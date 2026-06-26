@@ -19,8 +19,16 @@ runtime tool catalog.
   using scoped tokens to act for a user or itself.
 - ❌ **Not** for building MCP servers. Making an MCP server an OAuth 2.1 protected
   resource (DCR, metadata endpoints, token validation, `tools/list` filtering) is
-  the *resource-server* side — that's the **Descope MCP SDK**. This SDK is the
-  *requester* side. They compose (an agent can be both) but they don't merge.
+  the *resource-server* side. This SDK is the *requester* side. They compose (an
+  agent can be both) but they don't merge.
+
+> **Building an MCP server?** Use Descope's MCP server SDKs instead:
+> [`@descope/mcp-express`](https://docs.descope.com/mcp/mcp-express-sdk) (Node/Express)
+> or the [`descope-mcp` Python SDK](https://docs.descope.com/mcp/python-sdk) —
+> overview at [docs.descope.com/mcp](https://docs.descope.com/mcp). If your agent
+> *sits behind* such a server, you can still use this SDK inside your tool handlers
+> to fetch downstream tokens — resolve the user from the validated request and call
+> `connections.get_token` / `resources.get_token` as usual.
 
 **One core SDK, not one per framework.** Every framework defines a tool as a
 function; the `with_connection` / `withConnection` wrapper drops a fresh, scoped
@@ -280,8 +288,8 @@ signal and the agent-token-vs-management-key policy distinction), the CIBA appro
 fetch/execute **execution seam**. Only the hosted-execution endpoint itself
 (`mode="execute"`) is stubbed, pending core eng.
 
-Quickstarts: [standalone Connections](docs/standalone-connections.md) (first-class)
-and [MCP-fronted](docs/mcp-fronted.md).
+Quickstart: [standalone Connections](docs/standalone-connections.md), and the
+[framework cookbook](docs/FRAMEWORKS.md).
 
 ## Development
 

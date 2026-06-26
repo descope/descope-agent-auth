@@ -68,13 +68,13 @@ consent — not the default-scope list.
 
 ## Status
 
-Implements phases 1–7 of the build spec: types/errors/HTTP, all five credential
+Implements phases 1–7 of the build spec: types/errors/HTTP, all credential
 providers, the pluggable token store, the Connection/Resource exchange, the CIBA
 approval **gate** (`require_approval`), the `with_connection` tool wrapper, and the
 fetch/execute **execution seam** (`mode`). Only the hosted-execution endpoint
 itself (`mode="execute"`) is stubbed, pending core eng. See
-[docs/standalone-connections.md](../docs/standalone-connections.md) and
-[docs/mcp-fronted.md](../docs/mcp-fronted.md).
+[docs/standalone-connections.md](../docs/standalone-connections.md) and the
+[framework cookbook](../docs/FRAMEWORKS.md).
 
 > Some endpoint paths (device authorization, CIBA backchannel, resource-token
 > mapping) are centralized in `_endpoints.py` and flagged **UNVERIFIED** — confirm

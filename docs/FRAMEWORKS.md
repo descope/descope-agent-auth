@@ -9,10 +9,12 @@ Connection / Resource tokens from the Descope vault.
 
 It is **not** a tool for building MCP servers. Making an MCP server an OAuth 2.1
 protected resource (DCR, metadata endpoints, token validation, `tools/list`
-filtering) is the *resource-server* side — that's the **Descope MCP SDK**. This SDK
-is the *requester* side. They compose (an agent can be both), but they're separate
-libraries. See [mcp-fronted.md](mcp-fronted.md) if your agent sits behind an MCP
-server.
+filtering) is the *resource-server* side — for that, use Descope's MCP server SDKs
+([`@descope/mcp-express`](https://docs.descope.com/mcp/mcp-express-sdk) or the
+[`descope-mcp` Python SDK](https://docs.descope.com/mcp/python-sdk)). This SDK is
+the *requester* side; if your agent sits behind such a server, use it inside your
+tool handlers (resolve the user from the validated request, then call
+`connections.get_token` / `resources.get_token`).
 
 ## Do you need a separate SDK per framework?
 
@@ -360,7 +362,8 @@ export class DevAgent extends Agent {
 Managed agents execute tools through your backend (a function/webhook the platform
 calls, or an MCP server). Wrap that handler exactly like the Anthropic SDK example
 above — resolve the identifier from the authenticated request, then call the
-wrapped tool. If you expose tools via an MCP server, see [mcp-fronted.md](mcp-fronted.md).
+wrapped tool. (To make that backend an OAuth-protected MCP server, use Descope's
+[MCP server SDKs](https://docs.descope.com/mcp).)
 
 ## AG2 (AutoGen)
 

@@ -5,8 +5,9 @@ MCP server in front of it. Your agent acquires a Descope credential and exchange
 it for downstream provider tokens (GitHub, Slack, Google, ...) from the Descope
 vault.
 
-> If your agent sits behind an MCP server, see [mcp-fronted.md](mcp-fronted.md).
-> The two paths compose; neither requires the other.
+> If your agent sits behind an MCP server, use this SDK inside your tool handlers
+> the same way. (To *build* the MCP server, use Descope's
+> [MCP server SDKs](https://docs.descope.com/mcp) — this SDK is the client side.)
 
 ## The two phases
 
