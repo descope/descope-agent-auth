@@ -55,13 +55,17 @@ try {
 
 ## Phase-1 providers
 
-| Provider                    | When                                                                                                |
-| --------------------------- | --------------------------------------------------------------------------------------------------- |
-| `ClientCredentialsProvider` | autonomous agent, no user                                                                           |
-| `DeviceCodeProvider`        | headless agent (no browser)                                                                         |
-| `AuthorizationCodeProvider` | agent with a browser (PKCE)                                                                         |
-| `CibaProvider`              | out-of-band user approval (also backs the phase-2 approval gate)                                    |
-| `ManagementKeyProvider`     | privileged, **not recommended** (bypasses Connection Policies; requires `allowManagementKey: true`) |
+| Provider                    | When                                                                                                   |
+| --------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `ClientCredentialsProvider` | autonomous agent, no user                                                                              |
+| `DeviceCodeProvider`        | headless agent (no browser)                                                                            |
+| `AuthorizationCodeProvider` | agent with a browser (PKCE)                                                                            |
+| `CibaProvider`              | out-of-band user approval (also backs the phase-2 approval gate)                                       |
+| `AccessTokenProvider`       | bring your own Descope access token (e.g. a user's token from your app's login) for user-scoped access |
+| `ManagementKeyProvider`     | privileged, **not recommended** (bypasses Connection Policies; requires `allowManagementKey: true`)    |
+
+For a user-scoped call on a shared client, pass `actAsUserToken: <user jwt>` to
+`connections.getToken` / `resources.getToken`.
 
 ## Scopes
 

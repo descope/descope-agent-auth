@@ -53,7 +53,11 @@ except ConnectionAuthorizationRequired as e:
 | `DeviceCodeProvider` | headless agent (no browser) |
 | `AuthorizationCodeProvider` | agent with a browser (PKCE) |
 | `CibaProvider` | out-of-band user approval (also backs the phase-2 approval gate) |
+| `AccessTokenProvider` | bring your own Descope access token (e.g. a user's token from your app's login) for user-scoped access |
 | `ManagementKeyProvider` | privileged, **not recommended** (bypasses Connection Policies; requires `allow_management_key=True`) |
+
+For a user-scoped call on a shared client, pass `act_as_user_token=<user jwt>` to
+`connections.get_token` / `resources.get_token`.
 
 ## Scopes
 

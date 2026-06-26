@@ -10,6 +10,7 @@ export type { AgentAuthClientOptions } from './client';
 // providers
 export {
   CredentialProvider,
+  AccessTokenProvider,
   ClientCredentialsProvider,
   DeviceCodeProvider,
   AuthorizationCodeProvider,
@@ -17,6 +18,7 @@ export {
   ManagementKeyProvider,
 } from './providers';
 export type {
+  AccessTokenOptions,
   ClientCredentialsOptions,
   DeviceCodeOptions,
   AuthorizationCodeOptions,

@@ -28,6 +28,8 @@ export interface GetResourceTokenArgs {
   scopes?: string[];
   requireApproval?: ApprovalRequest;
   forceRefresh?: boolean;
+  /** Mint a user-scoped Resource token using this user's Descope access token. */
+  actAsUserToken?: string;
 }
 
 export interface ResourcesClientDeps {
@@ -77,17 +79,26 @@ export class ResourcesClient {
       if (cached) return cached;
     }
 
-    const cred = await this.deps.getCredential();
-    if (cred.kind === 'management_key') {
-      throw new AgentAuthError(
-        'Resource tokens use the token-exchange grant and require an OAuth agent identity ' +
-          '(Client ID/Secret via a phase-1 provider), not a Management Key.',
-      );
+    // The subject is either an explicit user token (user-scoped) or the client's
+    // own credential. A Management Key is not an OAuth token, so it cannot be the
+    // subject of a token-exchange.
+    let subjectToken: string;
+    if (args.actAsUserToken) {
+      subjectToken = args.actAsUserToken;
+    } else {
+      const cred = await this.deps.getCredential();
+      if (cred.kind === 'management_key') {
+        throw new AgentAuthError(
+          'Resource tokens use the token-exchange grant and require an OAuth agent identity ' +
+            '(Client ID/Secret via a phase-1 provider) or an actAsUserToken, not a Management Key.',
+        );
+      }
+      subjectToken = cred.token;
     }
 
     const data: Record<string, string> = {
       grant_type: GRANT_TOKEN_EXCHANGE,
-      subject_token: cred.token,
+      subject_token: subjectToken,
       subject_token_type: TOKEN_TYPE_ACCESS_TOKEN,
       resource: args.resource,
     };

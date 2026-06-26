@@ -22,6 +22,8 @@ export interface GetConnectionTokenArgs {
   forceRefresh?: boolean;
   redirectUrl?: string;
   requireApproval?: ApprovalRequest;
+  /** Run this call as a specific user by presenting their Descope access token. */
+  actAsUserToken?: string;
 }
 
 export interface ExecuteConnectionArgs {
@@ -31,6 +33,7 @@ export interface ExecuteConnectionArgs {
   scopes?: string[];
   tenantId?: string;
   requireApproval?: ApprovalRequest;
+  actAsUserToken?: string;
 }
 
 const cacheKey = (connection: string, identifier: string, scopes?: string[]): string => {
@@ -70,6 +73,7 @@ const buildArgs = (args: GetConnectionTokenArgs): FetchArgs => {
     connectBody,
     forceRefresh: Boolean(args.forceRefresh),
     requireApproval: args.requireApproval,
+    actAsUserToken: args.actAsUserToken,
   };
 };
 

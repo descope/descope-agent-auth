@@ -128,6 +128,7 @@ class VaultBackend:
         connect_body: Optional[dict],
         force_refresh: bool,
         require_approval: Optional["ApprovalRequest"] = None,
+        act_as_user_token: Optional[str] = None,
     ) -> VaultToken:
         # Phase-2 CIBA gate: a real person must sign off before this sensitive
         # exchange proceeds. Runs before any cache hit so the approval is never
@@ -145,7 +146,12 @@ class VaultBackend:
             if cached is not None:
                 return cached
 
-        header, _privileged = self._auth_header()
+        # act_as_user_token: present a specific user's Descope access token for this
+        # call so the vault fetch is user-scoped, instead of the client's credential.
+        if act_as_user_token:
+            header = f"Bearer {self._project_id}:{act_as_user_token}"
+        else:
+            header, _privileged = self._auth_header()
         resp = self._http.post_json(
             path, json=body, headers={"Authorization": header, "Content-Type": "application/json"}
         )
@@ -157,7 +163,7 @@ class VaultBackend:
 
         # 404 -> user has not connected (or token cleared / wrong scopes).
         if resp.status_code == 404:
-            connect_url = self._try_connect_url(connect_body)
+            connect_url = self._try_connect_url(connect_body, header)
             raise ConnectionAuthorizationRequired(
                 f"connection '{connection}' is not authorized for this identity yet",
                 connect_url=connect_url,
@@ -180,11 +186,10 @@ class VaultBackend:
             status_code=resp.status_code,
         )
 
-    def _try_connect_url(self, connect_body: Optional[dict]) -> Optional[str]:
+    def _try_connect_url(self, connect_body: Optional[dict], header: str) -> Optional[str]:
         if connect_body is None:
             return None
         try:
-            header, _ = self._auth_header()
             resp = self._http.post_json(
                 OUTBOUND_CONNECT,
                 json=connect_body,

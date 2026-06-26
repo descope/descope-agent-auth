@@ -64,8 +64,13 @@ class ResourcesClient:
         scopes: Optional[List[str]] = None,
         require_approval: Optional[ApprovalRequest] = None,
         force_refresh: bool = False,
+        act_as_user_token: Optional[str] = None,
     ) -> VaultToken:
         """Mint a Resource token via the token-exchange grant.
+
+        Pass ``act_as_user_token`` to mint a **user-scoped** Resource token: that
+        user's Descope access token becomes the ``subject_token`` of the exchange,
+        instead of the client's own credential.
 
         Raises ``ApprovalDenied`` / ``ApprovalTimeout`` if a ``require_approval``
         gate fails, ``PolicyDenied`` on 401/403, or ``TokenExchangeFailed`` on
@@ -91,16 +96,24 @@ class ResourcesClient:
             if cached is not None:
                 return cached
 
-        cred = self._get_credential()
-        if cred.is_privileged:
-            raise AgentAuthError(
-                "Resource tokens use the token-exchange grant and require an OAuth agent "
-                "identity (Client ID/Secret via a phase-1 provider), not a Management Key."
-            )
+        # The subject is either an explicit user token (user-scoped) or the
+        # client's own credential. A Management Key is not an OAuth token, so it
+        # cannot be the subject of a token-exchange.
+        if act_as_user_token:
+            subject_token = act_as_user_token
+        else:
+            cred = self._get_credential()
+            if cred.is_privileged:
+                raise AgentAuthError(
+                    "Resource tokens use the token-exchange grant and require an OAuth "
+                    "agent identity (Client ID/Secret via a phase-1 provider) or an "
+                    "act_as_user_token, not a Management Key."
+                )
+            subject_token = cred.token
 
         data = {
             "grant_type": GRANT_TOKEN_EXCHANGE,
-            "subject_token": cred.token,
+            "subject_token": subject_token,
             "subject_token_type": TOKEN_TYPE_ACCESS_TOKEN,
             "resource": resource,
         }

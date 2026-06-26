@@ -30,6 +30,7 @@ def _build_args(
     force_refresh: bool,
     redirect_url: Optional[str],
     require_approval: Optional[ApprovalRequest],
+    act_as_user_token: Optional[str],
 ) -> dict:
     body: dict = {"appId": connection, "userId": identifier}
     if tenant_id:
@@ -61,6 +62,7 @@ def _build_args(
         "connect_body": connect_body,
         "force_refresh": force_refresh,
         "require_approval": require_approval,
+        "act_as_user_token": act_as_user_token,
     }
 
 
@@ -79,8 +81,14 @@ class ConnectionsClient:
         force_refresh: bool = False,
         redirect_url: Optional[str] = None,
         require_approval: Optional[ApprovalRequest] = None,
+        act_as_user_token: Optional[str] = None,
     ) -> VaultToken:
         """Return a currently-valid downstream token for ``identifier``.
+
+        Pass ``act_as_user_token`` to run this single call as a specific user --
+        present that user's Descope access token (from your authorization-code /
+        device-code / CIBA login) so the vault fetch is user-scoped, without
+        reconfiguring the client.
 
         Raises ``ConnectionAuthorizationRequired`` (carrying ``connect_url``) when
         the user hasn't connected the account yet, ``PolicyDenied`` when an agent
@@ -96,6 +104,7 @@ class ConnectionsClient:
             force_refresh=force_refresh,
             redirect_url=redirect_url,
             require_approval=require_approval,
+            act_as_user_token=act_as_user_token,
         )
         return self._execution.fetch_token(**args)
 
@@ -108,6 +117,7 @@ class ConnectionsClient:
         scopes: Optional[List[str]] = None,
         tenant_id: Optional[str] = None,
         require_approval: Optional[ApprovalRequest] = None,
+        act_as_user_token: Optional[str] = None,
     ) -> Any:
         """Execute-mode counterpart of ``get_token`` (see execution seam).
 
@@ -124,5 +134,6 @@ class ConnectionsClient:
             force_refresh=False,
             redirect_url=None,
             require_approval=require_approval,
+            act_as_user_token=act_as_user_token,
         )
         return self._execution.execute(request=request, **args)

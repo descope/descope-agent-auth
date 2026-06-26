@@ -109,6 +109,9 @@ once at init — and you have two choices:
   - `DeviceCodeProvider` — headless agent (device code)
   - `AuthorizationCodeProvider` — browser present (authorization code + PKCE)
   - `CibaProvider` — out-of-band user approval (CIBA)
+- **A user's access token you already hold** (`AccessTokenProvider`) — if your app
+  already logged the user in with Descope, hand that token to the agent directly
+  (no re-authentication) for **user-scoped** access.
 - **Management Key** (`ManagementKeyProvider`) — use this only if you *don't* want
   the agent represented as a unique Agent in your Agent Directory. It's a static,
   high-privilege credential that **bypasses Connection Policies**, so it is not the
@@ -138,6 +141,64 @@ flowchart LR
 Configure phase 1 once; call phase 2 repeatedly. The phase-1 token and the
 downstream tokens are cached and refreshed transparently — you ask for a token and
 get a currently-valid one.
+
+## Autonomous vs. acting for a user
+
+**Autonomous agent (no user).** The agent authenticates as itself and acts on its
+own behalf:
+
+```python
+client = AgentAuthClient(
+    project_id="P2...",
+    credential=ClientCredentialsProvider(client_id="...", client_secret="..."),
+)
+token = client.connections.get_token(connection="github", identifier="agent@acme.com")
+```
+
+**On behalf of a user (autonomous client + `identifier`).** One backend client
+serves many users; its agent credential has the policy to read a named user's vault
+token. Pass the **user id** per call — no user token needed:
+
+```python
+token = client.connections.get_token(connection="github", identifier=user_id)
+```
+
+**User-scoped (the agent wields the user's own Descope token).** When the agent
+must act strictly as the user — and especially to mint a **user-scoped Resource
+token** (the user's token becomes the token-exchange `subject_token`) — supply that
+user's access token (the one you got from authorization code / device code / CIBA).
+Two ways:
+
+```python
+# A) You already hold the user's token (e.g. from your app's login):
+from descope_agent_auth import AccessTokenProvider
+
+client = AgentAuthClient(project_id="P2...", credential=AccessTokenProvider(access_token=user_jwt))
+gh  = client.connections.get_token(connection="github", identifier=user_id)   # user-scoped
+res = client.resources.get_token(resource="urn:my-api", scopes=["read"])      # user-scoped (subject = user_jwt)
+
+# B) One shared client, many users — pass the user token per call:
+gh  = client.connections.get_token(connection="github", identifier=user_id, act_as_user_token=user_jwt)
+res = client.resources.get_token(resource="urn:my-api", act_as_user_token=user_jwt)
+```
+
+```ts
+// TypeScript — same two options
+import { AccessTokenProvider } from '@descope/agent-auth';
+
+const client = new AgentAuthClient({ projectId: 'P2...', credential: new AccessTokenProvider({ accessToken: userJwt }) });
+await client.connections.getToken({ connection: 'github', identifier: userId });
+
+// or per call on a shared client:
+await client.connections.getToken({ connection: 'github', identifier: userId, actAsUserToken: userJwt });
+await client.resources.getToken({ resource: 'urn:my-api', actAsUserToken: userJwt });
+```
+
+> Where does `user_jwt` come from? Your app authenticates the user with Descope
+> (authorization code, device code, or CIBA) and gets their access token; you hand
+> that token to the SDK. The `DeviceCodeProvider` / `AuthorizationCodeProvider` /
+> `CibaProvider` can also acquire it for you — their resulting credential is the
+> user's token and flows into phase 2 the same way.
 
 ## How a credential gets into Descope
 
@@ -210,7 +271,7 @@ transfer. See each package's README for a copy-pasteable quickstart.
 ## Status
 
 Implements phases 1–7 of the build spec across both languages: types/errors/HTTP
-layer, all five credential providers, the pluggable token store, the
+layer, all credential providers, the pluggable token store, the
 Connection/Resource exchange (with the `ConnectionAuthorizationRequired` re-auth
 signal and the agent-token-vs-management-key policy distinction), the CIBA approval
 **gate** on exchange, the `with_connection` / `withConnection` tool wrapper, and the

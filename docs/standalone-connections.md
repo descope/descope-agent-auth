@@ -140,7 +140,37 @@ const repos = await listRepos('user@example.com');
 | `DeviceCodeProvider` | headless agent (no browser); shows a verification URL + code |
 | `AuthorizationCodeProvider` | agent with a browser available (PKCE) |
 | `CibaProvider` | the agent needs a specific user's approval out of band |
+| `AccessTokenProvider` | you already hold a user's Descope access token (user-scoped access) |
 | `ManagementKeyProvider` | privileged, **not recommended** — bypasses Connection Policies |
+
+### User-scoped access
+
+To act as a specific user — and to mint **user-scoped Resource tokens** — present
+that user's Descope access token (from your authorization-code / device-code / CIBA
+login). Either configure the client with `AccessTokenProvider`, or pass
+`act_as_user_token` / `actAsUserToken` per call on a shared client:
+
+```python
+from descope_agent_auth import AccessTokenProvider
+
+# Option A — a client bound to the user's token:
+client = AgentAuthClient(project_id="P2...", credential=AccessTokenProvider(access_token=user_jwt))
+gh = client.connections.get_token(connection="github", identifier=user_id)
+
+# Option B — one shared client, user token per call:
+gh = client.connections.get_token(connection="github", identifier=user_id, act_as_user_token=user_jwt)
+res = client.resources.get_token(resource="urn:my-api", act_as_user_token=user_jwt)
+```
+
+```ts
+import { AccessTokenProvider } from '@descope/agent-auth';
+
+const client = new AgentAuthClient({ projectId: 'P2...', credential: new AccessTokenProvider({ accessToken: userJwt }) });
+await client.connections.getToken({ connection: 'github', identifier: userId });
+
+// or per call on a shared client:
+await client.connections.getToken({ connection: 'github', identifier: userId, actAsUserToken: userJwt });
+```
 
 ## Scopes
 

@@ -64,6 +64,7 @@ export interface FetchArgs {
   connectBody?: Record<string, unknown>;
   forceRefresh: boolean;
   requireApproval?: ApprovalRequest;
+  actAsUserToken?: string;
 }
 
 export class VaultBackend {
@@ -127,7 +128,11 @@ export class VaultBackend {
       if (cached) return cached;
     }
 
-    const header = await this.authHeader();
+    // actAsUserToken: present a specific user's Descope access token for this call
+    // so the vault fetch is user-scoped, instead of the client's credential.
+    const header = args.actAsUserToken
+      ? `Bearer ${this.projectId}:${args.actAsUserToken}`
+      : await this.authHeader();
     const resp = await this.http.postJson(args.path, args.body, { Authorization: header });
 
     if (resp.ok && resp.json?.token) {
@@ -138,7 +143,7 @@ export class VaultBackend {
 
     // 404 -> user has not connected (or token cleared / wrong scopes).
     if (resp.statusCode === 404) {
-      const connectUrl = await this.tryConnectUrl(args.connectBody);
+      const connectUrl = await this.tryConnectUrl(args.connectBody, header);
       throw new ConnectionAuthorizationRequired(
         `connection '${args.connection}' is not authorized for this identity yet`,
         { connectUrl, connection: args.connection, identifier: args.identifier },
@@ -161,10 +166,12 @@ export class VaultBackend {
     );
   }
 
-  private async tryConnectUrl(connectBody?: Record<string, unknown>): Promise<string | undefined> {
+  private async tryConnectUrl(
+    connectBody: Record<string, unknown> | undefined,
+    header: string,
+  ): Promise<string | undefined> {
     if (!connectBody) return undefined;
     try {
-      const header = await this.authHeader();
       const resp = await this.http.postJson(OUTBOUND_CONNECT, connectBody, {
         Authorization: header,
       });
