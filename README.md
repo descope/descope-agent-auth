@@ -162,6 +162,18 @@ once at init — and you have three options:
   high-privilege credential that **bypasses Policies**, so it is not the
   recommended path (requires explicit opt-in).
 
+Which one depends on **where the agent runs** — and a backend job/service usually
+can't do an interactive `authorization_code` login itself (there's no browser at the
+agent; that happens in your front-end app):
+
+| Where the agent runs | Use |
+| --- | --- |
+| Backend, no user | `ClientCredentialsProvider` |
+| Backend, **on behalf of a user** | `ClientCredentialsProvider` + a `identifier` per call — see below |
+| Backend, **as** a user | `CibaProvider` (out-of-band approval) or `AccessTokenProvider` (token handed from your app) |
+| CLI / headless dev tool | `DeviceCodeProvider` |
+| The agent *is* a web app | `AuthorizationCodeProvider` |
+
 Then, at runtime (phase 2), the SDK **exchanges** that phase-1 credential for the
 token the agent actually needs:
 
@@ -183,12 +195,12 @@ flowchart LR
 - A **Resource token** is minted via the **token-exchange** grant. (This needs an
   OAuth agent identity — it does not apply to a Management Key.)
 
-Configure phase 1 once; call phase 2 repeatedly. The phase-1 credential and the
-downstream tokens are cached and refreshed transparently — you ask for a token and
-get a currently-valid one. Both are persisted to the pluggable token store
-(including refresh tokens), so a restarted or multi-process agent **refreshes
-instead of re-authenticating** — important for device-code / authorization-code /
-CIBA flows. See
+Configure phase 1 once; call phase 2 repeatedly — you ask for a token and get a
+currently-valid one. Refresh/persistence matters most for a **user grant the backend
+holds across runs** (`CIBA`, or a handed-off user token that carries a refresh
+token): the SDK refreshes it without re-prompting the user. `ClientCredentials`
+simply re-acquires, and in the on-behalf model below the agent holds no user token at
+all — Descope refreshes the vault's Connection tokens server-side. See
 [token storage & refresh](docs/standalone-connections.md#token-storage--refresh).
 
 ## Autonomous vs. acting for a user
@@ -204,13 +216,28 @@ client = AgentAuthClient(
 token = client.connections.get_token(connection="github", identifier="agent@acme.com")
 ```
 
-**On behalf of a user (autonomous client + `identifier`).** One backend client
-serves many users; its agent credential has the policy to read a named user's vault
-token. Pass the **user id** per call — no user token needed:
+**On behalf of a user (autonomous client + `identifier`) — the common backend
+pattern.** Your front-end app authenticates the user with Descope and triggers a
+backend job/service, **passing the user's id** to it. The agent there authenticates
+as *itself* (client credentials) and fetches that user's tokens by `identifier` — no
+user login or user token in the agent, and no browser:
 
 ```python
-token = client.connections.get_token(connection="github", identifier=user_id)
+# The agent runs as a backend job; the triggering app passed it `user_id`.
+client = AgentAuthClient(
+    project_id="P2...",
+    credential=ClientCredentialsProvider(client_id="...", client_secret="..."),
+)
+
+def run_job(user_id: str):
+    gh = client.connections.get_token(connection="github", identifier=user_id)
+    # ... use gh.access_token to act for that user
 ```
+
+The agent's policy governs which users/connections it may read; the user authorized
+the connection once (via a connect URL — see *How a credential gets into Descope*),
+and from then on the backend just fetches by `identifier`. Descope refreshes the
+vault's tokens for you.
 
 **User-scoped (the agent wields the user's own Descope token).** When the agent
 must act strictly as the user — and especially to mint a **user-scoped Resource
