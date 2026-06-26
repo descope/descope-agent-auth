@@ -55,13 +55,13 @@ try {
 
 ## Phase-1 providers
 
-| Provider | When |
-| --- | --- |
-| `ClientCredentialsProvider` | autonomous agent, no user |
-| `DeviceCodeProvider` | headless agent (no browser) |
-| `AuthorizationCodeProvider` | agent with a browser (PKCE) |
-| `CibaProvider` | out-of-band user approval (also backs the phase-2 approval gate) |
-| `ManagementKeyProvider` | privileged, **not recommended** (bypasses Connection Policies; requires `allowManagementKey: true`) |
+| Provider                    | When                                                                                                |
+| --------------------------- | --------------------------------------------------------------------------------------------------- |
+| `ClientCredentialsProvider` | autonomous agent, no user                                                                           |
+| `DeviceCodeProvider`        | headless agent (no browser)                                                                         |
+| `AuthorizationCodeProvider` | agent with a browser (PKCE)                                                                         |
+| `CibaProvider`              | out-of-band user approval (also backs the phase-2 approval gate)                                    |
+| `ManagementKeyProvider`     | privileged, **not recommended** (bypasses Connection Policies; requires `allowManagementKey: true`) |
 
 ## Scopes
 
@@ -72,12 +72,12 @@ consent — not the default-scope list.
 
 ## Scripts
 
-| Script | Purpose |
-| --- | --- |
-| `npm run build` | dual CJS + ESM bundle with type declarations (rollup) |
-| `npm test` | Jest + nock with coverage |
-| `npm run lint` | ESLint (airbnb-typescript) |
-| `npm run format-check` | Prettier check |
+| Script                 | Purpose                                               |
+| ---------------------- | ----------------------------------------------------- |
+| `npm run build`        | dual CJS + ESM bundle with type declarations (rollup) |
+| `npm test`             | Jest + nock with coverage                             |
+| `npm run lint`         | ESLint (airbnb-typescript)                            |
+| `npm run format-check` | Prettier check                                        |
 
 ## Status
 
