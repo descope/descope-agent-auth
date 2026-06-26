@@ -65,6 +65,22 @@ token for a Resource-scoped one.
 | call a 3rd-party OAuth provider | `connections.get_token` | provider OAuth token | Connections vault (template or custom) |
 | call your own Descope-protected API | `resources.get_token` | Descope OAuth token | token-exchange grant |
 
+```mermaid
+flowchart LR
+    Agent["Your agent<br/>(any framework)"] --> SDK["descope-agent-auth<br/>AgentAuthClient"]
+
+    SDK -->|"connections.get_token()"| Vault[("Connections<br/>vault")]
+    SDK -->|"resources.get_token()<br/>token-exchange grant"| AS["Descope<br/>OAuth authorization server"]
+
+    Vault --> Key["API key<br/>tenant · or · user + tenant"]
+    Vault --> TP["3rd-party OAuth token<br/>template or custom connection"]
+    AS --> Res["Resource token<br/>(Descope-issued OAuth)"]
+
+    Key --> Svc["Third-party service<br/>GitHub · Slack · Google …"]
+    TP --> Svc
+    Res --> MyAPI["Your Descope-protected API"]
+```
+
 ## How the SDK gets those tokens
 
 It starts with **how your agent authenticates to Descope** (phase 1), configured
@@ -85,10 +101,16 @@ once at init — and you have two choices:
 Then, at runtime (phase 2), the SDK **exchanges** that phase-1 credential for the
 token the agent actually needs:
 
-```
-                              ┌──────────────────── phase 2 ────────────────────┐
- Client ID + Secret ─▶ Descope OAuth token ─┬─▶ connections.get_token ─▶ Connection token (API key / OAuth)
- (or Management Key) ────────────────────────┘└─▶ resources.get_token  ─▶ Resource token (token-exchange)
+```mermaid
+flowchart LR
+    CID["OAuth Client ID + Secret<br/>(agent in your Agent Directory)"] --> Tok["Descope<br/>OAuth access token"]
+    MK["Management Key<br/>(no Agent Directory identity)"] -. "not recommended" .-> Tok
+
+    Tok -->|"phase 2"| Conn["connections.get_token()"]
+    Tok -->|"phase 2"| ResM["resources.get_token()"]
+
+    Conn --> CTok["Connection token<br/>API key / OAuth · governed by Connection Policies"]
+    ResM --> RTok["Resource token<br/>via token-exchange grant"]
 ```
 
 - A **Connection token** is pulled from the vault. When the phase-1 credential is
@@ -100,6 +122,64 @@ token the agent actually needs:
 Configure phase 1 once; call phase 2 repeatedly. The phase-1 token and the
 downstream tokens are cached and refreshed transparently — you ask for a token and
 get a currently-valid one.
+
+## How a credential gets into Descope
+
+Before the agent can fetch a **Connection** token, that credential has to exist in
+the Connections vault. There are three ways it gets there — the first is runtime
+(driven by the SDK), the other two are design/admin time:
+
+```mermaid
+flowchart TD
+    User["End user"] -->|"completes OAuth consent<br/>via the connect URL the SDK returns"| Vault[("Connections vault")]
+    Admin["Admin"] -->|"adds an API key by hand<br/>in the Descope Console"| Vault
+    Backend["Your backend / IaC"] -->|"adds an API key via the<br/>Descope Management API"| Vault
+    Vault -.->|"later: connections.get_token()"| Agent["Your agent"]
+```
+
+- **User connect (via the SDK).** When you call `connections.get_token` and the
+  user hasn't connected yet, the SDK raises `ConnectionAuthorizationRequired` with
+  a **connect URL**. Send the user there; they complete the provider's OAuth
+  consent; Descope stores the resulting token in the vault. The next
+  `get_token` call succeeds. (This is the OAuth path — GitHub, Slack, Google, ….)
+- **Console.** An admin pastes an API key into a Connection in the Descope Console
+  (typical for a static third-party API key, at the tenant or user level).
+- **Management API.** Your backend or infrastructure-as-code writes the API key
+  programmatically.
+
+Resource tokens need no provisioning step — they're minted on demand from your
+agent's identity via token-exchange.
+
+## End-to-end at runtime
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Agent as Your agent (SDK)
+    participant Descope
+    participant User
+    participant Service as Provider / your API
+
+    Note over Agent,Descope: Phase 1 — acquire (once)
+    Agent->>Descope: authenticate (client credentials / device / authcode / CIBA)
+    Descope-->>Agent: Descope OAuth access token
+
+    Note over Agent,Descope: Phase 2 — exchange (per call)
+    Agent->>Descope: connections.get_token(connection, identifier)
+    alt user has not connected this account yet
+        Descope-->>Agent: ConnectionAuthorizationRequired (connect_url)
+        Agent-->>User: surface connect_url
+        User->>Descope: complete OAuth consent
+        Descope->>Descope: store provider token in the vault
+        Agent->>Descope: retry connections.get_token(...)
+    end
+    Descope-->>Agent: scoped Connection token (refreshed as needed)
+    Agent->>Service: call the API with the token
+    Service-->>Agent: result
+```
+
+For a sensitive step you can also require a fresh CIBA **approval** before the
+exchange — see [docs/standalone-connections.md](docs/standalone-connections.md).
 
 ## Packages
 
