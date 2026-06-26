@@ -3,18 +3,26 @@
 ## What this SDK is for
 
 `descope-agent-auth` is for **homegrown / custom-built agents** — agents you write
-yourself in any framework. It puts the agent on the **OAuth client** side: it
-acquires a Descope credential for the agent and exchanges it for downstream
-Connection / Resource tokens from the Descope vault.
+yourself in any framework. It manages the tokens the **tools you implement** need to
+call downstream APIs (the **OAuth client** side): it acquires a Descope credential
+and exchanges it for Connection / Resource tokens from the Descope vault.
 
-It is **not** a tool for building MCP servers. Making an MCP server an OAuth 2.1
-protected resource (DCR, metadata endpoints, token validation, `tools/list`
-filtering) is the *resource-server* side — for that, use Descope's MCP server SDKs
+It does **not** manage the OAuth between your agent and a **third-party MCP server**
+— when your agent is an MCP *client*, your MCP client / agent platform (AWS Bedrock
+AgentCore, Azure AI Foundry, the MCP SDK's client) owns that connection's auth. Use
+this SDK inside your own tool code (a Bedrock action-group Lambda, an Azure function
+tool, a native framework tool) to fetch downstream tokens; a managed agent that only
+orchestrates third-party MCP servers has no place to plug it in.
+
+It is **not** a tool for building MCP servers. Protecting an MCP server (DCR,
+metadata endpoints, token validation, `tools/list` filtering) is the
+*resource-server* side — for that, use Descope's MCP server SDKs
 ([`@descope/mcp-express`](https://docs.descope.com/mcp/mcp-express-sdk) or the
 [`descope-mcp` Python SDK](https://docs.descope.com/mcp/python-sdk)). This SDK is
-the *requester* side; if your agent sits behind such a server, use it inside your
-tool handlers (resolve the user from the validated request, then call
-`connections.get_token` / `resources.get_token`).
+the *client* side, and the two are complementary: inside an MCP server's tool
+handler, use this SDK to fetch the downstream token the tool needs (resolve the
+user from the validated request, then call `connections.get_token` /
+`resources.get_token`).
 
 ## Do you need a separate SDK per framework?
 
@@ -37,9 +45,8 @@ client, and drop the wrapper into your tools.
 ### Runtime support
 
 The SDK runs on **Node, Cloudflare Workers, Deno, Bun, and browsers** — it uses
-only universal Web primitives (`fetch`, WebCrypto, `btoa`), never `node:crypto` or
-`Buffer` on the hot path. This is what makes the Cloudflare Agents example below
-work unchanged.
+only universal Web primitives (`fetch`, WebCrypto, `btoa`), so it works on edge
+runtimes without `nodejs_compat` for the auth layer.
 
 ---
 

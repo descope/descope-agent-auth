@@ -1,12 +1,11 @@
 # Standalone Connections quickstart
 
-This is the **first-class** path: using `descope-agent-auth` on its own, with no
-MCP server in front of it. Your agent acquires a Descope credential and exchanges
-it for downstream provider tokens (GitHub, Slack, Google, ...) from the Descope
-vault.
+Use `descope-agent-auth` on its own: your agent acquires a Descope credential and
+exchanges it for downstream provider tokens (GitHub, Slack, Google, ...) from the
+Descope vault.
 
-> If your agent sits behind an MCP server, use this SDK inside your tool handlers
-> the same way. (To *build* the MCP server, use Descope's
+> Building an MCP server? Use this SDK inside your tool handlers to fetch downstream
+> tokens. (To *protect* the MCP server itself, use Descope's
 > [MCP server SDKs](https://docs.descope.com/mcp) — this SDK is the client side.)
 
 ## The two phases
