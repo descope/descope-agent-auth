@@ -87,7 +87,6 @@ def connection_tool(
     def decorator(fn: Callable) -> Callable:
         @functools.wraps(fn)
         def wrapper(identifier: str, *args: object, **kwargs: object) -> object:
-            do_interrupt = interrupt or _default_interrupt()
             while True:
                 try:
                     token = client.connections.get_token(
@@ -99,8 +98,11 @@ def connection_tool(
                     )
                     return fn(token.access_token, identifier, *args, **kwargs)
                 except interruptible as exc:
-                    # On the first pass LangGraph's interrupt() raises to pause the
-                    # graph; on resume the node re-runs and we retry the exchange.
+                    # Resolve interrupt lazily, only when one actually needs to fire,
+                    # so a happy-path call never imports LangGraph. On the first pass
+                    # interrupt() raises to pause the graph; on resume the node re-runs
+                    # and we retry the exchange.
+                    do_interrupt = interrupt or _default_interrupt()
                     do_interrupt(interrupt_payload(exc))
 
         return wrapper

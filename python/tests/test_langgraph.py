@@ -39,6 +39,18 @@ class TestLangGraphIntegration(common.AgentAuthTest):
         self.assertEqual(events, [])  # interrupt never fired on the happy path
 
     @patch("httpx.Client.request")
+    def test_happy_path_does_not_import_langgraph(self, mock_request):
+        # interrupt is NOT injected, and langgraph is not installed. A happy-path
+        # call must succeed without resolving (importing) langgraph.
+        mock_request.return_value = make_response({"token": token_obj()})
+
+        @connection_tool(self.make_client(_mgmt()), connection="github", scopes=["repo"])
+        def list_repos(token, identifier):
+            return token
+
+        self.assertEqual(list_repos(identifier="u@e.com"), "gho_downstream_token")
+
+    @patch("httpx.Client.request")
     def test_pauses_on_connection_required(self, mock_request):
         mock_request.side_effect = [
             make_response({"error": "no"}, status=404),
