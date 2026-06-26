@@ -278,15 +278,24 @@ exchange — see [docs/standalone-connections.md](docs/standalone-connections.md
 The surfaces are kept identical across both languages so the docs and mental model
 transfer. See each package's README for a copy-pasteable quickstart.
 
-## Status
+## What's included
 
-Implements phases 1–7 of the build spec across both languages: types/errors/HTTP
-layer, all credential providers, the pluggable token store, the
-Connection/Resource exchange (with the `ConnectionAuthorizationRequired` re-auth
-signal and the agent-token-vs-management-key policy distinction), the CIBA approval
-**gate** on exchange, the `with_connection` / `withConnection` tool wrapper, and the
-fetch/execute **execution seam**. Only the hosted-execution endpoint itself
-(`mode="execute"`) is stubbed, pending core eng.
+Both languages, identical surfaces:
+
+- All credential providers: client credentials, device code, authorization code
+  (PKCE), CIBA, management key, and bring-your-own access token.
+- Connection and Resource token exchange, with the
+  `ConnectionAuthorizationRequired` re-auth signal and the agent-token-vs-management-key
+  distinction.
+- A pluggable token store that persists and refreshes credentials (including
+  refresh tokens) across restarts.
+- A human-in-the-loop CIBA **approval gate** on sensitive calls.
+- The `with_connection` / `withConnection` tool wrapper, plus a LangGraph
+  `interrupt()` helper.
+
+`mode: "execute"` (routing calls through Descope so the token never enters the
+agent process) is reserved — the client accepts it today and turns it on when
+Descope's hosted execution endpoint becomes available.
 
 Quickstart: [standalone Connections](docs/standalone-connections.md), and the
 [framework cookbook](docs/FRAMEWORKS.md).

@@ -62,7 +62,7 @@ try {
 | `AuthorizationCodeProvider` | agent with a browser (PKCE)                                                                            |
 | `CibaProvider`              | out-of-band user approval (also backs the phase-2 approval gate)                                       |
 | `AccessTokenProvider`       | bring your own Descope access token (e.g. a user's token from your app's login) for user-scoped access |
-| `ManagementKeyProvider`     | privileged, **not recommended** (bypasses Connection Policies; requires `allowManagementKey: true`)    |
+| `ManagementKeyProvider`     | privileged, **not recommended** (bypasses Policies; requires `allowManagementKey: true`)               |
 
 For a user-scoped call on a shared client, pass `actAsUserToken: <user jwt>` to
 `connections.getToken` / `resources.getToken`.
@@ -71,7 +71,7 @@ For a user-scoped call on a shared client, pass `actAsUserToken: <user jwt>` to
 
 Omit `scopes` on the exchange and the Connection's configured defaults are used.
 Pass `scopes` and they **fully override** the defaults (not clamped to a subset).
-The guardrail on what an agent may obtain is Connection Policies plus downstream
+The guardrail on what an agent may obtain is Policies plus downstream
 consent — not the default-scope list.
 
 ## Scripts
@@ -83,16 +83,18 @@ consent — not the default-scope list.
 | `npm run lint`         | ESLint (airbnb-typescript)                            |
 | `npm run format-check` | Prettier check                                        |
 
-## Status
+## What's included
 
-Implements phases 1–7 of the build spec: types/errors/HTTP, all credential
-providers, the pluggable token store, the Connection/Resource exchange, the CIBA
-approval **gate** (`requireApproval`), the `withConnection` tool wrapper, and the
-fetch/execute **execution seam** (`mode`). Only the hosted-execution endpoint
-itself (`mode: 'execute'`) is stubbed, pending core eng. See
+All credential providers, Connection and Resource token exchange, a pluggable
+token store that persists and refreshes credentials across restarts, a CIBA
+approval gate (`requireApproval`), the `withConnection` tool wrapper, and the
+fetch/execute `mode` seam. See
 [docs/standalone-connections.md](../docs/standalone-connections.md) and the
 [framework cookbook](../docs/FRAMEWORKS.md).
 
-> Some endpoint paths (device authorization, CIBA backchannel, resource-token
-> mapping) are centralized in `src/endpoints.ts` and flagged **UNVERIFIED** —
-> confirm them against your project's OIDC discovery document before production use.
+`mode: 'execute'` is reserved for Descope's hosted execution endpoint and turns on
+when that endpoint is available.
+
+> A few endpoint paths (device authorization, CIBA backchannel, the resource
+> token-exchange parameters) are centralized in `src/endpoints.ts` with comments
+> noting they should be confirmed against your project's OIDC discovery document.

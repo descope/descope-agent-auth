@@ -37,9 +37,8 @@ client, and drop the wrapper into your tools.
 ### Runtime support
 
 The SDK runs on **Node, Cloudflare Workers, Deno, Bun, and browsers** — it uses
-only universal Web primitives (`fetch`, WebCrypto, `btoa`), never `node:crypto` or
-`Buffer` on the hot path. This is what makes the Cloudflare Agents example below
-work unchanged.
+only universal Web primitives (`fetch`, WebCrypto, `btoa`), so it works on edge
+runtimes without `nodejs_compat` for the auth layer.
 
 ---
 
