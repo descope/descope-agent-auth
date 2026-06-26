@@ -3,9 +3,16 @@
 ## What this SDK is for
 
 `descope-agent-auth` is for **homegrown / custom-built agents** — agents you write
-yourself in any framework. It puts the agent on the **OAuth client** side: it
-acquires a Descope credential for the agent and exchanges it for downstream
-Connection / Resource tokens from the Descope vault.
+yourself in any framework. It manages the tokens the **tools you implement** need to
+call downstream APIs (the **OAuth client** side): it acquires a Descope credential
+and exchanges it for Connection / Resource tokens from the Descope vault.
+
+It does **not** manage the OAuth between your agent and a **third-party MCP server**
+— when your agent is an MCP *client*, your MCP client / agent platform (AWS Bedrock
+AgentCore, Azure AI Foundry, the MCP SDK's client) owns that connection's auth. Use
+this SDK inside your own tool code (a Bedrock action-group Lambda, an Azure function
+tool, a native framework tool) to fetch downstream tokens; a managed agent that only
+orchestrates third-party MCP servers has no place to plug it in.
 
 It is **not** a tool for building MCP servers. Protecting an MCP server (DCR,
 metadata endpoints, token validation, `tools/list` filtering) is the

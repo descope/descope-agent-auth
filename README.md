@@ -15,11 +15,23 @@ runtime tool catalog.
 - ✅ **Homegrown / custom-built agents** — agents you write yourself, in any
   framework (LangChain, LangGraph, Google ADK, OpenAI, Vercel AI, Mastra,
   LlamaIndex, Cloudflare Agents, AG2/AutoGen, CrewAI, TanStack AI, the Anthropic
-  SDK, and more). It puts your agent on the **OAuth client** side: getting and
-  using scoped tokens to act for a user or itself.
+  SDK, and more). It manages the tokens the **tools you implement** need to call
+  downstream APIs — putting your agent on the **OAuth client** side.
 - ❌ **Not** for building MCP servers. Protecting an MCP server (DCR, metadata
   endpoints, token validation, `tools/list` filtering) is a different job — the
   *resource-server* side. This SDK is the *client* side: it acquires and uses tokens.
+
+> **It manages tokens for the tools you implement — not your agent's connection to a
+> third-party MCP server.** When your agent acts as an MCP *client* (calling someone
+> else's MCP server), the OAuth between your agent and that server is owned by your
+> **MCP client / agent platform** — e.g. AWS Bedrock AgentCore, Azure AI Foundry, or
+> the MCP SDK's client — not by this SDK, and those runtimes don't expose a hook to
+> swap it in. Use this SDK *inside your own tool code* (a Bedrock action-group
+> Lambda, an Azure function tool, a native framework tool) to fetch downstream API
+> tokens. A managed agent that only orchestrates third-party MCP servers has no place
+> to plug this in — and those platforms usually ship their own outbound-token feature
+> (e.g. Bedrock AgentCore Identity). Descope's angle is **one token layer across
+> frameworks and clouds** instead of a per-platform one.
 
 > **Building an MCP server?** Use Descope's MCP server SDKs:
 > [`@descope/mcp-express`](https://docs.descope.com/mcp/mcp-express-sdk) (Node/Express)
