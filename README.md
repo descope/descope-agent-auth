@@ -17,18 +17,18 @@ runtime tool catalog.
   LlamaIndex, Cloudflare Agents, AG2/AutoGen, CrewAI, TanStack AI, the Anthropic
   SDK, and more). It puts your agent on the **OAuth client** side: getting and
   using scoped tokens to act for a user or itself.
-- ❌ **Not** for building MCP servers. Making an MCP server an OAuth 2.1 protected
-  resource (DCR, metadata endpoints, token validation, `tools/list` filtering) is
-  the *resource-server* side. This SDK is the *requester* side. They compose (an
-  agent can be both) but they don't merge.
+- ❌ **Not** for building MCP servers. Protecting an MCP server (DCR, metadata
+  endpoints, token validation, `tools/list` filtering) is a different job — the
+  *resource-server* side. This SDK is the *client* side: it acquires and uses tokens.
 
-> **Building an MCP server?** Use Descope's MCP server SDKs instead:
+> **Building an MCP server?** Use Descope's MCP server SDKs:
 > [`@descope/mcp-express`](https://docs.descope.com/mcp/mcp-express-sdk) (Node/Express)
 > or the [`descope-mcp` Python SDK](https://docs.descope.com/mcp/python-sdk) —
-> overview at [docs.descope.com/mcp](https://docs.descope.com/mcp). If your agent
-> *sits behind* such a server, you can still use this SDK inside your tool handlers
-> to fetch downstream tokens — resolve the user from the validated request and call
-> `connections.get_token` / `resources.get_token` as usual.
+> overview at [docs.descope.com/mcp](https://docs.descope.com/mcp). The two are
+> complementary: when one of your MCP server's tools runs and needs to call a
+> downstream API (GitHub, your own API, …), that tool's handler can use **this** SDK
+> to fetch the token — resolve the user from the validated request, then call
+> `connections.get_token` / `resources.get_token`.
 
 **One core SDK, not one per framework.** Every framework defines a tool as a
 function; the `with_connection` / `withConnection` wrapper drops a fresh, scoped

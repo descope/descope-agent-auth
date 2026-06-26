@@ -7,14 +7,15 @@ yourself in any framework. It puts the agent on the **OAuth client** side: it
 acquires a Descope credential for the agent and exchanges it for downstream
 Connection / Resource tokens from the Descope vault.
 
-It is **not** a tool for building MCP servers. Making an MCP server an OAuth 2.1
-protected resource (DCR, metadata endpoints, token validation, `tools/list`
-filtering) is the *resource-server* side — for that, use Descope's MCP server SDKs
+It is **not** a tool for building MCP servers. Protecting an MCP server (DCR,
+metadata endpoints, token validation, `tools/list` filtering) is the
+*resource-server* side — for that, use Descope's MCP server SDKs
 ([`@descope/mcp-express`](https://docs.descope.com/mcp/mcp-express-sdk) or the
 [`descope-mcp` Python SDK](https://docs.descope.com/mcp/python-sdk)). This SDK is
-the *requester* side; if your agent sits behind such a server, use it inside your
-tool handlers (resolve the user from the validated request, then call
-`connections.get_token` / `resources.get_token`).
+the *client* side, and the two are complementary: inside an MCP server's tool
+handler, use this SDK to fetch the downstream token the tool needs (resolve the
+user from the validated request, then call `connections.get_token` /
+`resources.get_token`).
 
 ## Do you need a separate SDK per framework?
 
