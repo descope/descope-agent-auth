@@ -38,10 +38,13 @@ The SDK fetches both, through two entry points.
 A **Connection** is a credential stored in the Descope **Connections vault**. It is
 either:
 
-- an **API key** — a stored secret for a service, held at either:
+- an **API key** — a stored secret for a service. The service can be a
+  **third-party API _or_ one of your own internal APIs** — handy when you'd rather
+  not put an existing API behind Descope OAuth scopes just to let an agent call it.
+  Held at either:
   - the **tenant level** (one key for your whole organization), or
-  - the **user + tenant level** (a per-user key for a third-party API the agent
-    calls on that user's behalf); or
+  - the **user + tenant level** (a per-user key the agent uses on that user's
+    behalf); or
 - a **third-party OAuth token** — for an OAuth provider set up from Descope's
   **Connection template library** or a custom Connection (GitHub, Slack, Google,
   …), scoped to the agent's identity.
@@ -61,25 +64,38 @@ token for a Resource-scoped one.
 
 | Your agent needs to… | Method | Token you get | Source |
 | --- | --- | --- | --- |
-| call a 3rd-party API with a stored key | `connections.get_token` | API key | Connections vault (tenant, or user + tenant) |
-| call a 3rd-party OAuth provider | `connections.get_token` | provider OAuth token | Connections vault (template or custom) |
-| call your own Descope-protected API | `resources.get_token` | Descope OAuth token | token-exchange grant |
+| call a **third-party or internal** API with a stored key | `connections.get_token` | API key | Connections vault (tenant, or user + tenant) |
+| call a third-party OAuth provider | `connections.get_token` | provider OAuth token | Connections vault (template or custom) |
+| call your own API with **Descope-issued OAuth scopes** | `resources.get_token` | Resource token (Descope OAuth) | token-exchange grant |
+
+> Two ways to reach **your own** APIs: use a **Resource token** when you want
+> Descope to mint OAuth tokens with scopes for it, or a Connection **API key** when
+> you'd rather keep an existing internal API as-is.
+
+The SDK fetches the token from **one of two sources**, hands it **back to your
+agent**, and your agent then uses it to call the target service:
 
 ```mermaid
-flowchart LR
-    Agent["Your agent<br/>(any framework)"] --> SDK["descope-agent-auth<br/>AgentAuthClient"]
+flowchart TD
+    Agent(["Your agent<br/>(any framework)"]) -->|"① ask for a token"| SDK["descope-agent-auth"]
 
-    SDK -->|"connections.get_token()"| Vault[("Connections<br/>vault")]
-    SDK -->|"resources.get_token()<br/>token-exchange grant"| AS["Descope<br/>OAuth authorization server"]
+    SDK -->|"connections.get_token()"| Vault[("Connections vault")]
+    SDK -->|"resources.get_token()<br/>token-exchange grant"| AS["Descope OAuth<br/>authorization server"]
 
-    Vault --> Key["API key<br/>tenant · or · user + tenant"]
-    Vault --> TP["3rd-party OAuth token<br/>template or custom connection"]
-    AS --> Res["Resource token<br/>(Descope-issued OAuth)"]
+    Vault -->|"API key · or · 3rd-party OAuth token"| SDK
+    AS -->|"Resource token (Descope OAuth)"| SDK
 
-    Key --> Svc["Third-party service<br/>GitHub · Slack · Google …"]
-    TP --> Svc
-    Res --> MyAPI["Your Descope-protected API"]
+    SDK -->|"② token returned to the agent"| Agent
+
+    Agent -->|"③ call with the token"| TP["Third-party service<br/>GitHub · Slack · Google …"]
+    Agent -->|"③ call with the token"| Own["Your own APIs<br/>Descope Resource (OAuth scopes)<br/>· or · internal API via a Connection API key"]
 ```
+
+Either kind of token — a Connection token from the vault or a Resource token from
+token-exchange — is returned to the agent (in the default `fetch` mode) and the
+agent makes the call itself. Note that a Connection **API key** can target a
+**third-party service _or_ one of your own internal APIs** — so you don't have to
+put an existing API behind Descope OAuth just to let an agent call it.
 
 ## How the SDK gets those tokens
 
