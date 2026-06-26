@@ -4,7 +4,7 @@
  * Fetch a scoped downstream provider token (GitHub, Slack, ...) from the vault
  * for a given identity. Omit `scopes` to request the Connection's configured
  * defaults; pass `scopes` to override them entirely (the SDK never clamps to a
- * subset -- the real guardrail is Connection Policies, not the default-scope list).
+ * subset -- the real guardrail is Policies, not the default-scope list).
  */
 
 import { OUTBOUND_USER_TOKEN, OUTBOUND_USER_TOKEN_LATEST } from '../endpoints';

@@ -3,7 +3,7 @@
  *
  * Wraps a static project Management Key. Not a flow; a high-privilege credential
  * that grants access to effectively everything in the vault and **bypasses
- * Connection Policies**. Construction requires an explicit `allowManagementKey:
+ * Policies**. Construction requires an explicit `allowManagementKey:
  * true` opt-in and emits a warning, to make the recommended-path guidance
  * unmissable.
  */
@@ -28,7 +28,7 @@ export class ManagementKeyProvider extends CredentialProvider {
     super();
     if (!opts.allowManagementKey) {
       throw new CredentialAcquisitionFailed(
-        'ManagementKeyProvider bypasses Connection Policies and grants broad vault ' +
+        'ManagementKeyProvider bypasses Policies and grants broad vault ' +
           'access. It is not the recommended path. To proceed deliberately, pass ' +
           'allowManagementKey: true.',
       );
@@ -37,7 +37,7 @@ export class ManagementKeyProvider extends CredentialProvider {
     // eslint-disable-next-line no-console
     const logger = opts.logger ?? { debug: () => {}, warn: console.warn.bind(console) };
     logger.warn(
-      'ManagementKeyProvider in use: this credential BYPASSES Connection Policies and ' +
+      'ManagementKeyProvider in use: this credential BYPASSES Policies and ' +
         'grants broad vault access. Prefer an agent-token provider where possible.',
     );
   }

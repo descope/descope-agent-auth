@@ -3,7 +3,7 @@
 Fetch a scoped downstream provider token (GitHub, Slack, ...) from the vault for a
 given identity. Omit ``scopes`` to request the Connection's configured defaults;
 pass ``scopes`` to override them entirely (the SDK never clamps to a subset -- the
-real guardrail is Connection Policies, not the default-scope list).
+real guardrail is Policies, not the default-scope list).
 """
 
 from __future__ import annotations

@@ -72,23 +72,21 @@ token for a Resource-scoped one.
 > Descope to mint OAuth tokens with scopes for it, or a Connection **API key** when
 > you'd rather keep an existing internal API as-is.
 
-The SDK fetches the token from **one of two sources**, hands it **back to your
-agent**, and your agent then uses it to call the target service:
+The flow reads left to right — **ask → receive → call**. (The agent in ① and ② is
+the same agent: it asks, gets the token back, then makes the call in ③.)
 
 ```mermaid
-flowchart TD
-    Agent(["Your agent<br/>(any framework)"]) -->|"① ask for a token"| SDK["descope-agent-auth"]
+flowchart LR
+    A1(["Your agent"]) -->|"① get_token()"| SDK["descope-agent-auth"]
 
-    SDK -->|"connections.get_token()"| Vault[("Connections vault")]
-    SDK -->|"resources.get_token()<br/>token-exchange grant"| AS["Descope OAuth<br/>authorization server"]
+    SDK -->|"connections"| Vault[("Connections vault")]
+    SDK -->|"resources<br/>(token-exchange)"| AS["Descope OAuth AS"]
 
-    Vault -->|"API key · or · 3rd-party OAuth token"| SDK
-    AS -->|"Resource token (Descope OAuth)"| SDK
+    Vault -->|"API key /<br/>3rd-party OAuth"| A2(["② agent now<br/>holds the token"])
+    AS -->|"Resource token"| A2
 
-    SDK -->|"② token returned to the agent"| Agent
-
-    Agent -->|"③ call with the token"| TP["Third-party service<br/>GitHub · Slack · Google …"]
-    Agent -->|"③ call with the token"| Own["Your own APIs<br/>Descope Resource (OAuth scopes)<br/>· or · internal API via a Connection API key"]
+    A2 -->|"③ call with the token"| TP["Third-party service<br/>GitHub · Slack · Google …"]
+    A2 -->|"③ call with the token"| Own["Your own / internal APIs<br/>Resource OAuth · or · Connection API key"]
 ```
 
 Either kind of token — a Connection token from the vault or a Resource token from
@@ -114,7 +112,7 @@ once at init — and you have two choices:
   (no re-authentication) for **user-scoped** access.
 - **Management Key** (`ManagementKeyProvider`) — use this only if you *don't* want
   the agent represented as a unique Agent in your Agent Directory. It's a static,
-  high-privilege credential that **bypasses Connection Policies**, so it is not the
+  high-privilege credential that **bypasses Policies**, so it is not the
   recommended path (requires explicit opt-in).
 
 Then, at runtime (phase 2), the SDK **exchanges** that phase-1 credential for the
@@ -128,12 +126,12 @@ flowchart LR
     Tok -->|"phase 2"| Conn["connections.get_token()"]
     Tok -->|"phase 2"| ResM["resources.get_token()"]
 
-    Conn --> CTok["Connection token<br/>API key / OAuth · governed by Connection Policies"]
+    Conn --> CTok["Connection token<br/>API key / OAuth · governed by Policies"]
     ResM --> RTok["Resource token<br/>via token-exchange grant"]
 ```
 
 - A **Connection token** is pulled from the vault. When the phase-1 credential is
-  an agent OAuth token, **Connection Policies** govern what it may obtain; a
+  an agent OAuth token, **Policies** govern what it may obtain; a
   Management Key is unrestricted.
 - A **Resource token** is minted via the **token-exchange** grant. (This needs an
   OAuth agent identity — it does not apply to a Management Key.)

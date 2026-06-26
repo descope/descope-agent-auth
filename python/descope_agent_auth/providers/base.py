@@ -26,7 +26,7 @@ class CredentialProvider(ABC):
     refresh-on-get behavior for free.
     """
 
-    #: Privileged providers (management key) bypass Connection Policies. Surfaced
+    #: Privileged providers (management key) bypass Policies. Surfaced
     #: so downstream code and logging can treat that path with caution.
     kind: CredentialKind = CredentialKind.AGENT_TOKEN
 

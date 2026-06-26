@@ -150,7 +150,7 @@ export class VaultBackend {
       );
     }
 
-    // 401/403 -> Connection Policy (or auth) denied. Meaningful for agent tokens;
+    // 401/403 -> Policy (or auth) denied. Meaningful for agent tokens;
     // a management key is unrestricted, so a 403 there is a real config error.
     if (resp.statusCode === 401 || resp.statusCode === 403) {
       throw new PolicyDenied(

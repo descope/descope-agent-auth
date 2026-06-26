@@ -35,7 +35,7 @@ export const tokenResponseToCredential = (
 };
 
 export abstract class CredentialProvider {
-  /** Privileged providers (management key) bypass Connection Policies. */
+  /** Privileged providers (management key) bypass Policies. */
   readonly kind: CredentialKind = 'agent_token';
 
   protected http?: HttpClient;

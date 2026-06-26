@@ -71,7 +71,7 @@ export class AgentAuthClient {
     if (this.credential.isPrivileged) {
       (logger ?? { warn: () => {}, debug: () => {} }).warn(
         'AgentAuthClient configured with a privileged (management-key) credential: ' +
-          'vault exchanges will BYPASS Connection Policies.',
+          'vault exchanges will BYPASS Policies.',
       );
     }
 

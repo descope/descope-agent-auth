@@ -141,7 +141,7 @@ const repos = await listRepos('user@example.com');
 | `AuthorizationCodeProvider` | agent with a browser available (PKCE) |
 | `CibaProvider` | the agent needs a specific user's approval out of band |
 | `AccessTokenProvider` | you already hold a user's Descope access token (user-scoped access) |
-| `ManagementKeyProvider` | privileged, **not recommended** — bypasses Connection Policies |
+| `ManagementKeyProvider` | privileged, **not recommended** — bypasses Policies |
 
 ### User-scoped access
 
@@ -177,7 +177,7 @@ await client.connections.getToken({ connection: 'github', identifier: userId, ac
 - **Omit** `scopes` → the Connection's configured default scopes are used.
 - **Pass** `scopes` → they fully override the defaults (not clamped to a subset).
 
-The real guardrail on what an agent can obtain is **Connection Policies** plus
+The real guardrail on what an agent can obtain is **Policies** plus
 downstream provider consent — not the default-scope list. The SDK never infers
 scopes from agent intent; a request either omits them or pins an explicit set.
 
@@ -229,7 +229,7 @@ const token = await client.connections.getToken({
 | Error | Meaning |
 | --- | --- |
 | `ConnectionAuthorizationRequired` | user hasn't connected the account; carries `connect_url` / `connectUrl` |
-| `PolicyDenied` | agent token lacks Connection Policy permission |
+| `PolicyDenied` | agent token lacks Policy permission |
 | `ApprovalDenied` / `ApprovalTimeout` | the CIBA gate was rejected or timed out |
 | `CredentialAcquisitionFailed` | phase 1 failed (bad client creds, device-flow timeout, ...) |
 | `TokenExchangeFailed` | other phase-2 transport/validation failure |

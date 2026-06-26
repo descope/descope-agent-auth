@@ -171,7 +171,7 @@ class VaultBackend:
                 identifier=identifier,
             )
 
-        # 401/403 -> Connection Policy (or auth) denied. Meaningful for agent tokens;
+        # 401/403 -> Policy (or auth) denied. Meaningful for agent tokens;
         # a management key is unrestricted, so a 403 there is a real config error.
         if resp.status_code in (401, 403):
             raise PolicyDenied(

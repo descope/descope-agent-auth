@@ -44,7 +44,7 @@ Two common arrangements:
 
 2. **Autonomous server identity.** The MCP server authenticates to Descope as
    itself (client credentials) and exchanges on behalf of the named `identifier`
-   it resolved from the validated request. Connection Policies govern what that
+   it resolved from the validated request. Policies govern what that
    server identity may pull.
 
 The exchange call is identical either way — only the phase-1 provider differs.

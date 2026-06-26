@@ -54,7 +54,7 @@ class AgentAuthClient:
         if self.credential.is_privileged:
             self._log.warning(
                 "AgentAuthClient configured with a privileged (management-key) "
-                "credential: vault exchanges will BYPASS Connection Policies."
+                "credential: vault exchanges will BYPASS Policies."
             )
 
         # Optional phase-2 approval gate: a CIBA provider used to require a fresh
