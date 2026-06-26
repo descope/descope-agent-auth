@@ -201,8 +201,20 @@ prompted to connect more than once as different tools need new scopes (increment
 consent). To get a single up-front consent, set the Connection's **default scopes**
 to the superset (and call tools without `scopes`), or request the superset.
 
-> Per-request scopes on the connect endpoint should be confirmed against your
-> Descope project — see the UNVERIFIED note in `connections` source.
+The connect endpoint nests these under `options` (`scopes`, `redirectUrl`, plus
+`prompt`, `loginHint`, `resources`, `externalIdentifier`). The SDK places the call's
+`scopes` and `redirect_url` there for you; pass any of the other fields via
+`connect_options` (Python) / `connectOptions` (TS):
+
+```python
+client.connections.get_token(
+    connection="github",
+    identifier=user_id,
+    scopes=["repo"],
+    redirect_url="https://app/cb",
+    connect_options={"prompt": ["consent"], "loginHint": "user@example.com"},
+)
+```
 
 ## Human-in-the-loop approval (CIBA gate)
 

@@ -81,6 +81,32 @@ class TestConnectionsExchange(common.AgentAuthTest):
         self.assertEqual(ctx.exception.connection, "github")
 
     @patch("httpx.Client.request")
+    def test_connect_url_carries_scopes_and_options(self, mock_request):
+        mock_request.side_effect = [
+            make_response(CRED),  # phase 1
+            make_response({"error": "no"}, status=404),  # scoped fetch -> not connected
+            make_response({"url": "https://api.descope.com/connect"}),  # connect
+        ]
+        client = self._agent_client()
+
+        with self.assertRaises(ConnectionAuthorizationRequired):
+            client.connections.get_token(
+                connection="github",
+                identifier="user@example.com",
+                scopes=["repo"],
+                redirect_url="https://app/cb",
+                connect_options={"prompt": ["consent"]},
+            )
+
+        # The connect call is the last request; its JSON body nests everything in options.
+        _, kwargs = mock_request.call_args
+        opts = kwargs["json"]["options"]
+        self.assertEqual(opts["scopes"], ["repo"])
+        self.assertEqual(opts["redirectUrl"], "https://app/cb")
+        self.assertEqual(opts["prompt"], ["consent"])
+        self.assertNotIn("scopes", kwargs["json"])  # not at top level
+
+    @patch("httpx.Client.request")
     def test_policy_denied(self, mock_request):
         mock_request.side_effect = [
             make_response(CRED),
