@@ -1,0 +1,211 @@
+# Standalone Connections quickstart
+
+This is the **first-class** path: using `descope-agent-auth` on its own, with no
+MCP server in front of it. Your agent acquires a Descope credential and exchanges
+it for downstream provider tokens (GitHub, Slack, Google, ...) from the Descope
+vault.
+
+> If your agent sits behind an MCP server, see [mcp-fronted.md](mcp-fronted.md).
+> The two paths compose; neither requires the other.
+
+## The two phases
+
+1. **Acquire** a Descope credential (configured once at init).
+2. **Exchange** it for a Connection token (called repeatedly at runtime).
+
+Refresh of both the Descope credential and the downstream tokens happens
+transparently underneath — you ask for a token and get a currently-valid one.
+
+## Prerequisites
+
+- A Descope project, and an **Outbound App / Connection** configured for the
+  provider you want (e.g. `github`), set up at design time in the Descope Console
+  or via the Descope MCP server. Default scopes live on the Connection.
+- A way for the agent to authenticate to Descope (see provider table below).
+
+---
+
+## Python
+
+```bash
+pip install descope-agent-auth
+```
+
+```python
+from descope_agent_auth import AgentAuthClient, ClientCredentialsProvider
+from descope_agent_auth.errors import ConnectionAuthorizationRequired
+
+client = AgentAuthClient(
+    project_id="P2abc...",
+    base_url="https://api.descope.com",
+    credential=ClientCredentialsProvider(
+        client_id="agent-client-id",
+        client_secret="agent-client-secret",
+    ),
+)
+
+try:
+    github = client.connections.get_token(
+        connection="github",
+        identifier="user@example.com",   # the principal the agent acts for
+        # scopes=["repo"],               # optional; overrides the Connection defaults
+    )
+    # github.access_token is a downstream GitHub token, refreshed as needed.
+    use_github(github.access_token)
+except ConnectionAuthorizationRequired as e:
+    # The user hasn't connected GitHub yet. Send them to e.connect_url to consent,
+    # then retry the exchange.
+    redirect_user_to(e.connect_url)
+```
+
+### Three-line tool ergonomic
+
+```python
+from descope_agent_auth import with_connection
+
+@with_connection(client, connection="github", scopes=["repo"])
+def list_repos(token, identifier):
+    gh = GitHub(auth=token)            # token injected, already scoped + fresh
+    return [r.name for r in gh.repos.list_for_authenticated_user()]
+
+repos = list_repos(identifier="user@example.com")
+# ConnectionAuthorizationRequired propagates if the user must connect first.
+```
+
+---
+
+## TypeScript
+
+```bash
+npm install @descope/agent-auth
+```
+
+```ts
+import {
+  AgentAuthClient,
+  ClientCredentialsProvider,
+  ConnectionAuthorizationRequired,
+} from '@descope/agent-auth';
+
+const client = new AgentAuthClient({
+  projectId: 'P2abc...',
+  baseUrl: 'https://api.descope.com',
+  credential: new ClientCredentialsProvider({
+    clientId: 'agent-client-id',
+    clientSecret: 'agent-client-secret',
+  }),
+});
+
+try {
+  const github = await client.connections.getToken({
+    connection: 'github',
+    identifier: 'user@example.com',
+    // scopes: ['repo'],   // optional; overrides the Connection defaults
+  });
+  useGithub(github.accessToken);
+} catch (e) {
+  if (e instanceof ConnectionAuthorizationRequired) {
+    redirectUserTo(e.connectUrl);
+  } else {
+    throw e;
+  }
+}
+```
+
+### Three-line tool ergonomic
+
+```ts
+import { withConnection } from '@descope/agent-auth';
+
+const listRepos = withConnection(
+  client,
+  { connection: 'github', scopes: ['repo'] },
+  async (token, identifier) => {
+    const octokit = new Octokit({ auth: token });
+    const { data } = await octokit.rest.repos.listForAuthenticatedUser();
+    return data.map((r) => r.name);
+  },
+);
+
+const repos = await listRepos('user@example.com');
+```
+
+---
+
+## Picking a phase-1 provider
+
+| Provider | Use when |
+| --- | --- |
+| `ClientCredentialsProvider` | autonomous agent, no user in the loop |
+| `DeviceCodeProvider` | headless agent (no browser); shows a verification URL + code |
+| `AuthorizationCodeProvider` | agent with a browser available (PKCE) |
+| `CibaProvider` | the agent needs a specific user's approval out of band |
+| `ManagementKeyProvider` | privileged, **not recommended** — bypasses Connection Policies |
+
+## Scopes
+
+- **Omit** `scopes` → the Connection's configured default scopes are used.
+- **Pass** `scopes` → they fully override the defaults (not clamped to a subset).
+
+The real guardrail on what an agent can obtain is **Connection Policies** plus
+downstream provider consent — not the default-scope list. The SDK never infers
+scopes from agent intent; a request either omits them or pins an explicit set.
+
+## Human-in-the-loop approval (CIBA gate)
+
+For a sensitive exchange, require a fresh user sign-off on a trusted device before
+the token is handed back. Configure an `approval` provider on the client, then pass
+`require_approval` / `requireApproval` to the exchange.
+
+```python
+from descope_agent_auth import AgentAuthClient, CibaProvider, ApprovalRequest
+
+client = AgentAuthClient(
+    project_id="P2abc...",
+    credential=ClientCredentialsProvider(client_id="...", client_secret="..."),
+    approval=CibaProvider(client_id="...", login_hint="user@example.com"),
+)
+
+token = client.connections.get_token(
+    connection="github",
+    identifier="user@example.com",
+    require_approval=ApprovalRequest(
+        login_hint="user@example.com",
+        binding_message="Approve the agent deleting branch protection",
+    ),
+)
+# Blocks until the user approves on their device, else raises ApprovalDenied / ApprovalTimeout.
+```
+
+```ts
+const client = new AgentAuthClient({
+  projectId: 'P2abc...',
+  credential: new ClientCredentialsProvider({ clientId: '...', clientSecret: '...' }),
+  approval: new CibaProvider({ clientId: '...', loginHint: 'user@example.com' }),
+});
+
+const token = await client.connections.getToken({
+  connection: 'github',
+  identifier: 'user@example.com',
+  requireApproval: {
+    loginHint: 'user@example.com',
+    bindingMessage: 'Approve the agent deleting branch protection',
+  },
+});
+```
+
+## Errors worth catching
+
+| Error | Meaning |
+| --- | --- |
+| `ConnectionAuthorizationRequired` | user hasn't connected the account; carries `connect_url` / `connectUrl` |
+| `PolicyDenied` | agent token lacks Connection Policy permission |
+| `ApprovalDenied` / `ApprovalTimeout` | the CIBA gate was rejected or timed out |
+| `CredentialAcquisitionFailed` | phase 1 failed (bad client creds, device-flow timeout, ...) |
+| `TokenExchangeFailed` | other phase-2 transport/validation failure |
+
+## Token storage
+
+By default tokens are cached in-process (`MemoryTokenStore`). For multi-process or
+serverless deployments, implement the `TokenStore` interface (`get`/`set`/`delete`/
+`list`) over Redis, a database, or a secrets manager and pass it as `store`.

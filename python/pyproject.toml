@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "descope-agent-auth"
+version = "0.1.0"
+description = "Client-side SDK for wiring a custom agent to Descope: acquire a Descope credential and exchange it for Connection/Resource tokens from the vault."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Descope" }]
+keywords = ["descope", "agent", "auth", "oauth", "ciba", "outbound-apps"]
+dependencies = [
+    "httpx>=0.24,<1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+    "mypy>=1.0",
+    "ruff>=0.1",
+]
+
+[project.urls]
+Homepage = "https://www.descope.com"
+Documentation = "https://docs.descope.com/agentic-identity-hub"
+
+[tool.hatch.build.targets.wheel]
+packages = ["descope_agent_auth"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.mypy]
+python_version = "3.9"
+strict = true

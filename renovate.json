@@ -1,0 +1,12 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":semanticCommits", ":dependencyDashboard"],
+  "packageRules": [
+    {
+      "matchManagers": ["npm", "pip_requirements", "pep621"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "non-major dev dependencies",
+      "matchDepTypes": ["devDependencies", "dev"]
+    }
+  ]
+}

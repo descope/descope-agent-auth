@@ -1,0 +1,37 @@
+{
+  "root": true,
+  "extends": [
+    "airbnb-base",
+    "airbnb-typescript/base",
+    "plugin:import/typescript",
+    "plugin:prettier/recommended"
+  ],
+  "plugins": ["@typescript-eslint", "import", "no-only-tests"],
+  "parser": "@typescript-eslint/parser",
+  "parserOptions": {
+    "project": "./tsconfig.eslint.json"
+  },
+  "env": {
+    "jest": true,
+    "node": true
+  },
+  "settings": {
+    "import/resolver": {
+      "typescript": {
+        "alwaysTryTypes": true
+      }
+    }
+  },
+  "rules": {
+    "no-console": 2,
+    "class-methods-use-this": 0,
+    "max-classes-per-file": 0,
+    "no-continue": 0,
+    "no-use-before-define": 0,
+    "@typescript-eslint/no-use-before-define": ["error", { "functions": false }],
+    "no-only-tests/no-only-tests": 2,
+    "import/prefer-default-export": 0,
+    "import/no-extraneous-dependencies": [2, { "devDependencies": ["**/*.test.ts"] }]
+  },
+  "ignorePatterns": ["build/*", "dist/*", "coverage/*", "CHANGELOG.md", "*.cjs", "*.js"]
+}
