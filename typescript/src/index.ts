@@ -33,6 +33,10 @@ export type { TokenStore } from './store';
 export { withConnection } from './tools';
 export type { WithConnectionOptions, ToolFn } from './tools';
 
+// integrations (optional, framework-specific)
+export { langgraphConnectionTool, interruptPayload } from './integrations/langgraph';
+export type { LangGraphConnectionOptions, InterruptFn } from './integrations/langgraph';
+
 // execution seam
 export { Execution } from './execution';
 export type { ToolRequest } from './execution';

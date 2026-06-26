@@ -133,33 +133,48 @@ const listRepos = tool(
 
 ## LangGraph
 
-LangGraph tools are LangChain tools (above), but LangGraph adds first-class
-**interrupts** — the natural home for the re-auth / approval signal. Catch
-`ConnectionAuthorizationRequired`, `interrupt()` with the connect URL so the graph
-pauses, and resume after the user consents:
+LangGraph adds first-class **interrupts** — the natural home for the re-auth /
+approval signal. There's an optional helper that wires this for you: it runs the
+exchange, converts `ConnectionAuthorizationRequired` into a LangGraph `interrupt()`
+(carrying the connect URL), pauses the graph, and **retries automatically on
+resume**. The SDK never depends on LangGraph — you pass `interrupt` in.
+
+**Python** (`descope-agent-auth[langgraph]`):
 
 ```python
-from langchain_core.tools import tool
-from langgraph.types import interrupt
-from descope_agent_auth.errors import ConnectionAuthorizationRequired
+from descope_agent_auth.integrations.langgraph import connection_tool
 
-@tool
-def list_repos(identifier: str) -> list[str]:
+@connection_tool(client, connection="github", scopes=["repo"])
+def list_repos(token, identifier):
     """List the user's GitHub repos."""
-    while True:
-        try:
-            token = client.connections.get_token(
-                connection="github", identifier=identifier, scopes=["repo"]
-            )
-            return [r.name for r in GitHub(auth=token.access_token).repos.list_for_authenticated_user()]
-        except ConnectionAuthorizationRequired as e:
-            # Pause the graph; the app shows e.connect_url, then resumes with Command(resume=...).
-            interrupt({"type": "connect_required", "connect_url": e.connect_url})
+    return [r.name for r in GitHub(auth=token).repos.list_for_authenticated_user()]
 ```
 
-The same shape gates a high-risk step on approval: wrap the call with
-`require_approval=ApprovalRequest(...)` and let `ApprovalDenied` / `ApprovalTimeout`
-surface, or `interrupt()` to drive the approval from the graph.
+`connection_tool` resolves `langgraph.types.interrupt` lazily (only when an
+interrupt actually fires). Pass `interrupt=...` to inject your own, and
+`interrupt_on=(...)` to also pause on `ApprovalDenied` / `ApprovalTimeout`.
+
+**TypeScript** (inject `interrupt` from `@langchain/langgraph`):
+
+```ts
+import { interrupt } from '@langchain/langgraph';
+import { langgraphConnectionTool } from '@descope/agent-auth';
+
+const listRepos = langgraphConnectionTool(
+  client,
+  { connection: 'github', scopes: ['repo'], interrupt }, // alsoInterruptOnApproval?: true
+  async (token, identifier) =>
+    (await new Octokit({ auth: token }).rest.repos.listForAuthenticatedUser()).data.map((r) => r.name),
+);
+```
+
+On resume (`Command(resume=...)`) the tool retries the exchange. To gate a
+high-risk step on approval too, add `require_approval` / `requireApproval` and the
+helper will interrupt on the approval errors when you opt in.
+
+> Prefer to wire it yourself? The helper is a thin loop — catch
+> `ConnectionAuthorizationRequired`, call `interrupt({...connect_url})`, and retry —
+> so you can inline that in a plain `@tool` instead.
 
 ## Google ADK
 
