@@ -48,9 +48,10 @@ class AgentAuthClient:
 
         self._http = HttpClient(base_url, timeout=timeout, retry=retry, logger=self._log)
 
-        # Phase 1: bind the provider so it can talk to Descope.
+        # Phase 1: bind the provider so it can talk to Descope and persist its
+        # credential (incl. refresh token) to the token store.
         self.credential = credential
-        self.credential.bind(self._http, project_id)
+        self.credential.bind(self._http, project_id, self.store)
         if self.credential.is_privileged:
             self._log.warning(
                 "AgentAuthClient configured with a privileged (management-key) "
@@ -61,7 +62,7 @@ class AgentAuthClient:
         # user sign-off before a sensitive exchange (see require_approval).
         self._approval = approval
         if self._approval is not None:
-            self._approval.bind(self._http, project_id)
+            self._approval.bind(self._http, project_id, self.store)
 
         backend = VaultBackend(
             http=self._http,

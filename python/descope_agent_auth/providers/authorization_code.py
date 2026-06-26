@@ -115,6 +115,9 @@ class AuthorizationCodeProvider(CredentialProvider):
         self._code = None
         return token_response_to_credential(resp.json, kind=self.kind)
 
+    def _storage_key(self) -> str:
+        return f"cred:authz:{self._project_id}:{self._client_id}"
+
     def _refresh_client_auth(self) -> dict:
         out = {"client_id": self._client_id}
         if self._client_secret:

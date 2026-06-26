@@ -52,4 +52,8 @@ export class ClientCredentialsProvider extends CredentialProvider {
     }
     return tokenResponseToCredential(resp.json, this.kind);
   }
+
+  protected storageKey(): string {
+    return `cred:client_credentials:${this.projectId}:${this.clientId}`;
+  }
 }

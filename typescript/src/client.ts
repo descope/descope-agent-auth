@@ -65,9 +65,10 @@ export class AgentAuthClient {
       logger,
     });
 
-    // Phase 1: bind the provider so it can talk to Descope.
+    // Phase 1: bind the provider so it can talk to Descope and persist its
+    // credential (incl. refresh token) to the token store.
     this.credential = opts.credential;
-    this.credential.bind(this.http, this.projectId);
+    this.credential.bind(this.http, this.projectId, this.store);
     if (this.credential.isPrivileged) {
       (logger ?? { warn: () => {}, debug: () => {} }).warn(
         'AgentAuthClient configured with a privileged (management-key) credential: ' +
@@ -79,7 +80,7 @@ export class AgentAuthClient {
     // sign-off before a sensitive exchange (see requireApproval).
     this.approval = opts.approval;
     if (this.approval) {
-      this.approval.bind(this.http, this.projectId);
+      this.approval.bind(this.http, this.projectId, this.store);
     }
 
     const backend = new VaultBackend(

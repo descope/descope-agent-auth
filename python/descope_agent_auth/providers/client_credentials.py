@@ -49,6 +49,9 @@ class ClientCredentialsProvider(CredentialProvider):
             )
         return token_response_to_credential(resp.json, kind=self.kind)
 
+    def _storage_key(self) -> str:
+        return f"cred:client_credentials:{self._project_id}:{self._client_id}"
+
     def _refresh_client_auth(self) -> dict:
         # client_credentials tokens are re-acquired, not refresh-token rotated;
         # base.get_credential falls back to _acquire when there is no refresh token.

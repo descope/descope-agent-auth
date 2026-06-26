@@ -122,3 +122,13 @@ class CibaProvider(CredentialProvider):
         if self._client_secret:
             body["client_secret"] = self._client_secret
         return body
+
+    def _storage_key(self) -> str:
+        # Keyed by the user (login_hint): the acquired token is user-bound.
+        return f"cred:ciba:{self._project_id}:{self._client_id}:{self._login_hint}"
+
+    def _refresh_client_auth(self) -> dict:
+        out = {"client_id": self._client_id}
+        if self._client_secret:
+            out["client_secret"] = self._client_secret
+        return out

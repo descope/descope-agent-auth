@@ -234,8 +234,26 @@ const token = await client.connections.getToken({
 | `CredentialAcquisitionFailed` | phase 1 failed (bad client creds, device-flow timeout, ...) |
 | `TokenExchangeFailed` | other phase-2 transport/validation failure |
 
-## Token storage
+## Token storage & refresh
 
-By default tokens are cached in-process (`MemoryTokenStore`). For multi-process or
-serverless deployments, implement the `TokenStore` interface (`get`/`set`/`delete`/
-`list`) over Redis, a database, or a secrets manager and pass it as `store`.
+The `store` holds **both** phases: the phase-1 Descope credential (including its
+**refresh token**, kept beyond the access token's expiry) and the phase-2
+downstream tokens. Everything is refreshed lazily on access — you ask for a token
+and get a currently-valid one.
+
+This matters most for **device code / authorization code / CIBA**: their tokens are
+persisted with the refresh token, so a restarted or multi-process agent **refreshes
+instead of re-running the interactive flow** (no second device prompt, browser
+redirect, or CIBA push). `ClientCredentials` is simply re-acquired (no user
+interaction); `ManagementKey` and bring-your-own `AccessTokenProvider` tokens are
+not persisted.
+
+By default everything is cached in-process (`MemoryTokenStore`) — fine for a single
+long-running process, but lost on restart. For multi-process, serverless, or
+restart-safe deployments, implement the `TokenStore` interface
+(`get`/`set`/`delete`/`list`) over Redis, a database, or a secrets manager and pass
+it as `store`.
+
+> **Security:** with a persistent store, the credentials there now include
+> **refresh tokens**. Treat the store as a secret store (encryption at rest, access
+> controls). The SDK never logs token values.

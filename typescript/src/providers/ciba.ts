@@ -139,4 +139,15 @@ export class CibaProvider extends CredentialProvider {
     if (this.clientSecret) body.client_secret = this.clientSecret;
     return body;
   }
+
+  protected storageKey(): string {
+    // Keyed by the user (loginHint): the acquired token is user-bound.
+    return `cred:ciba:${this.projectId}:${this.clientId}:${this.loginHint}`;
+  }
+
+  protected refreshClientAuth(): Record<string, string> {
+    const out: Record<string, string> = { client_id: this.clientId };
+    if (this.clientSecret) out.client_secret = this.clientSecret;
+    return out;
+  }
 }

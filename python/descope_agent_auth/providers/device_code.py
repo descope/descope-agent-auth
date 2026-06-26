@@ -95,3 +95,10 @@ class DeviceCodeProvider(CredentialProvider):
                 f"device flow failed: {_err(resp.json) or resp.text}"
             )
         raise CredentialAcquisitionFailed("device flow timed out before user approval")
+
+    def _storage_key(self) -> str:
+        return f"cred:device:{self._project_id}:{self._client_id}"
+
+    def _refresh_client_auth(self) -> dict:
+        # Device flow is a public client: refresh needs the client_id.
+        return {"client_id": self._client_id}

@@ -136,9 +136,13 @@ flowchart LR
 - A **Resource token** is minted via the **token-exchange** grant. (This needs an
   OAuth agent identity — it does not apply to a Management Key.)
 
-Configure phase 1 once; call phase 2 repeatedly. The phase-1 token and the
+Configure phase 1 once; call phase 2 repeatedly. The phase-1 credential and the
 downstream tokens are cached and refreshed transparently — you ask for a token and
-get a currently-valid one.
+get a currently-valid one. Both are persisted to the pluggable token store
+(including refresh tokens), so a restarted or multi-process agent **refreshes
+instead of re-authenticating** — important for device-code / authorization-code /
+CIBA flows. See
+[token storage & refresh](docs/standalone-connections.md#token-storage--refresh).
 
 ## Autonomous vs. acting for a user
 
