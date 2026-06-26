@@ -37,7 +37,7 @@ export class ConnectionAuthorizationRequired extends AgentAuthError {
   }
 }
 
-/** The agent token lacks Connection Policy permission for this connection/scope. */
+/** The agent token lacks Policy permission for this connection/scope. */
 export class PolicyDenied extends AgentAuthError {
   connection?: string;
 

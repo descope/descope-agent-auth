@@ -1,3 +1,4 @@
+from .access_token import AccessTokenProvider
 from .authorization_code import AuthorizationCodeProvider
 from .base import CredentialProvider
 from .ciba import CibaProvider
@@ -12,4 +13,5 @@ __all__ = [
     "AuthorizationCodeProvider",
     "CibaProvider",
     "ManagementKeyProvider",
+    "AccessTokenProvider",
 ]

@@ -99,4 +99,13 @@ export class DeviceCodeProvider extends CredentialProvider {
     }
     throw new CredentialAcquisitionFailed('device flow timed out before user approval');
   }
+
+  protected storageKey(): string {
+    return `cred:device:${this.projectId}:${this.clientId}`;
+  }
+
+  protected refreshClientAuth(): Record<string, string> {
+    // Device flow is a public client: refresh needs the client_id.
+    return { client_id: this.clientId };
+  }
 }

@@ -5,8 +5,9 @@ MCP server in front of it. Your agent acquires a Descope credential and exchange
 it for downstream provider tokens (GitHub, Slack, Google, ...) from the Descope
 vault.
 
-> If your agent sits behind an MCP server, see [mcp-fronted.md](mcp-fronted.md).
-> The two paths compose; neither requires the other.
+> If your agent sits behind an MCP server, use this SDK inside your tool handlers
+> the same way. (To *build* the MCP server, use Descope's
+> [MCP server SDKs](https://docs.descope.com/mcp) — this SDK is the client side.)
 
 ## The two phases
 
@@ -140,16 +141,81 @@ const repos = await listRepos('user@example.com');
 | `DeviceCodeProvider` | headless agent (no browser); shows a verification URL + code |
 | `AuthorizationCodeProvider` | agent with a browser available (PKCE) |
 | `CibaProvider` | the agent needs a specific user's approval out of band |
-| `ManagementKeyProvider` | privileged, **not recommended** — bypasses Connection Policies |
+| `AccessTokenProvider` | you already hold a user's Descope access token (user-scoped access) |
+| `ManagementKeyProvider` | privileged, **not recommended** — bypasses Policies |
+
+### User-scoped access
+
+To act as a specific user — and to mint **user-scoped Resource tokens** — present
+that user's Descope access token (from your authorization-code / device-code / CIBA
+login). Either configure the client with `AccessTokenProvider`, or pass
+`act_as_user_token` / `actAsUserToken` per call on a shared client:
+
+```python
+from descope_agent_auth import AccessTokenProvider
+
+# Option A — a client bound to the user's token:
+client = AgentAuthClient(project_id="P2...", credential=AccessTokenProvider(access_token=user_jwt))
+gh = client.connections.get_token(connection="github", identifier=user_id)
+
+# Option B — one shared client, user token per call:
+gh = client.connections.get_token(connection="github", identifier=user_id, act_as_user_token=user_jwt)
+res = client.resources.get_token(resource="urn:my-api", act_as_user_token=user_jwt)
+```
+
+```ts
+import { AccessTokenProvider } from '@descope/agent-auth';
+
+const client = new AgentAuthClient({ projectId: 'P2...', credential: new AccessTokenProvider({ accessToken: userJwt }) });
+await client.connections.getToken({ connection: 'github', identifier: userId });
+
+// or per call on a shared client:
+await client.connections.getToken({ connection: 'github', identifier: userId, actAsUserToken: userJwt });
+```
 
 ## Scopes
 
 - **Omit** `scopes` → the Connection's configured default scopes are used.
 - **Pass** `scopes` → they fully override the defaults (not clamped to a subset).
 
-The real guardrail on what an agent can obtain is **Connection Policies** plus
+The real guardrail on what an agent can obtain is **Policies** plus
 downstream provider consent — not the default-scope list. The SDK never infers
 scopes from agent intent; a request either omits them or pins an explicit set.
+
+### Scopes and the connect URL
+
+You define a tool's scopes in one place — `with_connection(scopes=[...])` /
+`get_token(scopes=[...])` — and the SDK uses that same set for **both** the token
+fetch **and** the connect URL it returns when the user hasn't connected yet. So the
+consent screen requests exactly what that tool needs; a different tool with
+different scopes produces a connect URL for those scopes. Omit `scopes` and the
+connect URL uses the Connection's **default scopes** configured in Descope.
+
+```python
+@with_connection(client, connection="github", scopes=["repo"])
+def list_repos(token, identifier): ...
+# If the user must connect first, e.connect_url already requests ["repo"].
+```
+
+Because the connect URL requests only the calling tool's scopes, a user may be
+prompted to connect more than once as different tools need new scopes (incremental
+consent). To get a single up-front consent, set the Connection's **default scopes**
+to the superset (and call tools without `scopes`), or request the superset.
+
+The connect endpoint nests these under `options` (`scopes`, `redirectUrl`, plus
+`prompt`, `loginHint`, `resources`, `externalIdentifier`). The SDK places the call's
+`scopes` and `redirect_url` there for you; pass any of the other fields via
+`connect_options` (Python) / `connectOptions` (TS):
+
+```python
+client.connections.get_token(
+    connection="github",
+    identifier=user_id,
+    scopes=["repo"],
+    redirect_url="https://app/cb",
+    connect_options={"prompt": ["consent"], "loginHint": "user@example.com"},
+)
+```
 
 ## Human-in-the-loop approval (CIBA gate)
 
@@ -199,13 +265,31 @@ const token = await client.connections.getToken({
 | Error | Meaning |
 | --- | --- |
 | `ConnectionAuthorizationRequired` | user hasn't connected the account; carries `connect_url` / `connectUrl` |
-| `PolicyDenied` | agent token lacks Connection Policy permission |
+| `PolicyDenied` | agent token lacks Policy permission |
 | `ApprovalDenied` / `ApprovalTimeout` | the CIBA gate was rejected or timed out |
 | `CredentialAcquisitionFailed` | phase 1 failed (bad client creds, device-flow timeout, ...) |
 | `TokenExchangeFailed` | other phase-2 transport/validation failure |
 
-## Token storage
+## Token storage & refresh
 
-By default tokens are cached in-process (`MemoryTokenStore`). For multi-process or
-serverless deployments, implement the `TokenStore` interface (`get`/`set`/`delete`/
-`list`) over Redis, a database, or a secrets manager and pass it as `store`.
+The `store` holds **both** phases: the phase-1 Descope credential (including its
+**refresh token**, kept beyond the access token's expiry) and the phase-2
+downstream tokens. Everything is refreshed lazily on access — you ask for a token
+and get a currently-valid one.
+
+This matters most for **device code / authorization code / CIBA**: their tokens are
+persisted with the refresh token, so a restarted or multi-process agent **refreshes
+instead of re-running the interactive flow** (no second device prompt, browser
+redirect, or CIBA push). `ClientCredentials` is simply re-acquired (no user
+interaction); `ManagementKey` and bring-your-own `AccessTokenProvider` tokens are
+not persisted.
+
+By default everything is cached in-process (`MemoryTokenStore`) — fine for a single
+long-running process, but lost on restart. For multi-process, serverless, or
+restart-safe deployments, implement the `TokenStore` interface
+(`get`/`set`/`delete`/`list`) over Redis, a database, or a secrets manager and pass
+it as `store`.
+
+> **Security:** with a persistent store, the credentials there now include
+> **refresh tokens**. Treat the store as a secret store (encryption at rest, access
+> controls). The SDK never logs token values.

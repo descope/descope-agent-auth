@@ -37,7 +37,7 @@ class ConnectionAuthorizationRequired(AgentAuthError):
 
 
 class PolicyDenied(AgentAuthError):
-    """The agent token lacks Connection Policy permission for this connection/scope."""
+    """The agent token lacks Policy permission for this connection/scope."""
 
     def __init__(
         self,

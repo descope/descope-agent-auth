@@ -103,6 +103,10 @@ export class AuthorizationCodeProvider extends CredentialProvider {
     return tokenResponseToCredential(resp.json, this.kind);
   }
 
+  protected storageKey(): string {
+    return `cred:authz:${this.projectId}:${this.clientId}`;
+  }
+
   protected refreshClientAuth(): Record<string, string> {
     const out: Record<string, string> = { client_id: this.clientId };
     if (this.clientSecret) out.client_secret = this.clientSecret;

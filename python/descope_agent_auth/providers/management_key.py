@@ -2,7 +2,7 @@
 
 Wraps a static project Management Key. This is not a flow; it is a high-privilege
 credential that grants access to effectively everything in the vault and
-**bypasses Connection Policies**. Support it for server-side/administrative cases,
+**bypasses Policies**. Support it for server-side/administrative cases,
 but make the recommended-path guidance unmissable: construction requires an
 explicit ``allow_management_key=True`` opt-in and emits a warning on init.
 """
@@ -25,13 +25,13 @@ class ManagementKeyProvider(CredentialProvider):
         super().__init__()
         if not allow_management_key:
             raise CredentialAcquisitionFailed(
-                "ManagementKeyProvider bypasses Connection Policies and grants broad "
+                "ManagementKeyProvider bypasses Policies and grants broad "
                 "vault access. It is not the recommended path. To proceed deliberately, "
                 "pass allow_management_key=True."
             )
         self._management_key = management_key
         _log.warning(
-            "ManagementKeyProvider in use: this credential BYPASSES Connection Policies "
+            "ManagementKeyProvider in use: this credential BYPASSES Policies "
             "and grants broad vault access. Prefer an agent-token provider where possible."
         )
 

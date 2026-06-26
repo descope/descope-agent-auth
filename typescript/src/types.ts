@@ -7,7 +7,7 @@
 
 /**
  * How a phase-1 credential is governed downstream. `agent_token` credentials are
- * subject to Connection Policies at exchange time; `management_key` credentials
+ * subject to Policies at exchange time; `management_key` credentials
  * bypass those policies entirely and grant broad vault access (never recommended).
  */
 export type CredentialKind = 'agent_token' | 'management_key';

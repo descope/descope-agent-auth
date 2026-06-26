@@ -15,7 +15,7 @@ from typing import List, Optional
 class CredentialKind(str, Enum):
     """How a phase-1 credential is governed downstream.
 
-    ``AGENT_TOKEN`` credentials are subject to Connection Policies at exchange
+    ``AGENT_TOKEN`` credentials are subject to Policies at exchange
     time. ``MANAGEMENT_KEY`` credentials bypass those policies entirely and grant
     broad vault access -- this is never the recommended path.
     """

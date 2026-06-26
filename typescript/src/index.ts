@@ -10,6 +10,7 @@ export type { AgentAuthClientOptions } from './client';
 // providers
 export {
   CredentialProvider,
+  AccessTokenProvider,
   ClientCredentialsProvider,
   DeviceCodeProvider,
   AuthorizationCodeProvider,
@@ -17,6 +18,7 @@ export {
   ManagementKeyProvider,
 } from './providers';
 export type {
+  AccessTokenOptions,
   ClientCredentialsOptions,
   DeviceCodeOptions,
   AuthorizationCodeOptions,
@@ -32,6 +34,10 @@ export type { TokenStore } from './store';
 // tools
 export { withConnection } from './tools';
 export type { WithConnectionOptions, ToolFn } from './tools';
+
+// integrations (optional, framework-specific)
+export { langgraphConnectionTool, interruptPayload } from './integrations/langgraph';
+export type { LangGraphConnectionOptions, InterruptFn } from './integrations/langgraph';
 
 // execution seam
 export { Execution } from './execution';

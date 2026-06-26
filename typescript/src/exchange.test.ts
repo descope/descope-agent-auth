@@ -108,6 +108,33 @@ describe('ConnectionsClient.getToken', () => {
     ).rejects.toMatchObject({ name: 'ConnectionAuthorizationRequired', connectUrl: undefined });
   });
 
+  it('connect request nests scopes + extra fields under options', async () => {
+    const client = agentClient();
+    let connectBody: any;
+    nock(BASE_URL).post(USER_SCOPED).reply(404, { error: 'no' });
+    nock(BASE_URL)
+      .post(CONNECT_PATH, (b) => {
+        connectBody = b;
+        return true;
+      })
+      .reply(200, { url: 'https://api.descope.com/connect' });
+
+    await client.connections
+      .getToken({
+        connection: 'github',
+        identifier: 'user@example.com',
+        scopes: ['repo'],
+        redirectUrl: 'https://app/cb',
+        connectOptions: { prompt: ['consent'] },
+      })
+      .catch(() => undefined);
+
+    expect(connectBody.options.scopes).toEqual(['repo']);
+    expect(connectBody.options.redirectUrl).toBe('https://app/cb');
+    expect(connectBody.options.prompt).toEqual(['consent']);
+    expect(connectBody.scopes).toBeUndefined(); // not at top level
+  });
+
   it('403 -> PolicyDenied', async () => {
     nock(BASE_URL).post(USER_LATEST).reply(403, { error: 'policy denied' });
     const client = agentClient();

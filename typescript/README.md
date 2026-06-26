@@ -55,13 +55,17 @@ try {
 
 ## Phase-1 providers
 
-| Provider | When |
-| --- | --- |
-| `ClientCredentialsProvider` | autonomous agent, no user |
-| `DeviceCodeProvider` | headless agent (no browser) |
-| `AuthorizationCodeProvider` | agent with a browser (PKCE) |
-| `CibaProvider` | out-of-band user approval (also backs the phase-2 approval gate) |
-| `ManagementKeyProvider` | privileged, **not recommended** (bypasses Connection Policies; requires `allowManagementKey: true`) |
+| Provider                    | When                                                                                                   |
+| --------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `ClientCredentialsProvider` | autonomous agent, no user                                                                              |
+| `DeviceCodeProvider`        | headless agent (no browser)                                                                            |
+| `AuthorizationCodeProvider` | agent with a browser (PKCE)                                                                            |
+| `CibaProvider`              | out-of-band user approval (also backs the phase-2 approval gate)                                       |
+| `AccessTokenProvider`       | bring your own Descope access token (e.g. a user's token from your app's login) for user-scoped access |
+| `ManagementKeyProvider`     | privileged, **not recommended** (bypasses Connection Policies; requires `allowManagementKey: true`)    |
+
+For a user-scoped call on a shared client, pass `actAsUserToken: <user jwt>` to
+`connections.getToken` / `resources.getToken`.
 
 ## Scopes
 
@@ -72,22 +76,22 @@ consent — not the default-scope list.
 
 ## Scripts
 
-| Script | Purpose |
-| --- | --- |
-| `npm run build` | dual CJS + ESM bundle with type declarations (rollup) |
-| `npm test` | Jest + nock with coverage |
-| `npm run lint` | ESLint (airbnb-typescript) |
-| `npm run format-check` | Prettier check |
+| Script                 | Purpose                                               |
+| ---------------------- | ----------------------------------------------------- |
+| `npm run build`        | dual CJS + ESM bundle with type declarations (rollup) |
+| `npm test`             | Jest + nock with coverage                             |
+| `npm run lint`         | ESLint (airbnb-typescript)                            |
+| `npm run format-check` | Prettier check                                        |
 
 ## Status
 
-Implements phases 1–7 of the build spec: types/errors/HTTP, all five credential
+Implements phases 1–7 of the build spec: types/errors/HTTP, all credential
 providers, the pluggable token store, the Connection/Resource exchange, the CIBA
 approval **gate** (`requireApproval`), the `withConnection` tool wrapper, and the
 fetch/execute **execution seam** (`mode`). Only the hosted-execution endpoint
 itself (`mode: 'execute'`) is stubbed, pending core eng. See
-[docs/standalone-connections.md](../docs/standalone-connections.md) and
-[docs/mcp-fronted.md](../docs/mcp-fronted.md).
+[docs/standalone-connections.md](../docs/standalone-connections.md) and the
+[framework cookbook](../docs/FRAMEWORKS.md).
 
 > Some endpoint paths (device authorization, CIBA backchannel, resource-token
 > mapping) are centralized in `src/endpoints.ts` and flagged **UNVERIFIED** —

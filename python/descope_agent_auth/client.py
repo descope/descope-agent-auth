@@ -48,20 +48,21 @@ class AgentAuthClient:
 
         self._http = HttpClient(base_url, timeout=timeout, retry=retry, logger=self._log)
 
-        # Phase 1: bind the provider so it can talk to Descope.
+        # Phase 1: bind the provider so it can talk to Descope and persist its
+        # credential (incl. refresh token) to the token store.
         self.credential = credential
-        self.credential.bind(self._http, project_id)
+        self.credential.bind(self._http, project_id, self.store)
         if self.credential.is_privileged:
             self._log.warning(
                 "AgentAuthClient configured with a privileged (management-key) "
-                "credential: vault exchanges will BYPASS Connection Policies."
+                "credential: vault exchanges will BYPASS Policies."
             )
 
         # Optional phase-2 approval gate: a CIBA provider used to require a fresh
         # user sign-off before a sensitive exchange (see require_approval).
         self._approval = approval
         if self._approval is not None:
-            self._approval.bind(self._http, project_id)
+            self._approval.bind(self._http, project_id, self.store)
 
         backend = VaultBackend(
             http=self._http,
@@ -75,8 +76,17 @@ class AgentAuthClient:
         execution = Execution(mode=self.mode, backend=backend)
 
         # Phase 2 entry points.
+        # Connection tokens come from the vault (via the execution seam); Resource
+        # tokens are minted by the token-exchange grant directly off the phase-1
+        # credential, so ResourcesClient is wired to the HTTP + credential layer.
         self.connections = ConnectionsClient(execution)
-        self.resources = ResourcesClient(execution)
+        self.resources = ResourcesClient(
+            http=self._http,
+            get_credential=self.get_credential,
+            store=self.store,
+            mode=self.mode,
+            approval_gate=self._run_approval,
+        )
 
     def _run_approval(self, request: ApprovalRequest) -> None:
         """Run a CIBA approval cycle for a sensitive exchange; raise on denial/timeout."""

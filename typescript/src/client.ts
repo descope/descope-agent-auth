@@ -65,13 +65,14 @@ export class AgentAuthClient {
       logger,
     });
 
-    // Phase 1: bind the provider so it can talk to Descope.
+    // Phase 1: bind the provider so it can talk to Descope and persist its
+    // credential (incl. refresh token) to the token store.
     this.credential = opts.credential;
-    this.credential.bind(this.http, this.projectId);
+    this.credential.bind(this.http, this.projectId, this.store);
     if (this.credential.isPrivileged) {
       (logger ?? { warn: () => {}, debug: () => {} }).warn(
         'AgentAuthClient configured with a privileged (management-key) credential: ' +
-          'vault exchanges will BYPASS Connection Policies.',
+          'vault exchanges will BYPASS Policies.',
       );
     }
 
@@ -79,7 +80,7 @@ export class AgentAuthClient {
     // sign-off before a sensitive exchange (see requireApproval).
     this.approval = opts.approval;
     if (this.approval) {
-      this.approval.bind(this.http, this.projectId);
+      this.approval.bind(this.http, this.projectId, this.store);
     }
 
     const backend = new VaultBackend(
@@ -93,7 +94,16 @@ export class AgentAuthClient {
     // behind the mode flag so enabling it later is a config change, not a rewrite.
     const execution = new Execution(this.mode, backend);
     this.connections = new ConnectionsClient(execution);
-    this.resources = new ResourcesClient(execution);
+    // Connection tokens come from the vault (via the execution seam); Resource
+    // tokens are minted by the token-exchange grant directly off the phase-1
+    // credential, so ResourcesClient is wired to the HTTP + credential layer.
+    this.resources = new ResourcesClient({
+      http: this.http,
+      getCredential: () => this.getCredential(),
+      store: this.store,
+      mode: this.mode,
+      approvalGate: (request) => this.runApproval(request),
+    });
   }
 
   private async runApproval(request: ApprovalRequest): Promise<void> {

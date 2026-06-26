@@ -3,7 +3,7 @@
 Fetch a scoped downstream provider token (GitHub, Slack, ...) from the vault for a
 given identity. Omit ``scopes`` to request the Connection's configured defaults;
 pass ``scopes`` to override them entirely (the SDK never clamps to a subset -- the
-real guardrail is Connection Policies, not the default-scope list).
+real guardrail is Policies, not the default-scope list).
 """
 
 from __future__ import annotations
@@ -29,7 +29,9 @@ def _build_args(
     with_refresh_token: bool,
     force_refresh: bool,
     redirect_url: Optional[str],
+    connect_options: Optional[dict],
     require_approval: Optional[ApprovalRequest],
+    act_as_user_token: Optional[str],
 ) -> dict:
     body: dict = {"appId": connection, "userId": identifier}
     if tenant_id:
@@ -44,13 +46,22 @@ def _build_args(
     else:
         path = OUTBOUND_USER_TOKEN_LATEST
 
+    # Connect-URL config lives under `options` (redirectUrl, scopes, prompt,
+    # loginHint, resources, externalIdentifier). The connect URL requests the SAME
+    # scopes as the token fetch, so a user who hasn't connected yet consents to
+    # exactly what this tool needs; omitting scopes falls back to the Connection's
+    # default scopes. connect_options carries any of the other option fields.
+    options: dict = dict(connect_options or {})
+    if redirect_url:
+        options["redirectUrl"] = redirect_url
+    if scopes:
+        options["scopes"] = list(scopes)
+
     connect_body: dict = {"appId": connection}
     if tenant_id:
         connect_body["tenantId"] = tenant_id
-    if scopes:
-        connect_body["scopes"] = list(scopes)
-    if redirect_url:
-        connect_body["options"] = {"redirectUrl": redirect_url}
+    if options:
+        connect_body["options"] = options
 
     return {
         "path": path,
@@ -61,6 +72,7 @@ def _build_args(
         "connect_body": connect_body,
         "force_refresh": force_refresh,
         "require_approval": require_approval,
+        "act_as_user_token": act_as_user_token,
     }
 
 
@@ -78,9 +90,21 @@ class ConnectionsClient:
         with_refresh_token: bool = False,
         force_refresh: bool = False,
         redirect_url: Optional[str] = None,
+        connect_options: Optional[dict] = None,
         require_approval: Optional[ApprovalRequest] = None,
+        act_as_user_token: Optional[str] = None,
     ) -> VaultToken:
         """Return a currently-valid downstream token for ``identifier``.
+
+        Pass ``act_as_user_token`` to run this single call as a specific user --
+        present that user's Descope access token (from your authorization-code /
+        device-code / CIBA login) so the vault fetch is user-scoped, without
+        reconfiguring the client.
+
+        ``connect_options`` sets extra fields on the connect URL built when the user
+        hasn't connected yet (``prompt``, ``loginHint``, ``resources``,
+        ``externalIdentifier``); ``redirect_url`` and the call's ``scopes`` are added
+        to it automatically.
 
         Raises ``ConnectionAuthorizationRequired`` (carrying ``connect_url``) when
         the user hasn't connected the account yet, ``PolicyDenied`` when an agent
@@ -95,7 +119,9 @@ class ConnectionsClient:
             with_refresh_token=with_refresh_token,
             force_refresh=force_refresh,
             redirect_url=redirect_url,
+            connect_options=connect_options,
             require_approval=require_approval,
+            act_as_user_token=act_as_user_token,
         )
         return self._execution.fetch_token(**args)
 
@@ -107,7 +133,9 @@ class ConnectionsClient:
         identifier: str,
         scopes: Optional[List[str]] = None,
         tenant_id: Optional[str] = None,
+        connect_options: Optional[dict] = None,
         require_approval: Optional[ApprovalRequest] = None,
+        act_as_user_token: Optional[str] = None,
     ) -> Any:
         """Execute-mode counterpart of ``get_token`` (see execution seam).
 
@@ -123,6 +151,8 @@ class ConnectionsClient:
             with_refresh_token=False,
             force_refresh=False,
             redirect_url=None,
+            connect_options=connect_options,
             require_approval=require_approval,
+            act_as_user_token=act_as_user_token,
         )
         return self._execution.execute(request=request, **args)

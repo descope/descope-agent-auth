@@ -9,10 +9,12 @@ Connection / Resource tokens from the Descope vault.
 
 It is **not** a tool for building MCP servers. Making an MCP server an OAuth 2.1
 protected resource (DCR, metadata endpoints, token validation, `tools/list`
-filtering) is the *resource-server* side — that's the **Descope MCP SDK**. This SDK
-is the *requester* side. They compose (an agent can be both), but they're separate
-libraries. See [mcp-fronted.md](mcp-fronted.md) if your agent sits behind an MCP
-server.
+filtering) is the *resource-server* side — for that, use Descope's MCP server SDKs
+([`@descope/mcp-express`](https://docs.descope.com/mcp/mcp-express-sdk) or the
+[`descope-mcp` Python SDK](https://docs.descope.com/mcp/python-sdk)). This SDK is
+the *requester* side; if your agent sits behind such a server, use it inside your
+tool handlers (resolve the user from the validated request, then call
+`connections.get_token` / `resources.get_token`).
 
 ## Do you need a separate SDK per framework?
 
@@ -133,33 +135,48 @@ const listRepos = tool(
 
 ## LangGraph
 
-LangGraph tools are LangChain tools (above), but LangGraph adds first-class
-**interrupts** — the natural home for the re-auth / approval signal. Catch
-`ConnectionAuthorizationRequired`, `interrupt()` with the connect URL so the graph
-pauses, and resume after the user consents:
+LangGraph adds first-class **interrupts** — the natural home for the re-auth /
+approval signal. There's an optional helper that wires this for you: it runs the
+exchange, converts `ConnectionAuthorizationRequired` into a LangGraph `interrupt()`
+(carrying the connect URL), pauses the graph, and **retries automatically on
+resume**. The SDK never depends on LangGraph — you pass `interrupt` in.
+
+**Python** (`descope-agent-auth[langgraph]`):
 
 ```python
-from langchain_core.tools import tool
-from langgraph.types import interrupt
-from descope_agent_auth.errors import ConnectionAuthorizationRequired
+from descope_agent_auth.integrations.langgraph import connection_tool
 
-@tool
-def list_repos(identifier: str) -> list[str]:
+@connection_tool(client, connection="github", scopes=["repo"])
+def list_repos(token, identifier):
     """List the user's GitHub repos."""
-    while True:
-        try:
-            token = client.connections.get_token(
-                connection="github", identifier=identifier, scopes=["repo"]
-            )
-            return [r.name for r in GitHub(auth=token.access_token).repos.list_for_authenticated_user()]
-        except ConnectionAuthorizationRequired as e:
-            # Pause the graph; the app shows e.connect_url, then resumes with Command(resume=...).
-            interrupt({"type": "connect_required", "connect_url": e.connect_url})
+    return [r.name for r in GitHub(auth=token).repos.list_for_authenticated_user()]
 ```
 
-The same shape gates a high-risk step on approval: wrap the call with
-`require_approval=ApprovalRequest(...)` and let `ApprovalDenied` / `ApprovalTimeout`
-surface, or `interrupt()` to drive the approval from the graph.
+`connection_tool` resolves `langgraph.types.interrupt` lazily (only when an
+interrupt actually fires). Pass `interrupt=...` to inject your own, and
+`interrupt_on=(...)` to also pause on `ApprovalDenied` / `ApprovalTimeout`.
+
+**TypeScript** (inject `interrupt` from `@langchain/langgraph`):
+
+```ts
+import { interrupt } from '@langchain/langgraph';
+import { langgraphConnectionTool } from '@descope/agent-auth';
+
+const listRepos = langgraphConnectionTool(
+  client,
+  { connection: 'github', scopes: ['repo'], interrupt }, // alsoInterruptOnApproval?: true
+  async (token, identifier) =>
+    (await new Octokit({ auth: token }).rest.repos.listForAuthenticatedUser()).data.map((r) => r.name),
+);
+```
+
+On resume (`Command(resume=...)`) the tool retries the exchange. To gate a
+high-risk step on approval too, add `require_approval` / `requireApproval` and the
+helper will interrupt on the approval errors when you opt in.
+
+> Prefer to wire it yourself? The helper is a thin loop — catch
+> `ConnectionAuthorizationRequired`, call `interrupt({...connect_url})`, and retry —
+> so you can inline that in a plain `@tool` instead.
 
 ## Google ADK
 
@@ -345,7 +362,8 @@ export class DevAgent extends Agent {
 Managed agents execute tools through your backend (a function/webhook the platform
 calls, or an MCP server). Wrap that handler exactly like the Anthropic SDK example
 above — resolve the identifier from the authenticated request, then call the
-wrapped tool. If you expose tools via an MCP server, see [mcp-fronted.md](mcp-fronted.md).
+wrapped tool. (To make that backend an OAuth-protected MCP server, use Descope's
+[MCP server SDKs](https://docs.descope.com/mcp).)
 
 ## AG2 (AutoGen)
 

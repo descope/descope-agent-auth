@@ -14,6 +14,7 @@ from .errors import (
     TokenExchangeFailed,
 )
 from .providers import (
+    AccessTokenProvider,
     AuthorizationCodeProvider,
     CibaProvider,
     ClientCredentialsProvider,
@@ -43,6 +44,7 @@ __all__ = [
     "AuthorizationCodeProvider",
     "CibaProvider",
     "ManagementKeyProvider",
+    "AccessTokenProvider",
     # store
     "TokenStore",
     "MemoryTokenStore",

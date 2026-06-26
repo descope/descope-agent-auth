@@ -4,7 +4,7 @@
  * Fetch a scoped downstream provider token (GitHub, Slack, ...) from the vault
  * for a given identity. Omit `scopes` to request the Connection's configured
  * defaults; pass `scopes` to override them entirely (the SDK never clamps to a
- * subset -- the real guardrail is Connection Policies, not the default-scope list).
+ * subset -- the real guardrail is Policies, not the default-scope list).
  */
 
 import { OUTBOUND_USER_TOKEN, OUTBOUND_USER_TOKEN_LATEST } from '../endpoints';
@@ -21,7 +21,11 @@ export interface GetConnectionTokenArgs {
   withRefreshToken?: boolean;
   forceRefresh?: boolean;
   redirectUrl?: string;
+  /** Extra connect-URL `options` fields (prompt, loginHint, resources, externalIdentifier). */
+  connectOptions?: Record<string, unknown>;
   requireApproval?: ApprovalRequest;
+  /** Run this call as a specific user by presenting their Descope access token. */
+  actAsUserToken?: string;
 }
 
 export interface ExecuteConnectionArgs {
@@ -30,7 +34,9 @@ export interface ExecuteConnectionArgs {
   identifier: string;
   scopes?: string[];
   tenantId?: string;
+  connectOptions?: Record<string, unknown>;
   requireApproval?: ApprovalRequest;
+  actAsUserToken?: string;
 }
 
 const cacheKey = (connection: string, identifier: string, scopes?: string[]): string => {
@@ -56,10 +62,18 @@ const buildArgs = (args: GetConnectionTokenArgs): FetchArgs => {
     body.scopes = scopes;
   }
 
+  // Connect-URL config lives under `options` (redirectUrl, scopes, prompt,
+  // loginHint, resources, externalIdentifier). The connect URL requests the SAME
+  // scopes as the token fetch, so a user who hasn't connected yet consents to
+  // exactly what this tool needs; omitting scopes falls back to the Connection's
+  // default scopes. connectOptions carries any of the other option fields.
+  const options: Record<string, unknown> = { ...(args.connectOptions ?? {}) };
+  if (args.redirectUrl) options.redirectUrl = args.redirectUrl;
+  if (scopes && scopes.length) options.scopes = scopes;
+
   const connectBody: Record<string, unknown> = { appId: connection };
   if (tenantId) connectBody.tenantId = tenantId;
-  if (scopes && scopes.length) connectBody.scopes = scopes;
-  if (args.redirectUrl) connectBody.options = { redirectUrl: args.redirectUrl };
+  if (Object.keys(options).length > 0) connectBody.options = options;
 
   return {
     path,
@@ -70,6 +84,7 @@ const buildArgs = (args: GetConnectionTokenArgs): FetchArgs => {
     connectBody,
     forceRefresh: Boolean(args.forceRefresh),
     requireApproval: args.requireApproval,
+    actAsUserToken: args.actAsUserToken,
   };
 };
 
