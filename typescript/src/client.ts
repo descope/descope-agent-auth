@@ -93,7 +93,16 @@ export class AgentAuthClient {
     // behind the mode flag so enabling it later is a config change, not a rewrite.
     const execution = new Execution(this.mode, backend);
     this.connections = new ConnectionsClient(execution);
-    this.resources = new ResourcesClient(execution);
+    // Connection tokens come from the vault (via the execution seam); Resource
+    // tokens are minted by the token-exchange grant directly off the phase-1
+    // credential, so ResourcesClient is wired to the HTTP + credential layer.
+    this.resources = new ResourcesClient({
+      http: this.http,
+      getCredential: () => this.getCredential(),
+      store: this.store,
+      mode: this.mode,
+      approvalGate: (request) => this.runApproval(request),
+    });
   }
 
   private async runApproval(request: ApprovalRequest): Promise<void> {

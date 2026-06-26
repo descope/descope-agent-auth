@@ -75,8 +75,17 @@ class AgentAuthClient:
         execution = Execution(mode=self.mode, backend=backend)
 
         # Phase 2 entry points.
+        # Connection tokens come from the vault (via the execution seam); Resource
+        # tokens are minted by the token-exchange grant directly off the phase-1
+        # credential, so ResourcesClient is wired to the HTTP + credential layer.
         self.connections = ConnectionsClient(execution)
-        self.resources = ResourcesClient(execution)
+        self.resources = ResourcesClient(
+            http=self._http,
+            get_credential=self.get_credential,
+            store=self.store,
+            mode=self.mode,
+            approval_gate=self._run_approval,
+        )
 
     def _run_approval(self, request: ApprovalRequest) -> None:
         """Run a CIBA approval cycle for a sensitive exchange; raise on denial/timeout."""

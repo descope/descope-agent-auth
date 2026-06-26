@@ -54,7 +54,10 @@ OUTBOUND_USER_TOKEN_LATEST = "/v1/mgmt/outbound/app/user/token/latest"
 # VERIFIED. Fetch a stored outbound-app user token for an explicit scope set.
 OUTBOUND_USER_TOKEN = "/v1/mgmt/outbound/app/user/token"
 
-# VERIFIED. Tenant-scoped variants (used for resource/tenant tokens).
+# VERIFIED. Tenant-scoped Connection tokens (a tenant-level API key for your org),
+# distinct from Resource tokens (which use the token-exchange grant below).
+# Reserved for a future tenant-level connections path; not yet exposed on the SDK
+# surface.
 OUTBOUND_TENANT_TOKEN_LATEST = "/v1/mgmt/outbound/app/tenant/token/latest"
 OUTBOUND_TENANT_TOKEN = "/v1/mgmt/outbound/app/tenant/token"
 
@@ -69,3 +72,8 @@ GRANT_AUTHORIZATION_CODE = "authorization_code"
 GRANT_REFRESH_TOKEN = "refresh_token"
 GRANT_DEVICE_CODE = "urn:ietf:params:oauth:grant-type:device_code"  # VERIFIED
 GRANT_CIBA = "urn:openid:params:grant-type:ciba"  # UNVERIFIED -- confirm via discovery
+
+# Resource tokens are minted by exchanging the agent's Descope access token for a
+# Resource-scoped token via the RFC 8693 token-exchange grant against OAUTH2_TOKEN.
+GRANT_TOKEN_EXCHANGE = "urn:ietf:params:oauth:grant-type:token-exchange"
+TOKEN_TYPE_ACCESS_TOKEN = "urn:ietf:params:oauth:token-type:access_token"

@@ -9,6 +9,7 @@ from descope_agent_auth import (
     ManagementKeyProvider,
 )
 from descope_agent_auth.errors import (
+    AgentAuthError,
     ConnectionAuthorizationRequired,
     PolicyDenied,
     TokenExchangeFailed,
@@ -125,37 +126,53 @@ class TestConnectionsExchange(common.AgentAuthTest):
 
 @patch("time.sleep", lambda *_: None)
 class TestResourcesExchange(common.AgentAuthTest):
-    def _mgmt_client(self):
-        return self.make_client(
+    """Resource tokens are minted via the RFC 8693 token-exchange grant."""
+
+    def _agent_client(self):
+        return self.make_client(ClientCredentialsProvider(client_id="cid", client_secret="s"))
+
+    @patch("httpx.Client.request")
+    def test_token_exchange_returns_resource_token(self, mock_request):
+        mock_request.side_effect = [
+            make_response({"access_token": "agent_at", "expires_in": 3600}),  # phase 1
+            make_response(  # token-exchange
+                {
+                    "access_token": "resource_at",
+                    "token_type": "Bearer",
+                    "expires_in": 3600,
+                    "scope": "read",
+                }
+            ),
+        ]
+        client = self._agent_client()
+
+        tok = client.resources.get_token(resource="urn:my-api", scopes=["read"])
+
+        self.assertEqual(tok.access_token, "resource_at")
+        self.assertEqual(tok.scopes, ["read"])
+        args, kwargs = mock_request.call_args  # the token-exchange call
+        self.assertEqual(args[1], "/oauth2/v1/token")
+        self.assertEqual(
+            kwargs["data"]["grant_type"], "urn:ietf:params:oauth:grant-type:token-exchange"
+        )
+        self.assertEqual(kwargs["data"]["resource"], "urn:my-api")
+        self.assertEqual(kwargs["data"]["subject_token"], "agent_at")
+
+    @patch("httpx.Client.request")
+    def test_management_key_rejected_for_resources(self, mock_request):
+        client = self.make_client(
             ManagementKeyProvider(management_key="K", allow_management_key=True)
         )
+        with self.assertRaises(AgentAuthError):
+            client.resources.get_token(resource="urn:my-api")
+        mock_request.assert_not_called()  # token-exchange never attempted
 
     @patch("httpx.Client.request")
-    def test_omitted_scopes_hits_tenant_latest(self, mock_request):
-        mock_request.return_value = make_response(
-            {"token": token_obj(appId="urn:res", scopes=["read"])}
-        )
-        client = self._mgmt_client()
-
-        tok = client.resources.get_token(resource="urn:res")
-
-        self.assertEqual(tok.scopes, ["read"])
-        args, _ = mock_request.call_args
-        self.assertEqual(args[1], "/v1/mgmt/outbound/app/tenant/token/latest")
-
-    @patch("httpx.Client.request")
-    def test_explicit_scopes_hits_tenant_scoped(self, mock_request):
-        mock_request.return_value = make_response(
-            {"token": token_obj(appId="urn:res", scopes=["read", "write"])}
-        )
-        client = self._mgmt_client()
-
-        tok = client.resources.get_token(
-            resource="urn:res", scopes=["read", "write"], tenant_id="t1"
-        )
-
-        self.assertEqual(tok.scopes, ["read", "write"])
-        args, kwargs = mock_request.call_args
-        self.assertEqual(args[1], "/v1/mgmt/outbound/app/tenant/token")
-        self.assertEqual(kwargs["json"]["scopes"], ["read", "write"])
-        self.assertEqual(kwargs["json"]["tenantId"], "t1")
+    def test_policy_denied(self, mock_request):
+        mock_request.side_effect = [
+            make_response({"access_token": "agent_at", "expires_in": 3600}),
+            make_response({"error": "access_denied"}, status=403),
+        ]
+        client = self._agent_client()
+        with self.assertRaises(PolicyDenied):
+            client.resources.get_token(resource="urn:my-api")

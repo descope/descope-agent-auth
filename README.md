@@ -28,15 +28,78 @@ token into that function — so there's nothing to install per framework. It run
 Node, Cloudflare Workers, Deno, Bun, and browsers. See the
 **[framework cookbook](docs/FRAMEWORKS.md)** for a copy-paste snippet per framework.
 
-## Two-phase mental model
+## What kind of token does your agent need?
 
-| Phase | What | How |
-| --- | --- | --- |
-| **1 — Acquire** | get a Descope credential | `ClientCredentials` · `DeviceCode` · `AuthorizationCode` · `CIBA` · `ManagementKey` |
-| **2 — Exchange** | trade it for a vault token | `connections.getToken(...)` · `resources.getToken(...)` |
+To call any service, your agent ultimately needs one of **two kinds of token**.
+The SDK fetches both, through two entry points.
 
-Configure phase 1 once at init, then call phase 2 repeatedly. Refresh of the
-phase-1 token and the downstream tokens happens transparently underneath.
+### 1. A Connection token — `client.connections.get_token(...)`
+
+A **Connection** is a credential stored in the Descope **Connections vault**. It is
+either:
+
+- an **API key** — a stored secret for a service, held at either:
+  - the **tenant level** (one key for your whole organization), or
+  - the **user + tenant level** (a per-user key for a third-party API the agent
+    calls on that user's behalf); or
+- a **third-party OAuth token** — for an OAuth provider set up from Descope's
+  **Connection template library** or a custom Connection (GitHub, Slack, Google,
+  …), scoped to the agent's identity.
+
+You pass the `identifier` (the user/principal the agent acts for) and optionally a
+`tenant_id`; the vault returns the right stored token, refreshed as needed. If the
+user hasn't connected the account yet, you get `ConnectionAuthorizationRequired`
+carrying a connect URL.
+
+### 2. A Resource token — `client.resources.get_token(...)`
+
+A **Resource** is an API *you* build and protect with **Descope as the OAuth
+authorization server**. The SDK obtains a Descope-issued OAuth token scoped to that
+Resource using the **OAuth token-exchange grant**
+(`urn:ietf:params:oauth:grant-type:token-exchange`) — exchanging the agent's Descope
+token for a Resource-scoped one.
+
+| Your agent needs to… | Method | Token you get | Source |
+| --- | --- | --- | --- |
+| call a 3rd-party API with a stored key | `connections.get_token` | API key | Connections vault (tenant, or user + tenant) |
+| call a 3rd-party OAuth provider | `connections.get_token` | provider OAuth token | Connections vault (template or custom) |
+| call your own Descope-protected API | `resources.get_token` | Descope OAuth token | token-exchange grant |
+
+## How the SDK gets those tokens
+
+It starts with **how your agent authenticates to Descope** (phase 1), configured
+once at init — and you have two choices:
+
+- **OAuth Client ID + Client Secret** (the common case) — your agent is a
+  first-class identity in your **Agent Directory**. The SDK gets a Descope OAuth
+  access token using whichever **grant** fits:
+  - `ClientCredentialsProvider` — autonomous agent, no user
+  - `DeviceCodeProvider` — headless agent (device code)
+  - `AuthorizationCodeProvider` — browser present (authorization code + PKCE)
+  - `CibaProvider` — out-of-band user approval (CIBA)
+- **Management Key** (`ManagementKeyProvider`) — use this only if you *don't* want
+  the agent represented as a unique Agent in your Agent Directory. It's a static,
+  high-privilege credential that **bypasses Connection Policies**, so it is not the
+  recommended path (requires explicit opt-in).
+
+Then, at runtime (phase 2), the SDK **exchanges** that phase-1 credential for the
+token the agent actually needs:
+
+```
+                              ┌──────────────────── phase 2 ────────────────────┐
+ Client ID + Secret ─▶ Descope OAuth token ─┬─▶ connections.get_token ─▶ Connection token (API key / OAuth)
+ (or Management Key) ────────────────────────┘└─▶ resources.get_token  ─▶ Resource token (token-exchange)
+```
+
+- A **Connection token** is pulled from the vault. When the phase-1 credential is
+  an agent OAuth token, **Connection Policies** govern what it may obtain; a
+  Management Key is unrestricted.
+- A **Resource token** is minted via the **token-exchange** grant. (This needs an
+  OAuth agent identity — it does not apply to a Management Key.)
+
+Configure phase 1 once; call phase 2 repeatedly. The phase-1 token and the
+downstream tokens are cached and refreshed transparently — you ask for a token and
+get a currently-valid one.
 
 ## Packages
 
