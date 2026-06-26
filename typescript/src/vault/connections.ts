@@ -59,6 +59,13 @@ const buildArgs = (args: GetConnectionTokenArgs): FetchArgs => {
     body.scopes = scopes;
   }
 
+  // The connect URL requests the SAME scopes as the token fetch, so a user who
+  // hasn't connected yet consents to exactly what this tool needs. Omitting scopes
+  // falls back to the Connection's configured default scopes.
+  // UNVERIFIED: per-request `scopes` on the REST connect endpoint is not in the
+  // public docs (the Flow "Outbound App Connect" action does support a custom-scope
+  // override) -- confirm against your project; the field may need to move under
+  // `options`.
   const connectBody: Record<string, unknown> = { appId: connection };
   if (tenantId) connectBody.tenantId = tenantId;
   if (scopes && scopes.length) connectBody.scopes = scopes;

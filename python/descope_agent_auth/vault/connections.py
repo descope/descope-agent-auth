@@ -45,6 +45,13 @@ def _build_args(
     else:
         path = OUTBOUND_USER_TOKEN_LATEST
 
+    # The connect URL requests the SAME scopes as the token fetch, so a user who
+    # hasn't connected yet consents to exactly what this tool needs. Omitting scopes
+    # falls back to the Connection's configured default scopes.
+    # UNVERIFIED: per-request `scopes` on the REST connect endpoint is not in the
+    # public docs (the Flow "Outbound App Connect" action does support a custom-scope
+    # override) -- confirm against your project; the field may need to move under
+    # `options`.
     connect_body: dict = {"appId": connection}
     if tenant_id:
         connect_body["tenantId"] = tenant_id

@@ -181,6 +181,29 @@ The real guardrail on what an agent can obtain is **Policies** plus
 downstream provider consent — not the default-scope list. The SDK never infers
 scopes from agent intent; a request either omits them or pins an explicit set.
 
+### Scopes and the connect URL
+
+You define a tool's scopes in one place — `with_connection(scopes=[...])` /
+`get_token(scopes=[...])` — and the SDK uses that same set for **both** the token
+fetch **and** the connect URL it returns when the user hasn't connected yet. So the
+consent screen requests exactly what that tool needs; a different tool with
+different scopes produces a connect URL for those scopes. Omit `scopes` and the
+connect URL uses the Connection's **default scopes** configured in Descope.
+
+```python
+@with_connection(client, connection="github", scopes=["repo"])
+def list_repos(token, identifier): ...
+# If the user must connect first, e.connect_url already requests ["repo"].
+```
+
+Because the connect URL requests only the calling tool's scopes, a user may be
+prompted to connect more than once as different tools need new scopes (incremental
+consent). To get a single up-front consent, set the Connection's **default scopes**
+to the superset (and call tools without `scopes`), or request the superset.
+
+> Per-request scopes on the connect endpoint should be confirmed against your
+> Descope project — see the UNVERIFIED note in `connections` source.
+
 ## Human-in-the-loop approval (CIBA gate)
 
 For a sensitive exchange, require a fresh user sign-off on a trusted device before
