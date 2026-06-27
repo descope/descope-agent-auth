@@ -45,7 +45,7 @@ export type { ToolRequest } from './execution';
 
 // vault arg types
 export type { GetConnectionTokenArgs, GetResourceTokenArgs } from './vault';
-export type { ExecuteConnectionArgs } from './vault/connections';
+export type { ExecuteConnectionArgs, GetTenantConnectionTokenArgs } from './vault/connections';
 
 // types
 export type {

@@ -1,0 +1,5 @@
+# Install the published SDK:
+descope-agent-auth
+
+# ...or develop against this repo's local copy instead:
+#   pip install -e ../../python

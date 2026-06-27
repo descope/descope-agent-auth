@@ -10,6 +10,24 @@ Everything else — tool code, API wrappers, a connector catalog — is out of s
 by design. This is the auth substrate an agent's tool calls sit on top of, not a
 runtime tool catalog.
 
+## What it looks like
+
+```python
+from descope_agent_auth import AgentAuthClient, AccessTokenProvider
+from descope_agent_auth.errors import ConnectionAuthorizationRequired
+
+client = AgentAuthClient(project_id="P2...", credential=AccessTokenProvider(access_token=user_jwt))
+
+try:
+    github = client.connections.get_token(connection="github", identifier="user@example.com")
+    use(github.access_token)              # a fresh, scoped GitHub token
+except ConnectionAuthorizationRequired as e:
+    redirect_user_to(e.connect_url)       # the user hasn't linked GitHub yet
+```
+
+Runnable samples (Python + TypeScript) in **[`examples/`](examples/)**. Full
+walkthrough: **[standalone Connections quickstart](docs/standalone-connections.md)**.
+
 ## Who this is for
 
 - ✅ **Homegrown / custom-built agents** — agents you write yourself, in any
@@ -21,26 +39,34 @@ runtime tool catalog.
   endpoints, token validation, `tools/list` filtering) is a different job — the
   *resource-server* side. This SDK is the *client* side: it acquires and uses tokens.
 
-> **It manages tokens for the tools you implement — not your agent's connection to a
-> third-party MCP server.** When your agent acts as an MCP *client* (calling someone
-> else's MCP server), the OAuth between your agent and that server is owned by your
-> **MCP client / agent platform** — e.g. AWS Bedrock AgentCore, Azure AI Foundry, or
-> the MCP SDK's client — not by this SDK, and those runtimes don't expose a hook to
-> swap it in. Use this SDK *inside your own tool code* (a Bedrock action-group
-> Lambda, an Azure function tool, a native framework tool) to fetch downstream API
-> tokens. A managed agent that only orchestrates third-party MCP servers has no place
-> to plug this in — and those platforms usually ship their own outbound-token feature
-> (e.g. Bedrock AgentCore Identity). Descope's angle is **one token layer across
-> frameworks and clouds** instead of a per-platform one.
+> **Scope in one line:** this SDK manages the tokens **the tools you implement**
+> need — not your agent's own OAuth connection to a third-party MCP server (that's
+> owned by your MCP client / agent platform). Use it *inside* your tool code.
 
-> **Building an MCP server?** Use Descope's MCP server SDKs:
-> [`@descope/mcp-express`](https://docs.descope.com/mcp/mcp-express-sdk) (Node/Express)
-> or the [`descope-mcp` Python SDK](https://docs.descope.com/mcp/python-sdk) —
-> overview at [docs.descope.com/mcp](https://docs.descope.com/mcp). The two are
-> complementary: when one of your MCP server's tools runs and needs to call a
-> downstream API (GitHub, your own API, …), that tool's handler can use **this** SDK
-> to fetch the token — resolve the user from the validated request, then call
-> `connections.get_token` / `resources.get_token`.
+<details>
+<summary><strong>Using a managed MCP-client platform (Bedrock, Azure AI Foundry, …)?</strong></summary>
+
+When your agent acts as an MCP *client*, the OAuth between it and the remote server
+is owned by that platform — AWS Bedrock AgentCore, Azure AI Foundry, the MCP SDK's
+client — and those runtimes don't expose a hook to swap it in; they usually ship
+their own outbound-token feature (e.g. Bedrock AgentCore Identity). Use **this** SDK
+*inside your own tool code* (a Bedrock action-group Lambda, an Azure function tool, a
+native framework tool) to fetch downstream API tokens. Descope's angle is **one token
+layer across frameworks and clouds** instead of a per-platform one.
+
+</details>
+
+<details>
+<summary><strong>Building an MCP <em>server</em>?</strong></summary>
+
+Use Descope's MCP server SDKs — [`@descope/mcp-express`](https://docs.descope.com/mcp/mcp-express-sdk)
+(Node/Express) or the [`descope-mcp` Python SDK](https://docs.descope.com/mcp/python-sdk)
+([overview](https://docs.descope.com/mcp)). They're complementary: when one of your
+server's tools needs a downstream API token, its handler can use **this** SDK —
+resolve the user from the validated request, then call `connections.get_token` /
+`resources.get_token`.
+
+</details>
 
 **One core SDK, not one per framework.** Every framework defines a tool as a
 function; the `with_connection` / `withConnection` wrapper drops a fresh, scoped
@@ -109,11 +135,8 @@ flowchart LR
     A2 -->|"③ call with the token"| Own["Your own / internal APIs<br/>Resource OAuth · or · Connection API key"]
 ```
 
-Either kind of token — a Connection token from the vault or a Resource token from
-token-exchange — is returned to the agent (in the default `fetch` mode) and the
-agent makes the call itself. Note that a Connection **API key** can target a
-**third-party service _or_ one of your own internal APIs** — so you don't have to
-put an existing API behind Descope OAuth just to let an agent call it.
+In the default `fetch` mode, the token is returned to the agent and it makes the
+call itself.
 
 ## How a credential gets into Descope
 
@@ -327,7 +350,8 @@ Both languages, identical surfaces:
 agent process) is reserved — the client accepts it today and turns it on when
 Descope's hosted execution endpoint becomes available.
 
-Quickstart: [standalone Connections](docs/standalone-connections.md), and the
+Quickstart: [standalone Connections](docs/standalone-connections.md). Runnable
+[examples](examples/) (Python + TypeScript). Per-framework snippets:
 [framework cookbook](docs/FRAMEWORKS.md).
 
 ## Development

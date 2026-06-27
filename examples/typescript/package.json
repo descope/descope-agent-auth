@@ -1,0 +1,19 @@
+{
+  "name": "descope-agent-auth-examples",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Runnable examples for @descope/agent-auth",
+  "scripts": {
+    "user": "tsx --env-file=../.env userConnection.ts",
+    "autonomous": "tsx --env-file=../.env autonomousAgent.ts",
+    "tool": "tsx --env-file=../.env toolErgonomic.ts"
+  },
+  "dependencies": {
+    "@descope/agent-auth": "^0.1.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  }
+}
