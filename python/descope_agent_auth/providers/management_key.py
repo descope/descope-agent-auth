@@ -35,9 +35,9 @@ class ManagementKeyProvider(CredentialProvider):
             "and grants broad vault access. Prefer an agent-token provider where possible."
         )
 
-    def _acquire(self) -> Credential:
+    async def _acquire(self) -> Credential:
         # A management key is static -- no acquisition or refresh needed.
         return Credential(token=self._management_key, kind=self.kind, expires_at=None)
 
-    def refresh(self) -> Credential:  # nothing to refresh
-        return self._acquire()
+    async def refresh(self) -> Credential:  # nothing to refresh
+        return await self._acquire()

@@ -2,8 +2,11 @@
 
 Tests are ``unittest.TestCase`` subclasses that patch the HTTP layer with
 ``unittest.mock`` and assert with ``self.assertEqual`` / ``self.assertRaises``.
-The Descope wire layer is mocked at ``httpx.Client.request`` via ``make_response``
-(a ``MagicMock`` shaped like the SDK's ``HttpResponse`` consumer expectations).
+The SDK core is async, so the Descope wire layer is mocked at
+``httpx.AsyncClient.request`` (via ``unittest.mock.AsyncMock``) using
+``make_response`` (a ``MagicMock`` shaped like the SDK's ``HttpResponse`` consumer
+expectations). Tests drive the synchronous ``AgentAuthClient`` facade, so their
+bodies stay synchronous; the facade runs the async core on a background loop.
 """
 
 from __future__ import annotations

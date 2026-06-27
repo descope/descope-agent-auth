@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from descope_agent_auth import (
     CibaProvider,
@@ -21,7 +21,7 @@ from .common import make_response
 
 
 class TestClientCredentialsProvider(common.AgentAuthTest):
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_happy_path_uses_basic_auth(self, mock_request):
         mock_request.return_value = make_response({"access_token": "agent_at", "expires_in": 3600})
         client = self.make_client(ClientCredentialsProvider(client_id="cid", client_secret="s"))
@@ -35,7 +35,7 @@ class TestClientCredentialsProvider(common.AgentAuthTest):
         _, kwargs = mock_request.call_args
         self.assertTrue(kwargs["headers"]["Authorization"].startswith("Basic "))
 
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_caches_until_expiry(self, mock_request):
         mock_request.return_value = make_response({"access_token": "agent_at", "expires_in": 3600})
         client = self.make_client(ClientCredentialsProvider(client_id="cid", client_secret="s"))
@@ -45,7 +45,7 @@ class TestClientCredentialsProvider(common.AgentAuthTest):
 
         self.assertEqual(mock_request.call_count, 1)
 
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_acquisition_failure(self, mock_request):
         mock_request.return_value = make_response({"error": "invalid_client"}, status=401)
         client = self.make_client(ClientCredentialsProvider(client_id="cid", client_secret="bad"))
@@ -53,7 +53,7 @@ class TestClientCredentialsProvider(common.AgentAuthTest):
         with self.assertRaises(CredentialAcquisitionFailed):
             client.get_credential()
 
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_reacquires_when_expired(self, mock_request):
         mock_request.side_effect = [
             make_response({"access_token": "first", "expires_in": -10}),
@@ -64,7 +64,7 @@ class TestClientCredentialsProvider(common.AgentAuthTest):
         self.assertEqual(client.get_credential().token, "first")
         self.assertEqual(client.get_credential().token, "second")
 
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_uses_refresh_token_grant_when_held(self, mock_request):
         mock_request.side_effect = [
             make_response({"access_token": "first", "expires_in": -10, "refresh_token": "r1"}),
@@ -79,9 +79,9 @@ class TestClientCredentialsProvider(common.AgentAuthTest):
         self.assertEqual(kwargs["data"]["grant_type"], "refresh_token")
 
 
-@patch("time.sleep", lambda *_: None)
+@patch("asyncio.sleep", AsyncMock())
 class TestDeviceCodeProvider(common.AgentAuthTest):
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_pending_then_success(self, mock_request):
         mock_request.side_effect = [
             make_response(
@@ -106,7 +106,7 @@ class TestDeviceCodeProvider(common.AgentAuthTest):
         self.assertEqual(cred.token, "device_at")
         self.assertEqual(seen["code"], "WXYZ-1234")
 
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_timeout(self, mock_request):
         mock_request.return_value = make_response(
             {"device_code": "d", "interval": 1, "expires_in": 0}
@@ -117,13 +117,13 @@ class TestDeviceCodeProvider(common.AgentAuthTest):
             self.make_client(provider).get_credential()
 
 
-@patch("time.sleep", lambda *_: None)
+@patch("asyncio.sleep", AsyncMock())
 class TestCibaProvider(common.AgentAuthTest):
     @staticmethod
     def _initiated():
         return make_response({"auth_req_id": "areq", "interval": 1, "expires_in": 60})
 
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_pending_then_approved(self, mock_request):
         mock_request.side_effect = [
             self._initiated(),
@@ -134,7 +134,7 @@ class TestCibaProvider(common.AgentAuthTest):
 
         self.assertEqual(self.make_client(provider).get_credential().token, "ciba_at")
 
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_denied(self, mock_request):
         mock_request.side_effect = [
             self._initiated(),
@@ -145,7 +145,7 @@ class TestCibaProvider(common.AgentAuthTest):
         with self.assertRaises(ApprovalDenied):
             self.make_client(provider).get_credential()
 
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_timeout(self, mock_request):
         mock_request.side_effect = [
             self._initiated(),
@@ -162,7 +162,7 @@ class TestManagementKeyProvider(common.AgentAuthTest):
         with self.assertRaises(CredentialAcquisitionFailed):
             ManagementKeyProvider(management_key="K123")
 
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_is_privileged(self, _mock_request):
         provider = ManagementKeyProvider(management_key="K123", allow_management_key=True)
         client = self.make_client(provider)

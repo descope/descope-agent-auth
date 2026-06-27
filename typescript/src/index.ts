@@ -13,7 +13,6 @@ export {
   AccessTokenProvider,
   ClientCredentialsProvider,
   DeviceCodeProvider,
-  AuthorizationCodeProvider,
   CibaProvider,
   ManagementKeyProvider,
 } from './providers';
@@ -21,7 +20,6 @@ export type {
   AccessTokenOptions,
   ClientCredentialsOptions,
   DeviceCodeOptions,
-  AuthorizationCodeOptions,
   CibaOptions,
   CibaAuthenticateArgs,
   ManagementKeyOptions,
@@ -45,7 +43,11 @@ export type { ToolRequest } from './execution';
 
 // vault arg types
 export type { GetConnectionTokenArgs, GetResourceTokenArgs } from './vault';
-export type { ExecuteConnectionArgs } from './vault/connections';
+export type {
+  ExecuteConnectionArgs,
+  GetTenantConnectionTokenArgs,
+  WaitForConnectionArgs,
+} from './vault/connections';
 
 // types
 export type {

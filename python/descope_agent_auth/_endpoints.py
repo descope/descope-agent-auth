@@ -24,12 +24,9 @@ from __future__ import annotations
 
 # --- Phase 1: OAuth2 / OIDC (acquisition) -----------------------------------
 
-# VERIFIED. Used for authorization_code (+PKCE), client_credentials, refresh_token,
-# device_code, and CIBA token-polling grants.
+# VERIFIED. Used for client_credentials, refresh_token, device_code, and CIBA
+# token-polling grants.
 OAUTH2_TOKEN = "/oauth2/v1/token"
-
-# VERIFIED. Authorization-code redirect entry point.
-OAUTH2_AUTHORIZE = "/oauth2/v1/authorize"
 
 # VERIFIED (inbound-apps authorization server). Alternative token endpoint when the
 # agent authenticates as an inbound app client rather than the project OIDC server.
@@ -54,10 +51,9 @@ OUTBOUND_USER_TOKEN_LATEST = "/v1/mgmt/outbound/app/user/token/latest"
 # VERIFIED. Fetch a stored outbound-app user token for an explicit scope set.
 OUTBOUND_USER_TOKEN = "/v1/mgmt/outbound/app/user/token"
 
-# VERIFIED. Tenant-scoped Connection tokens (a tenant-level API key for your org),
-# distinct from Resource tokens (which use the token-exchange grant below).
-# Reserved for a future tenant-level connections path; not yet exposed on the SDK
-# surface.
+# VERIFIED. Tenant-scoped Connection tokens (a tenant-level API key / org-shared
+# OAuth token), distinct from Resource tokens (which use the token-exchange grant
+# below). Exposed via ConnectionsClient.get_tenant_token.
 OUTBOUND_TENANT_TOKEN_LATEST = "/v1/mgmt/outbound/app/tenant/token/latest"
 OUTBOUND_TENANT_TOKEN = "/v1/mgmt/outbound/app/tenant/token"
 
@@ -68,7 +64,6 @@ OUTBOUND_CONNECT = "/v1/mgmt/outbound/app/connect"
 # --- grant types -------------------------------------------------------------
 
 GRANT_CLIENT_CREDENTIALS = "client_credentials"
-GRANT_AUTHORIZATION_CODE = "authorization_code"
 GRANT_REFRESH_TOKEN = "refresh_token"
 GRANT_DEVICE_CODE = "urn:ietf:params:oauth:grant-type:device_code"  # VERIFIED
 GRANT_CIBA = "urn:openid:params:grant-type:ciba"  # UNVERIFIED -- confirm via discovery

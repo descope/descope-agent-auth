@@ -39,6 +39,8 @@ export interface ResourcesClientDeps {
   mode: Mode;
   approvalGate?: ApprovalGate;
   skewSeconds?: number;
+  /** When false, never read/write the token cache so Policies are re-enforced each call. */
+  cacheTokens?: boolean;
 }
 
 const cacheKey = (resource: string, scopes?: string[]): string => {
@@ -51,9 +53,11 @@ const errMsg = (body: any): string | undefined =>
 
 export class ResourcesClient {
   private readonly skew: number;
+  private readonly cacheTokens: boolean;
 
   constructor(private readonly deps: ResourcesClientDeps) {
     this.skew = deps.skewSeconds ?? 60;
+    this.cacheTokens = deps.cacheTokens ?? true;
   }
 
   async getToken(args: GetResourceTokenArgs): Promise<VaultToken> {
@@ -74,7 +78,7 @@ export class ResourcesClient {
     }
 
     const key = cacheKey(args.resource, args.scopes);
-    if (!args.forceRefresh) {
+    if (this.cacheTokens && !args.forceRefresh) {
       const cached = await this.cacheGet(key);
       if (cached) return cached;
     }
@@ -120,7 +124,7 @@ export class ResourcesClient {
     }
 
     const token = toVaultToken(resp.json, args.resource);
-    await this.cacheSet(key, token);
+    if (this.cacheTokens) await this.cacheSet(key, token);
     return token;
   }
 

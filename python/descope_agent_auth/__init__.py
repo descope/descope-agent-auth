@@ -2,7 +2,7 @@
 for Connection / Resource tokens from the Descope vault. Two phases, nothing more.
 """
 
-from .client import AgentAuthClient
+from .client import AgentAuthClient, AsyncAgentAuthClient
 from .execution import Execution, ToolRequest
 from .errors import (
     AgentAuthError,
@@ -15,7 +15,6 @@ from .errors import (
 )
 from .providers import (
     AccessTokenProvider,
-    AuthorizationCodeProvider,
     CibaProvider,
     ClientCredentialsProvider,
     CredentialProvider,
@@ -23,7 +22,7 @@ from .providers import (
     ManagementKeyProvider,
 )
 from .store import MemoryTokenStore, TokenStore
-from .tools import with_connection
+from .tools import with_connection, with_connection_async
 from .types import (
     ApprovalRequest,
     Credential,
@@ -37,11 +36,11 @@ __version__ = "0.1.0"
 
 __all__ = [
     "AgentAuthClient",
+    "AsyncAgentAuthClient",
     # providers
     "CredentialProvider",
     "ClientCredentialsProvider",
     "DeviceCodeProvider",
-    "AuthorizationCodeProvider",
     "CibaProvider",
     "ManagementKeyProvider",
     "AccessTokenProvider",
@@ -50,6 +49,7 @@ __all__ = [
     "MemoryTokenStore",
     # tools
     "with_connection",
+    "with_connection_async",
     # execution seam
     "Execution",
     "ToolRequest",

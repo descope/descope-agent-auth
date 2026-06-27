@@ -30,6 +30,12 @@ export interface AgentAuthClientOptions {
   timeoutMs?: number;
   retry?: RetryConfig;
   logger?: Logger;
+  /**
+   * Cache fetched Connection/Resource tokens (default `true`). Set `false` to fetch
+   * every time so Descope re-enforces Policies on each call — caching a token skips
+   * the retrieval-time policy check until it expires.
+   */
+  cacheTokens?: boolean;
 }
 
 export class AgentAuthClient {
@@ -83,12 +89,15 @@ export class AgentAuthClient {
       this.approval.bind(this.http, this.projectId, this.store);
     }
 
+    const cacheTokens = opts.cacheTokens ?? true;
     const backend = new VaultBackend(
       this.http,
       this.projectId,
       () => this.getCredential(),
       this.store,
       (request) => this.runApproval(request),
+      undefined,
+      cacheTokens,
     );
     // The execution seam wraps the backend: fetch is wired, execute is stubbed
     // behind the mode flag so enabling it later is a config change, not a rewrite.
@@ -103,6 +112,7 @@ export class AgentAuthClient {
       store: this.store,
       mode: this.mode,
       approvalGate: (request) => this.runApproval(request),
+      cacheTokens,
     });
   }
 

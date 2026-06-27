@@ -19,11 +19,15 @@ fetches the scoped token via phase 2, injects it, and lets the
 from __future__ import annotations
 
 import functools
-from typing import Callable, List, Optional, TypeVar
+from typing import TYPE_CHECKING, Awaitable, Callable, List, Optional, TypeVar
 
 from ..types import ApprovalRequest
 
+if TYPE_CHECKING:
+    from ..client import AgentAuthClient, AsyncAgentAuthClient
+
 F = TypeVar("F", bound=Callable[..., object])
+AF = TypeVar("AF", bound=Callable[..., Awaitable[object]])
 
 
 def with_connection(
@@ -52,6 +56,38 @@ def with_connection(
                 require_approval=require_approval,
             )
             return fn(token.access_token, identifier, *args, **kwargs)
+
+        return wrapper  # type: ignore[return-value]
+
+    return decorator
+
+
+def with_connection_async(
+    client: "AsyncAgentAuthClient",  # noqa: F821  (avoid import cycle)
+    *,
+    connection: str,
+    scopes: Optional[List[str]] = None,
+    tenant_id: Optional[str] = None,
+    require_approval: Optional[ApprovalRequest] = None,
+) -> Callable[[AF], AF]:
+    """Async counterpart of :func:`with_connection` for ``AsyncAgentAuthClient``.
+
+    Decorates an async tool ``async fn(token, identifier, *args, **kwargs)``: fetches
+    the scoped Connection token via the async client and awaits the original
+    function with the raw token string as its first positional argument.
+    """
+
+    def decorator(fn: AF) -> AF:
+        @functools.wraps(fn)
+        async def wrapper(identifier: str, *args: object, **kwargs: object) -> object:
+            token = await client.connections.get_token(
+                connection=connection,
+                identifier=identifier,
+                scopes=scopes,
+                tenant_id=tenant_id,
+                require_approval=require_approval,
+            )
+            return await fn(token.access_token, identifier, *args, **kwargs)
 
         return wrapper  # type: ignore[return-value]
 

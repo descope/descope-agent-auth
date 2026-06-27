@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import time
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from descope_agent_auth import (
     AgentAuthClient,
@@ -26,7 +26,7 @@ def _client(credential, store):
 
 
 class TestCredentialPersistence(common.AgentAuthTest):
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_credential_persisted_and_reused_across_instances(self, mock_request):
         # Simulates a restart: a fresh provider/client backed by the same store
         # should load the credential instead of re-acquiring it.
@@ -43,7 +43,7 @@ class TestCredentialPersistence(common.AgentAuthTest):
         self.assertEqual(mock_request.call_count, 1)
         self.assertIn(f"cred:client_credentials:{PROJECT_ID}:cid", store.list())
 
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_management_key_is_not_persisted(self, mock_request):
         store = MemoryTokenStore()
         client = _client(
@@ -53,9 +53,9 @@ class TestCredentialPersistence(common.AgentAuthTest):
         self.assertEqual(store.list(), [])  # nothing written for a static key
 
 
-@patch("time.sleep", lambda *_: None)
+@patch("asyncio.sleep", AsyncMock())
 class TestRefreshFromStore(common.AgentAuthTest):
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_device_refreshes_from_stored_token_without_reauth(self, mock_request):
         # Pre-seed the store with an EXPIRED device credential that has a refresh
         # token (as if persisted before a restart).
@@ -84,7 +84,7 @@ class TestRefreshFromStore(common.AgentAuthTest):
         self.assertEqual(kwargs["data"]["grant_type"], "refresh_token")
         self.assertEqual(kwargs["data"]["client_id"], "cid")  # device refresh needs client_id
 
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_ciba_refresh_includes_client_secret(self, mock_request):
         store = MemoryTokenStore()
         store.set(
@@ -111,7 +111,7 @@ class TestRefreshFromStore(common.AgentAuthTest):
         self.assertEqual(kwargs["data"]["client_id"], "cid")
         self.assertEqual(kwargs["data"]["client_secret"], "sec")
 
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_rotated_refresh_token_is_persisted(self, mock_request):
         store = MemoryTokenStore()
         key = f"cred:device:{PROJECT_ID}:cid"

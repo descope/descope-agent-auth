@@ -53,16 +53,16 @@ class Execution:
     def mode(self) -> Mode:
         return self._mode
 
-    def fetch_token(self, **fetch_args: Any) -> VaultToken:
+    async def fetch_token(self, **fetch_args: Any) -> VaultToken:
         """Fetch path: return the raw vault token (fetch mode only)."""
         if self._mode is Mode.EXECUTE:
             raise AgentAuthError(
                 "raw token fetch is disabled in execute mode; the token stays vaulted. "
                 "Use execute() to route the call through Descope instead."
             )
-        return self._backend.fetch(**fetch_args)
+        return await self._backend.fetch(**fetch_args)
 
-    def execute(self, *, request: ToolRequest, **fetch_args: Any) -> Any:
+    async def execute(self, *, request: ToolRequest, **fetch_args: Any) -> Any:
         """Execute path: route the call through Descope's hosted execution endpoint.
 
         Stubbed until core eng ships the endpoint. The seam exists so that turning

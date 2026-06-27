@@ -10,6 +10,7 @@ Endpoint paths for the device-authorization request are UNVERIFIED -- see
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Callable, List, Optional, Tuple
 
@@ -37,13 +38,13 @@ class DeviceCodeProvider(CredentialProvider):
         self._on_pending = on_pending
         self._max_wait_seconds = max_wait_seconds
 
-    def _start(self) -> Tuple[str, PendingAuthorization]:
+    async def _start(self) -> Tuple[str, PendingAuthorization]:
         """Return ``(device_code, pending)``. The device_code is kept local and
         never placed into ``pending`` (which a caller may log)."""
         data = {"client_id": self._client_id}
         if self._scopes:
             data["scope"] = " ".join(self._scopes)
-        resp = self.http.post_form(DEVICE_AUTHORIZATION, data=data)
+        resp = await self.http.post_form(DEVICE_AUTHORIZATION, data=data)
         if not resp.ok or not resp.json:
             raise CredentialAcquisitionFailed(
                 f"device authorization request failed ({resp.status_code}): "
@@ -63,8 +64,8 @@ class DeviceCodeProvider(CredentialProvider):
         )
         return device_code, pending
 
-    def _acquire(self) -> Credential:
-        device_code, pending = self._start()
+    async def _acquire(self) -> Credential:
+        device_code, pending = await self._start()
         if self._on_pending:
             self._on_pending(pending)
 
@@ -74,8 +75,8 @@ class DeviceCodeProvider(CredentialProvider):
             time.time() + self._max_wait_seconds,
         )
         while time.time() < deadline:
-            time.sleep(interval)
-            resp = self.http.post_form(
+            await asyncio.sleep(interval)
+            resp = await self.http.post_form(
                 OAUTH2_TOKEN,
                 data={
                     "grant_type": GRANT_DEVICE_CODE,

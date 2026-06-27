@@ -26,8 +26,7 @@ user from the validated request, then call `connections.get_token` /
 
 ## Do you need a separate SDK per framework?
 
-**No.** Unlike the Auth0 approach of shipping one package per framework
-(`@auth0/ai-langchain`, `-vercel`, `-llamaindex`, …), this is **one
+**No.** Rather than shipping one package per framework, this is **one
 framework-agnostic core SDK**. Here's why that's enough:
 
 - Every framework below defines a "tool" as **just a function**.

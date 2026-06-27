@@ -1,3 +1,3 @@
-from .wrapper import with_connection
+from .wrapper import with_connection, with_connection_async
 
-__all__ = ["with_connection"]
+__all__ = ["with_connection", "with_connection_async"]

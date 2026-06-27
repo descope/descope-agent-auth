@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from descope_agent_auth import ManagementKeyProvider
 from descope_agent_auth.errors import ApprovalDenied, ConnectionAuthorizationRequired
@@ -21,7 +21,7 @@ def _mgmt():
 
 
 class TestLangGraphIntegration(common.AgentAuthTest):
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_no_error_calls_fn_without_interrupting(self, mock_request):
         mock_request.return_value = make_response({"token": token_obj()})
         events = []
@@ -38,7 +38,7 @@ class TestLangGraphIntegration(common.AgentAuthTest):
         self.assertEqual(list_repos(identifier="u@e.com"), "u@e.com:gho_downstream_token")
         self.assertEqual(events, [])  # interrupt never fired on the happy path
 
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_happy_path_does_not_import_langgraph(self, mock_request):
         # interrupt is NOT injected, and langgraph is not installed. A happy-path
         # call must succeed without resolving (importing) langgraph.
@@ -50,7 +50,7 @@ class TestLangGraphIntegration(common.AgentAuthTest):
 
         self.assertEqual(list_repos(identifier="u@e.com"), "gho_downstream_token")
 
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_pauses_on_connection_required(self, mock_request):
         mock_request.side_effect = [
             make_response({"error": "no"}, status=404),
@@ -76,7 +76,7 @@ class TestLangGraphIntegration(common.AgentAuthTest):
         self.assertEqual(captured["type"], "connection_authorization_required")
         self.assertEqual(captured["connect_url"], "https://api.descope.com/connect?x=1")
 
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_retries_after_resume(self, mock_request):
         # 404 -> connect URL fetched -> interrupt returns (inline resume) -> retry succeeds.
         mock_request.side_effect = [
@@ -102,7 +102,7 @@ class TestLangGraphIntegration(common.AgentAuthTest):
         self.assertEqual(list_repos(identifier="u@e.com"), "gho_downstream_token")
         self.assertEqual(calls["n"], 1)
 
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_non_interrupt_errors_propagate(self, mock_request):
         mock_request.return_value = make_response({"error": "policy denied"}, status=403)
 
@@ -120,7 +120,7 @@ class TestLangGraphIntegration(common.AgentAuthTest):
         with self.assertRaises(PolicyDenied):
             list_repos(identifier="u@e.com")
 
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_missing_langgraph_raises_friendly_importerror(self, mock_request):
         mock_request.side_effect = [
             make_response({"error": "no"}, status=404),

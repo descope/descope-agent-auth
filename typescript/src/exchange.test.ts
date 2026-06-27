@@ -7,6 +7,8 @@ import { AgentAuthError, PolicyDenied, TokenExchangeFailed } from './errors';
 const TOKEN_PATH = '/oauth2/v1/token';
 const USER_LATEST = '/v1/mgmt/outbound/app/user/token/latest';
 const USER_SCOPED = '/v1/mgmt/outbound/app/user/token';
+const TENANT_LATEST = '/v1/mgmt/outbound/app/tenant/token/latest';
+const TENANT_SCOPED = '/v1/mgmt/outbound/app/tenant/token';
 const CONNECT_PATH = '/v1/mgmt/outbound/app/connect';
 
 const silentLogger = { debug: () => {}, warn: () => {} };
@@ -175,6 +177,135 @@ describe('ConnectionsClient.getToken', () => {
     await client.connections.getToken({ connection: 'github', identifier: 'user@example.com' });
     await client.connections.getToken({ connection: 'github', identifier: 'user@example.com' });
     expect(scope.isDone()).toBe(true); // only one interceptor consumed
+  });
+
+  it('cacheTokens:false fetches every time (Policies re-enforced per call)', async () => {
+    nock(BASE_URL).post(USER_LATEST).reply(200, { token: tokenObj() });
+    nock(BASE_URL).post(USER_LATEST).reply(200, { token: tokenObj() });
+    const client = makeClient(
+      new ManagementKeyProvider({
+        managementKey: 'K123',
+        allowManagementKey: true,
+        logger: silentLogger,
+      }),
+      { cacheTokens: false },
+    );
+    await client.connections.getToken({ connection: 'github', identifier: 'u@x.com' });
+    await client.connections.getToken({ connection: 'github', identifier: 'u@x.com' });
+    expect(nock.pendingMocks()).toHaveLength(0); // both interceptors consumed -> no cache
+  });
+
+  it('threads tenantId into the user-token body', async () => {
+    let sentBody: any;
+    nock(BASE_URL)
+      .post(USER_LATEST, (b) => {
+        sentBody = b;
+        return true;
+      })
+      .reply(200, { token: tokenObj() });
+    const client = agentClient();
+    await client.connections.getToken({
+      connection: 'github',
+      identifier: 'user@example.com',
+      tenantId: 't1',
+    });
+    expect(sentBody.tenantId).toBe('t1');
+  });
+
+  it('same user + different tenant do not collide in cache', async () => {
+    // One token per tenant for the same Connection; each distinct tenant hits net.
+    nock(BASE_URL).post(USER_LATEST).reply(200, { token: tokenObj() });
+    nock(BASE_URL).post(USER_LATEST).reply(200, { token: tokenObj() });
+    const client = mgmtClient();
+    await client.connections.getToken({
+      connection: 'github',
+      identifier: 'u@x.com',
+      tenantId: 't1',
+    });
+    await client.connections.getToken({
+      connection: 'github',
+      identifier: 'u@x.com',
+      tenantId: 't2',
+    });
+    expect(nock.pendingMocks()).toHaveLength(0); // both interceptors consumed
+  });
+});
+
+describe('ConnectionsClient.getTenantToken', () => {
+  it('omitted scopes -> tenant /latest with tenantId, no userId', async () => {
+    let sentBody: any;
+    nock(BASE_URL)
+      .post(TENANT_LATEST, (b) => {
+        sentBody = b;
+        return true;
+      })
+      .reply(200, { token: tokenObj() });
+    const client = agentClient();
+    const tok = await client.connections.getTenantToken({ connection: 'github', tenantId: 't1' });
+    expect(tok.accessToken).toBe('gho_downstream_token');
+    expect(sentBody.tenantId).toBe('t1');
+    expect(sentBody.userId).toBeUndefined();
+  });
+
+  it('explicit scopes -> tenant scoped endpoint', async () => {
+    let sentBody: any;
+    nock(BASE_URL)
+      .post(TENANT_SCOPED, (b) => {
+        sentBody = b;
+        return true;
+      })
+      .reply(200, { token: tokenObj({ scopes: ['read'] }) });
+    const client = agentClient();
+    await client.connections.getTenantToken({
+      connection: 'github',
+      tenantId: 't1',
+      scopes: ['read'],
+    });
+    expect(sentBody.scopes).toEqual(['read']);
+  });
+
+  it('miss -> ConnectionAuthorizationRequired with no connect URL and no connect call', async () => {
+    nock(BASE_URL).post(TENANT_LATEST).reply(404, { error: 'not found' });
+    // Deliberately NOT registering a CONNECT interceptor: if the SDK tried to
+    // build a connect URL, nock would throw on the unmatched request.
+    const client = agentClient();
+    await expect(
+      client.connections.getTenantToken({ connection: 'github', tenantId: 't1' }),
+    ).rejects.toMatchObject({ name: 'ConnectionAuthorizationRequired', connectUrl: undefined });
+  });
+});
+
+describe('ConnectionsClient.waitForConnection', () => {
+  it('polls until connected, delivering the connect URL once', async () => {
+    nock(BASE_URL).post(USER_LATEST).reply(404, { error: 'no' });
+    nock(BASE_URL).post(CONNECT_PATH).reply(200, { url: 'https://api.descope.com/connect' });
+    nock(BASE_URL).post(USER_LATEST).reply(200, { token: tokenObj() });
+
+    const client = agentClient();
+    const delivered: string[] = [];
+    const tok = await client.connections.waitForConnection({
+      connection: 'github',
+      identifier: 'u@x.com',
+      onConnectUrl: (u) => delivered.push(u),
+      pollIntervalSeconds: 0,
+      timeoutSeconds: 5,
+    });
+
+    expect(tok.accessToken).toBe('gho_downstream_token');
+    expect(delivered).toEqual(['https://api.descope.com/connect']); // delivered once
+  });
+
+  it('throws on timeout', async () => {
+    nock(BASE_URL).post(USER_LATEST).reply(404, { error: 'no' });
+    nock(BASE_URL).post(CONNECT_PATH).reply(200, { url: 'https://api.descope.com/connect' });
+    const client = agentClient();
+    await expect(
+      client.connections.waitForConnection({
+        connection: 'github',
+        identifier: 'u@x.com',
+        timeoutSeconds: 0,
+      }),
+    ).rejects.toBeInstanceOf(AgentAuthError);
   });
 });
 

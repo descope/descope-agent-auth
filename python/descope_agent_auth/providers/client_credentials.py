@@ -35,11 +35,11 @@ class ClientCredentialsProvider(CredentialProvider):
         raw = f"{self._client_id}:{self._client_secret}".encode("utf-8")
         return "Basic " + base64.b64encode(raw).decode("ascii")
 
-    def _acquire(self) -> Credential:
+    async def _acquire(self) -> Credential:
         data = {"grant_type": GRANT_CLIENT_CREDENTIALS}
         if self._scopes:
             data["scope"] = " ".join(self._scopes)
-        resp = self.http.post_form(
+        resp = await self.http.post_form(
             OAUTH2_TOKEN, data=data, headers={"Authorization": self._basic_auth()}
         )
         if not resp.ok:
