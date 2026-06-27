@@ -46,11 +46,13 @@ def _build_args(
     else:
         path = OUTBOUND_USER_TOKEN_LATEST
 
-    # Connect-URL config lives under `options` (redirectUrl, scopes, prompt,
-    # loginHint, resources, externalIdentifier). The connect URL requests the SAME
-    # scopes as the token fetch, so a user who hasn't connected yet consents to
-    # exactly what this tool needs; omitting scopes falls back to the Connection's
-    # default scopes. connect_options carries any of the other option fields.
+    # Connect-URL config lives under `options`. The SDK fills in the two documented
+    # fields -- `redirectUrl` and `scopes` -- so the connect URL requests the SAME
+    # scopes as the token fetch (a user who hasn't connected yet consents to exactly
+    # what this tool needs; omitting scopes falls back to the Connection's default
+    # scopes). `connect_options` is an escape hatch for any additional provider-
+    # specific OAuth passthrough fields; it does NOT bind the URL to a user -- the
+    # connection is associated with whoever the request's bearer token identifies.
     options: dict = dict(connect_options or {})
     if redirect_url:
         options["redirectUrl"] = redirect_url
@@ -101,10 +103,12 @@ class ConnectionsClient:
         device-code / CIBA login) so the vault fetch is user-scoped, without
         reconfiguring the client.
 
-        ``connect_options`` sets extra fields on the connect URL built when the user
-        hasn't connected yet (``prompt``, ``loginHint``, ``resources``,
-        ``externalIdentifier``); ``redirect_url`` and the call's ``scopes`` are added
-        to it automatically.
+        ``connect_options`` is an escape hatch for extra provider-specific
+        passthrough fields on the connect URL built when the user hasn't connected
+        yet (the SDK adds ``redirect_url`` and the call's ``scopes`` automatically).
+        It does **not** bind the URL to a user -- Descope associates the connection
+        with whoever the request's bearer token identifies, so a backend with only a
+        management key cannot target an arbitrary user this way (see the docs).
 
         Raises ``ConnectionAuthorizationRequired`` (carrying ``connect_url``) when
         the user hasn't connected the account yet, ``PolicyDenied`` when an agent

@@ -201,10 +201,11 @@ prompted to connect more than once as different tools need new scopes (increment
 consent). To get a single up-front consent, set the Connection's **default scopes**
 to the superset (and call tools without `scopes`), or request the superset.
 
-The connect endpoint nests these under `options` (`scopes`, `redirectUrl`, plus
-`prompt`, `loginHint`, `resources`, `externalIdentifier`). The SDK places the call's
-`scopes` and `redirect_url` there for you; pass any of the other fields via
-`connect_options` (Python) / `connectOptions` (TS):
+The connect endpoint nests these under `options`. The two documented fields are
+`redirectUrl` and `scopes`, and the SDK fills both in for you (from `redirect_url`
+and the call's `scopes`). `connect_options` (Python) / `connectOptions` (TS) is an
+escape hatch for any **additional provider-specific OAuth passthrough** fields your
+Connection supports — it is not a documented, user-binding mechanism:
 
 ```python
 client.connections.get_token(
@@ -212,9 +213,86 @@ client.connections.get_token(
     identifier=user_id,
     scopes=["repo"],
     redirect_url="https://app/cb",
-    connect_options={"prompt": ["consent"], "loginHint": "user@example.com"},
+    connect_options={"prompt": ["consent"]},   # provider passthrough; verify support
 )
 ```
+
+> **`connect_options` does not pick the user.** Descope binds the connection to
+> whoever the connect request's **bearer token** identifies (the user's session /
+> refresh JWT) — there is no documented body field to target an arbitrary user. This
+> is why a backend with only a management key can't mint a user-bound connect URL out
+> of thin air; see [How a user connects when the agent is a backend process](#how-a-user-connects-when-the-agent-is-a-backend-process).
+
+## How a user connects when the agent is a backend process
+
+The front-end path is simple: the user is present in a browser with a live Descope
+session, your app calls `get_token`, catches `ConnectionAuthorizationRequired`, and
+redirects them to `connect_url`. They consent, the token lands in the vault under
+their identity, the retry succeeds.
+
+A **backend job has neither a browser nor (usually) the user's live session token**,
+so that path doesn't translate directly. The thing to understand first:
+
+> Descope associates a connect URL with the user identified by the **bearer token on
+> the connect request** — the user's session / refresh JWT. The request body is just
+> `appId` + `options{ redirectUrl, scopes }`; there is **no documented field to name
+> an arbitrary user**. So you cannot mint a *user-bound* connect URL from a bare
+> management key plus an identifier — the identifier alone never reaches the consent
+> screen.
+
+That rules out "management key + user id → connect URL" as a server-side shortcut.
+A backend-initiated connection therefore has to get a **user credential into the
+loop** by one of these routes:
+
+1. **Defer to the user's next interactive moment (simplest).** The backend doesn't
+   build the URL at all. When `get_token` raises `ConnectionAuthorizationRequired`,
+   record that this identity needs to connect (a flag, a queued task) and surface it
+   the next time the user is in your front-end — where their live session token
+   builds the connect URL the normal way. The agent retries once the vault has the
+   token.
+
+2. **Act as the user with a token you already hold.** If you've previously logged
+   the user in (authorization-code / device-code / CIBA) and **persisted their
+   refresh token** (the `store` keeps it), present that token via `act_as_user_token`
+   so the connect URL is minted server-side under their identity. Deliver the URL
+   **out of band** — email, Slack, in-app — and learn it finished by **polling**
+   (retry `get_token`) or a **Descope webhook**.
+
+   ```python
+   try:
+       client.connections.get_token(
+           connection="github",
+           identifier=user_id,
+           act_as_user_token=stored_user_jwt,   # mints the connect URL as this user
+       )
+   except ConnectionAuthorizationRequired as e:
+       email_user(user_id, e.connect_url)       # out-of-band delivery
+       # later: poll get_token(...) again, or react to a Descope webhook, then fetch.
+   ```
+
+3. **Ask the user out of band via CIBA.** With no token on hand, use a `CibaProvider`
+   to get a user-scoped Descope token through an out-of-band push to the user's
+   device, then use it as `act_as_user_token` as in (2). CIBA is also the right tool
+   when you want a fresh per-exchange approval — see the CIBA gate section below.
+
+Whichever route, completion is asynchronous: **poll** by retrying `get_token` (it
+succeeds once the vault holds the token) or subscribe to a **Descope webhook**.
+
+### How other platforms model this
+
+The contrast is worth stating plainly, because some platforms *do* key the connect
+URL by your stable user id server-side with no session token:
+
+| Platform | Backend-initiated connect |
+| --- | --- |
+| **Arcade** | `tools.authorize(tool, user_id=…)` returns an auth URL + id keyed by **your user id**; poll `auth.wait_for_completion(id)`. No user session needed. |
+| **Scalekit** | "Connected accounts": create a connection link for a **user id**, hosted consent, email / magic-link delivery, **webhook** on completion. |
+| **Auth0 (Token Vault)** | Interactive flows surface the authorize URL as an **interrupt**; async/backend uses **CIBA** to ask a specific user out of band. |
+| **Descope** | The connect URL is bound by the **user token on the request**, not a body id — so a backend supplies that token (stored refresh token via `act_as_user_token`, or CIBA), or defers URL creation to the user's interactive moment. |
+
+The practical upshot: with Descope you reach the same out-of-band outcome, but the
+user identity comes from **a token you act as**, not an identifier in the connect
+body.
 
 ## Human-in-the-loop approval (CIBA gate)
 

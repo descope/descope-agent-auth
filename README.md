@@ -134,6 +134,9 @@ flowchart TD
   a **connect URL**. Send the user there; they complete the provider's OAuth
   consent; Descope stores the resulting token in the vault. The next
   `get_token` call succeeds. (This is the OAuth path — GitHub, Slack, Google, ….)
+  The connect URL is bound to the user by the **token on the request**, so a
+  pure backend job (no browser, no live session) takes a slightly different route —
+  see [How a user connects when the agent is a backend process](docs/standalone-connections.md#how-a-user-connects-when-the-agent-is-a-backend-process).
 - **Console.** An admin pastes an API key into a Connection in the Descope Console
   (typical for a static third-party API key, at the tenant or user level).
 - **Management API.** Your backend or infrastructure-as-code writes the API key

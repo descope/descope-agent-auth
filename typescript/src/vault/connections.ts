@@ -21,7 +21,11 @@ export interface GetConnectionTokenArgs {
   withRefreshToken?: boolean;
   forceRefresh?: boolean;
   redirectUrl?: string;
-  /** Extra connect-URL `options` fields (prompt, loginHint, resources, externalIdentifier). */
+  /**
+   * Escape hatch for extra provider-specific passthrough fields on the connect-URL
+   * `options`. Does NOT bind the URL to a user -- Descope associates the connection
+   * with whoever the request's bearer token identifies.
+   */
   connectOptions?: Record<string, unknown>;
   requireApproval?: ApprovalRequest;
   /** Run this call as a specific user by presenting their Descope access token. */
@@ -62,11 +66,13 @@ const buildArgs = (args: GetConnectionTokenArgs): FetchArgs => {
     body.scopes = scopes;
   }
 
-  // Connect-URL config lives under `options` (redirectUrl, scopes, prompt,
-  // loginHint, resources, externalIdentifier). The connect URL requests the SAME
-  // scopes as the token fetch, so a user who hasn't connected yet consents to
-  // exactly what this tool needs; omitting scopes falls back to the Connection's
-  // default scopes. connectOptions carries any of the other option fields.
+  // Connect-URL config lives under `options`. The SDK fills in the two documented
+  // fields -- `redirectUrl` and `scopes` -- so the connect URL requests the SAME
+  // scopes as the token fetch (a user who hasn't connected yet consents to exactly
+  // what this tool needs; omitting scopes falls back to the Connection's default
+  // scopes). connectOptions is an escape hatch for additional provider-specific
+  // OAuth passthrough fields; it does NOT bind the URL to a user -- the connection
+  // is associated with whoever the request's bearer token identifies.
   const options: Record<string, unknown> = { ...(args.connectOptions ?? {}) };
   if (args.redirectUrl) options.redirectUrl = args.redirectUrl;
   if (scopes && scopes.length) options.scopes = scopes;
