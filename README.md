@@ -314,6 +314,23 @@ await client.resources.getToken({ resource: 'urn:my-api', actAsUserToken: userJw
 > to the SDK. The `DeviceCodeProvider` / `CibaProvider` can also acquire it for you —
 > their resulting credential is the user's token and flows into phase 2 the same way.
 
+**Management key (trusted backend, no user token).** A common server-side shape: the
+agent has no user token but needs a specific user's already-connected token. A
+management key fetches **any** user's token by `identifier` (and `tenant_id` for a
+tenant-bound one). It **bypasses Policies** — guard this path — and it can only
+*read* tokens, not perform a user's initial OAuth consent (that's still interactive).
+
+```python
+from descope_agent_auth import ManagementKeyProvider
+
+client = AgentAuthClient(
+    project_id="P2...",
+    credential=ManagementKeyProvider(management_key="K...", allow_management_key=True),
+)
+gh = client.connections.get_token(connection="github", identifier=user_id)              # any user
+gh = client.connections.get_token(connection="github", identifier=user_id, tenant_id="acme")  # + tenant
+```
+
 ## End-to-end at runtime
 
 ```mermaid
