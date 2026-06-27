@@ -412,8 +412,7 @@ folding it into login). Three practical options:
    - **Your own front-end** — a `/connect` route that redirects the user to the
      connect URL, e.g. on catching `ConnectionAuthorizationRequired`.
 
-2. **Mint the URL from the backend and relay it.** This is the same shape as
-   Arcade's `auth.start()` → `wait_for_completion()`: the backend generates a
+2. **Mint the URL from the backend and relay it.** The backend generates a
    user-bound connect URL, hands it to the user (print, email, in-app, redirect),
    and polls until they finish. It needs a **user token** — a stored refresh token
    from a prior login, or one obtained via **CIBA / device-code** — passed as
@@ -440,22 +439,21 @@ folding it into login). Three practical options:
 
 In every case the provider consent itself is interactive (the user opens the URL or
 completes the flow); the backend's job is to get the right URL in front of them and
-then detect completion (poll with `wait_for_connection`, or react to a webhook).
+then detect completion by polling with `wait_for_connection`.
 
 ### Waiting for the connection to complete
 
-`wait_for_connection` / `waitForConnection` is the poll half of routes 1 and 2 (the
-analog of Arcade's `wait_for_completion`): it polls until the user finishes consenting
-(or a timeout), so you don't hand-roll the retry loop. Pass a **user token** as
-`act_as_user_token` so the connect URL is user-bound (a live session token, or a
-stored / CIBA-obtained one), and use `on_connect_url` to hand the URL to wherever you
-surface it (redirect, widget, email):
+`wait_for_connection` / `waitForConnection` polls until the user finishes consenting
+(or a timeout), so you don't hand-roll the retry loop. It uses whatever credential the
+client is configured with — the same as `get_token` — so on a user-scoped client you
+pass nothing extra; on a shared client, add `act_as_user_token` to act as that user.
+`on_connect_url` hands you the connect URL the moment it's known, to surface however
+you like (redirect, widget, email):
 
 ```python
 token = client.connections.wait_for_connection(
     connection="github",
     identifier=user_id,
-    act_as_user_token=user_token,          # any user token -> a user-bound connect URL
     on_connect_url=send_to_user,           # redirect, widget, or email
     poll_interval=2.0,
     timeout=300.0,
@@ -467,15 +465,11 @@ token = client.connections.wait_for_connection(
 const token = await client.connections.waitForConnection({
   connection: 'github',
   identifier: userId,
-  actAsUserToken: userSessionJwt,
   onConnectUrl: (url) => sendToUi(url),
   pollIntervalSeconds: 2,
   timeoutSeconds: 300,
 });
 ```
-
-For a fully event-driven flow, skip polling and react to a **Descope webhook** on
-connection completion instead.
 
 ## Human-in-the-loop approval (CIBA gate)
 
