@@ -472,6 +472,81 @@ const token = await client.connections.waitForConnection({
 });
 ```
 
+## Common deployment patterns
+
+Which calls you use depends on **whose account the agent acts against.**
+
+### Per-user connections (each user connects their own account)
+
+The default. Each user authorizes their own GitHub / Gmail / … once (interactive —
+see [above](#how-a-user-connects-when-the-agent-is-a-backend-process)); thereafter
+the agent fetches that user's token by `identifier`:
+
+```python
+gh = client.connections.get_token(connection="github", identifier=user_id)
+```
+
+### Org-managed (shared) credentials
+
+One connection that **every user calls against** — a single org Gmail, Salesforce, or
+GitHub — without each user authenticating separately. Store it as a **tenant-level**
+connection and fetch it with `get_tenant_token`. An autonomous agent (client
+credentials associated with the tenant) or a management key can read it:
+
+```python
+# client credentials (tenant-associated) — or ManagementKeyProvider
+client = AgentAuthClient(
+    project_id="P2...",
+    credential=ClientCredentialsProvider(client_id="...", client_secret="..."),
+)
+gmail = client.connections.get_tenant_token(connection="gmail", tenant_id="acme")
+```
+
+### Background agent acting for many users
+
+A single service account that runs work for many `userID`s. Use a **management key**
+(it reads any user's token by `identifier`) and fetch per user:
+
+```python
+client = AgentAuthClient(
+    project_id="P2...",
+    credential=ManagementKeyProvider(management_key="K...", allow_management_key=True),
+)
+for user_id in batch:
+    gh = client.connections.get_token(connection="github", identifier=user_id)
+    ...
+```
+
+The catch: a management key **reads** tokens but can't mint a user's *initial* connect
+URL (that needs the user's own session). So host a connect UI — Descope's **Outbound
+Apps widget** or your own `/connect` page — where each user links their account once;
+after that the background agent just fetches.
+
+### Pre-authenticating users (custom UI / pre-flight)
+
+To connect users **outside** an agent run — onboarding, a settings page, or a
+pre-flight check before a task — generate the URL with `get_connect_url`, send the
+user through, and wait:
+
+```python
+url = client.connections.get_connect_url(connection="gmail", identifier=user_id)
+send_to_user(url)                       # redirect, button, or email
+client.connections.wait_for_connection(connection="gmail", identifier=user_id)
+```
+
+To verify several required connections up front, loop and collect the ones still
+needing a link:
+
+```python
+needs_connect = []
+for conn in ["gmail", "github"]:
+    try:
+        client.connections.get_token(connection=conn, identifier=user_id)
+    except ConnectionAuthorizationRequired as e:
+        needs_connect.append((conn, e.connect_url))
+# send each connect URL to the user, then proceed once needs_connect is empty
+```
+
 ## Human-in-the-loop approval (CIBA gate)
 
 For a sensitive exchange, require a fresh user sign-off on a trusted device before
