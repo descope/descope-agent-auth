@@ -28,6 +28,24 @@ A Connection has **two separate operations** — keep them distinct:
    **stored, currently-valid** token from the vault — no user, no browser, no refresh
    handling.
 
+```mermaid
+flowchart LR
+    subgraph Authorize["① Authorize — once per user per connection"]
+        direction LR
+        U["User<br/>(in a browser)"] -->|"opens connect URL,<br/>approves OAuth consent"| D["Descope"]
+        D -->|"stores tokens +<br/>keeps them refreshed"| V[("Connections<br/>Vault")]
+    end
+
+    subgraph Fetch["② Fetch — every time the agent acts"]
+        direction LR
+        A["Your backend<br/>agent (SDK)"] -->|"get_token(identifier)"| V2[("Connections<br/>Vault")]
+        V2 -->|"stored, valid token"| A
+        A -->|"call API with token"| P["Provider<br/>GitHub · Slack · …"]
+    end
+
+    Authorize -.->|"token now in the vault"| Fetch
+```
+
 In the SDK, the two meet at one point: a fetch that finds nothing raises
 `ConnectionAuthorizationRequired` (carrying the connect URL) — that's your cue to run
 the authorize step; once the user consents, the next `get_token` just works.
@@ -345,6 +363,32 @@ The front-end path is simple: the user is present in a browser with a live Desco
 session, your app calls `get_token`, catches `ConnectionAuthorizationRequired`, and
 redirects them to `connect_url`. They consent, the token lands in the vault under
 their identity, the retry succeeds.
+
+End to end, authorize (once) then fetch (every call) looks like this:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Agent as Backend agent (SDK)
+    participant Descope
+    participant User
+    participant Provider as Provider (GitHub, Slack…)
+
+    Note over Agent,Provider: Authorize — once per user (a user token binds the URL)
+    Agent->>Descope: get_token(identifier) — nothing stored yet
+    Descope-->>Agent: ConnectionAuthorizationRequired (connect_url)
+    Agent->>User: relay connect_url (redirect / email / in-app)
+    User->>Provider: open URL, approve OAuth consent
+    Provider-->>Descope: authorization code, exchanged for tokens
+    Descope->>Descope: store and refresh in the Connections Vault
+    Agent->>Descope: wait_for_connection() polls until stored
+    Descope-->>Agent: connected
+
+    Note over Agent,Provider: Fetch — every call thereafter
+    Agent->>Descope: get_token(identifier)
+    Descope-->>Agent: stored, currently-valid token
+    Agent->>Provider: call the API with the token
+```
 
 A **backend job has neither a browser nor (usually) the user's live session token**,
 so that path doesn't translate directly. The thing to understand first:
