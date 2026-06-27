@@ -40,19 +40,21 @@ walkthrough: **[standalone Connections quickstart](docs/standalone-connections.m
   *resource-server* side. This SDK is the *client* side: it acquires and uses tokens.
 
 > **Scope in one line:** this SDK manages the tokens **the tools you implement**
-> need — not your agent's own OAuth connection to a third-party MCP server (that's
-> owned by your MCP client / agent platform). Use it *inside* your tool code.
+> need — not your agent's OAuth connection to a third-party MCP server. Use it
+> *inside* your tool code.
 
 <details>
-<summary><strong>Using a managed MCP-client platform (Bedrock, Azure AI Foundry, …)?</strong></summary>
+<summary><strong>Using your agent as an MCP client to third-party servers?</strong></summary>
 
-When your agent acts as an MCP *client*, the OAuth between it and the remote server
-is owned by that platform — AWS Bedrock AgentCore, Azure AI Foundry, the MCP SDK's
-client — and those runtimes don't expose a hook to swap it in; they usually ship
-their own outbound-token feature (e.g. Bedrock AgentCore Identity). Use **this** SDK
-*inside your own tool code* (a Bedrock action-group Lambda, an Azure function tool, a
-native framework tool) to fetch downstream API tokens. Descope's angle is **one token
-layer across frameworks and clouds** instead of a per-platform one.
+If your agent connects to remote MCP servers as a *client* — calling tools those
+servers expose rather than tools you wrote — this SDK is not the right layer. The
+OAuth between the agent and those servers is handled by your MCP client stack, and
+you're usually not implementing those tools yourself.
+
+**This SDK belongs in tool code you implement** — a custom function, a Lambda action
+group, a framework-native tool — to fetch downstream API tokens for APIs your agent
+calls directly. It is not a replacement for the auth your MCP client uses to reach
+third-party MCP servers.
 
 </details>
 
