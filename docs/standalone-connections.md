@@ -453,3 +453,35 @@ it as `store`.
 > **Security:** with a persistent store, the credentials there now include
 > **refresh tokens**. Treat the store as a secret store (encryption at rest, access
 > controls). The SDK never logs token values.
+
+### Caching vs. policy enforcement
+
+Descope enforces **Policies at retrieval time** — i.e. when the SDK actually calls
+the vault. A cached Connection/Resource token therefore **skips the policy check**
+until it expires: if a Policy is tightened or access revoked, a cached token keeps
+working until its TTL lapses.
+
+If you need Policies (or revocation) re-evaluated on **every** call, disable the
+phase-2 cache with `cache_tokens=False` / `cacheTokens: false` so each `get_token`
+hits Descope:
+
+```python
+client = AgentAuthClient(
+    project_id="P2...",
+    credential=ClientCredentialsProvider(client_id="...", client_secret="..."),
+    cache_tokens=False,   # every fetch re-enforces Policies (no phase-2 caching)
+)
+```
+
+```ts
+const client = new AgentAuthClient({
+  projectId: 'P2...',
+  credential: new ClientCredentialsProvider({ clientId: '...', clientSecret: '...' }),
+  cacheTokens: false, // every fetch re-enforces Policies (no phase-2 caching)
+});
+```
+
+This disables only the **phase-2 token cache**. Phase-1 credential persistence
+(device-code / CIBA refresh tokens) is unaffected — that's about not re-running an
+interactive login, not policy. For a one-off fresh fetch instead, pass
+`force_refresh=True` / `forceRefresh: true` on the call.

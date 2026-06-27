@@ -52,6 +52,7 @@ class AsyncAgentAuthClient:
         timeout: float = 30.0,
         retry: Optional[RetryConfig] = None,
         logger: Optional[logging.Logger] = None,
+        cache_tokens: bool = True,
     ) -> None:
         self.project_id = project_id
         self.base_url = base_url
@@ -83,6 +84,7 @@ class AsyncAgentAuthClient:
             get_credential=self.get_credential,
             store=self.store,
             approval_gate=self._run_approval,
+            cache_tokens=cache_tokens,
         )
         # The execution seam wraps the backend: fetch is wired, execute is stubbed
         # behind the mode flag so enabling it later is a config change, not a rewrite.
@@ -99,6 +101,7 @@ class AsyncAgentAuthClient:
             store=self.store,
             mode=self.mode,
             approval_gate=self._run_approval,
+            cache_tokens=cache_tokens,
         )
 
     async def _run_approval(self, request: ApprovalRequest) -> None:
@@ -324,6 +327,7 @@ class AgentAuthClient:
         timeout: float = 30.0,
         retry: Optional[RetryConfig] = None,
         logger: Optional[logging.Logger] = None,
+        cache_tokens: bool = True,
     ) -> None:
         self._bridge = _LoopBridge()
         # The async client builds an httpx.AsyncClient, which must be created on the
@@ -339,6 +343,7 @@ class AgentAuthClient:
                 timeout=timeout,
                 retry=retry,
                 logger=logger,
+                cache_tokens=cache_tokens,
             )
         )
         self.connections = _SyncConnections(self._bridge, self._async.connections)

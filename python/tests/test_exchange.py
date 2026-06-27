@@ -152,6 +152,21 @@ class TestConnectionsExchange(common.AgentAuthTest):
         self.assertEqual(mock_request.call_count, 1)  # second served from cache
 
     @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_cache_disabled_fetches_every_time(self, mock_request):
+        # cache_tokens=False -> no cache read/write, so Policies are re-enforced on
+        # every call (each fetch hits Descope).
+        mock_request.return_value = make_response({"token": token_obj()})
+        client = self.make_client(
+            ManagementKeyProvider(management_key="K123", allow_management_key=True),
+            cache_tokens=False,
+        )
+
+        client.connections.get_token(connection="github", identifier="user@example.com")
+        client.connections.get_token(connection="github", identifier="user@example.com")
+
+        self.assertEqual(mock_request.call_count, 2)  # not cached
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_user_token_threads_tenant_id_into_body(self, mock_request):
         mock_request.side_effect = [make_response(CRED), make_response({"token": token_obj()})]
         client = self._agent_client()

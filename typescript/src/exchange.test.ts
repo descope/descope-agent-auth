@@ -179,6 +179,22 @@ describe('ConnectionsClient.getToken', () => {
     expect(scope.isDone()).toBe(true); // only one interceptor consumed
   });
 
+  it('cacheTokens:false fetches every time (Policies re-enforced per call)', async () => {
+    nock(BASE_URL).post(USER_LATEST).reply(200, { token: tokenObj() });
+    nock(BASE_URL).post(USER_LATEST).reply(200, { token: tokenObj() });
+    const client = makeClient(
+      new ManagementKeyProvider({
+        managementKey: 'K123',
+        allowManagementKey: true,
+        logger: silentLogger,
+      }),
+      { cacheTokens: false },
+    );
+    await client.connections.getToken({ connection: 'github', identifier: 'u@x.com' });
+    await client.connections.getToken({ connection: 'github', identifier: 'u@x.com' });
+    expect(nock.pendingMocks()).toHaveLength(0); // both interceptors consumed -> no cache
+  });
+
   it('threads tenantId into the user-token body', async () => {
     let sentBody: any;
     nock(BASE_URL)

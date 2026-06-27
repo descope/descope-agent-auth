@@ -50,6 +50,7 @@ class ResourcesClient:
         mode: Mode,
         approval_gate: Optional[Callable[[ApprovalRequest], Awaitable[None]]] = None,
         skew_seconds: float = 60.0,
+        cache_tokens: bool = True,
     ) -> None:
         self._http = http
         self._get_credential = get_credential
@@ -57,6 +58,9 @@ class ResourcesClient:
         self._mode = mode
         self._approval_gate = approval_gate
         self._skew = skew_seconds
+        # When False, never read/write the token cache: every mint hits Descope so
+        # Policies are re-enforced each call (see VaultBackend for the rationale).
+        self._cache_tokens = cache_tokens
 
     async def get_token(
         self,
@@ -92,7 +96,7 @@ class ResourcesClient:
             await self._approval_gate(require_approval)
 
         cache_key = _cache_key(resource, scopes)
-        if not force_refresh:
+        if self._cache_tokens and not force_refresh:
             cached = await self._cache_get(cache_key)
             if cached is not None:
                 return cached
@@ -137,7 +141,8 @@ class ResourcesClient:
             )
 
         token = self._to_vault_token(resp.json, resource)
-        await self._cache_set(cache_key, token)
+        if self._cache_tokens:
+            await self._cache_set(cache_key, token)
         return token
 
     @staticmethod

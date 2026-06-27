@@ -75,6 +75,7 @@ class VaultBackend:
         store: TokenStore,
         approval_gate: Optional[Callable[["ApprovalRequest"], Awaitable[None]]] = None,
         skew_seconds: float = 60.0,
+        cache_tokens: bool = True,
     ) -> None:
         self._http = http
         self._project_id = project_id
@@ -83,6 +84,10 @@ class VaultBackend:
         # Runs a CIBA approval before a sensitive exchange; raises on denial/timeout.
         self._approval_gate = approval_gate
         self._skew = skew_seconds
+        # When False, never read or write the phase-2 token cache: every fetch hits
+        # Descope, so Policies are re-enforced on every call (caching a token skips
+        # the retrieval-time policy check until it expires).
+        self._cache_tokens = cache_tokens
 
     # -- auth ---------------------------------------------------------------
 
@@ -141,7 +146,7 @@ class VaultBackend:
                 )
             await self._approval_gate(require_approval)
 
-        if not force_refresh:
+        if self._cache_tokens and not force_refresh:
             cached = await self._cache_get(cache_key)
             if cached is not None:
                 return cached
@@ -158,7 +163,8 @@ class VaultBackend:
 
         if resp.ok and resp.json and resp.json.get("token"):
             token = token_object_to_vault_token(resp.json["token"])
-            await self._cache_set(cache_key, token)
+            if self._cache_tokens:
+                await self._cache_set(cache_key, token)
             return token
 
         # 404 -> user has not connected (or token cleared / wrong scopes).

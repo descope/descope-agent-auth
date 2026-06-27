@@ -75,6 +75,10 @@ export class VaultBackend {
     private readonly store: TokenStore,
     private readonly approvalGate?: ApprovalGate,
     private readonly skewSeconds = 60,
+    // When false, never read/write the phase-2 token cache: every fetch hits
+    // Descope, so Policies are re-enforced on every call (a cached token skips the
+    // retrieval-time policy check until it expires).
+    private readonly cacheTokens = true,
   ) {}
 
   private async authHeader(): Promise<string> {
@@ -123,7 +127,7 @@ export class VaultBackend {
       await this.approvalGate(args.requireApproval);
     }
 
-    if (!args.forceRefresh) {
+    if (this.cacheTokens && !args.forceRefresh) {
       const cached = await this.cacheGet(args.cacheKey);
       if (cached) return cached;
     }
@@ -137,7 +141,7 @@ export class VaultBackend {
 
     if (resp.ok && resp.json?.token) {
       const token = tokenObjectToVaultToken(resp.json.token);
-      await this.cacheSet(args.cacheKey, token);
+      if (this.cacheTokens) await this.cacheSet(args.cacheKey, token);
       return token;
     }
 
