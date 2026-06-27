@@ -203,6 +203,51 @@ await client.connections.getToken({ connection: 'github', identifier: userId });
 await client.connections.getToken({ connection: 'github', identifier: userId, actAsUserToken: userJwt });
 ```
 
+### Management key (trusted backend, no user token)
+
+A common backend shape: an agent runs server-side with **no user token on hand** and
+needs to read a specific user's already-connected token. A management key fetches
+**any** user's Connection token by `identifier` (and `tenant_id` for a tenant-bound
+one). It **bypasses Policies**, so treat this path as privileged and guard who can
+invoke it — it isn't the recommended default, but it's operationally simple for a
+trusted backend.
+
+```python
+from descope_agent_auth import AgentAuthClient, ManagementKeyProvider
+
+client = AgentAuthClient(
+    project_id="P2...",
+    credential=ManagementKeyProvider(management_key="K...", allow_management_key=True),
+)
+
+# Any user's token by id:
+gh = client.connections.get_token(connection="github", identifier=user_id)
+
+# A user's tenant-bound token (multi-tenant Connections):
+gh = client.connections.get_token(connection="github", identifier=user_id, tenant_id="acme")
+
+# Org-shared, no user:
+slack = client.connections.get_tenant_token(connection="slack", tenant_id="acme")
+```
+
+```ts
+import { AgentAuthClient, ManagementKeyProvider } from '@descope/agent-auth';
+
+const client = new AgentAuthClient({
+  projectId: 'P2...',
+  credential: new ManagementKeyProvider({ managementKey: 'K...', allowManagementKey: true }),
+});
+
+await client.connections.getToken({ connection: 'github', identifier: userId });
+await client.connections.getToken({ connection: 'github', identifier: userId, tenantId: 'acme' });
+await client.connections.getTenantToken({ connection: 'slack', tenantId: 'acme' });
+```
+
+> A management key **reads** tokens; it can't perform a user's **initial** OAuth
+> consent. The user must connect first through their own session (front-end
+> `/connect`, the Outbound Apps widget, or a flow action) — see
+> [How a user connects when the agent is a backend process](#how-a-user-connects-when-the-agent-is-a-backend-process).
+
 ## Scopes
 
 - **Omit** `scopes` → the Connection's configured default scopes are used.
