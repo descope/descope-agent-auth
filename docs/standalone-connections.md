@@ -366,7 +366,7 @@ But there's a deeper constraint to be honest about:
 > GitHub token — the user still has to consent to GitHub interactively.
 
 So a backend-initiated connection is about getting the user to the connect URL (or
-folding it into login). The practical options:
+folding it into login). Three practical options:
 
 1. **Defer to the user's next interactive moment (the common path).** When
    `get_token` raises `ConnectionAuthorizationRequired`, flag that this identity needs
@@ -377,32 +377,52 @@ folding it into login). The practical options:
    - **Your own front-end** — a `/connect` route that redirects the user to the
      connect URL, e.g. on catching `ConnectionAuthorizationRequired`.
 
-   The agent retries once the vault holds the token — poll with `wait_for_connection`
-   (below) or react to a Descope webhook.
+2. **Mint the URL from the backend and relay it.** This is the same shape as
+   Arcade's `auth.start()` → `wait_for_completion()`: the backend generates a
+   user-bound connect URL, hands it to the user (print, email, in-app, redirect),
+   and polls until they finish. It needs a **user token** on the request — a stored
+   refresh token from a prior login, or one obtained via **CIBA / device-code** —
+   passed as `act_as_user_token`. (CIBA's role is exactly this: it yields the *user
+   token* that binds the URL; the user still consents to the provider in a browser.)
+   A bare **management key cannot** mint here — Descope binds the URL to the request
+   JWT, with no `user_id` body field like Arcade has.
 
-2. **Connect *inside* the login flow (unique to Descope).** Because Descope login is
+   ```python
+   try:
+       client.connections.get_token(connection="github", identifier=user_id,
+                                     act_as_user_token=user_token)
+   except ConnectionAuthorizationRequired as e:
+       send_to_user(e.connect_url)          # print / email / in-app
+   token = client.connections.wait_for_connection(
+       connection="github", identifier=user_id, act_as_user_token=user_token,
+   )                                          # polls until the user consents
+   ```
+
+3. **Connect *inside* the login flow (unique to Descope).** Because Descope login is
    flow-based, you can add a **connection step as a flow action** — so when the user
    authenticates (including via a CIBA flow), they consent to GitHub / HubSpot in that
    same flow, with no separate connect URL afterward. Not the common path, but an
    option a token-vault-only design can't offer.
 
-Either way the consent is interactive and happens with the user's own session; the
-backend's job is just to detect completion (poll or webhook).
+In every case the provider consent itself is interactive (the user opens the URL or
+completes the flow); the backend's job is to get the right URL in front of them and
+then detect completion (poll with `wait_for_connection`, or react to a webhook).
 
 ### Waiting for the connection to complete
 
-Once the user has been sent to the connect URL, `wait_for_connection` /
-`waitForConnection` polls until they finish consenting (or a timeout) — so you don't
-hand-roll the retry loop. In a context where you hold the user's **live session
-token**, pass it as `act_as_user_token` so the connect URL is user-bound, and use
-`on_connect_url` to hand the URL to your UI (redirect or widget):
+`wait_for_connection` / `waitForConnection` is the poll half of routes 1 and 2 (the
+analog of Arcade's `wait_for_completion`): it polls until the user finishes consenting
+(or a timeout), so you don't hand-roll the retry loop. Pass a **user token** as
+`act_as_user_token` so the connect URL is user-bound (a live session token, or a
+stored / CIBA-obtained one), and use `on_connect_url` to hand the URL to wherever you
+surface it (redirect, widget, email):
 
 ```python
 token = client.connections.wait_for_connection(
     connection="github",
     identifier=user_id,
-    act_as_user_token=user_session_jwt,    # live session -> a user-bound connect URL
-    on_connect_url=send_to_ui,             # redirect, or show in the widget
+    act_as_user_token=user_token,          # any user token -> a user-bound connect URL
+    on_connect_url=send_to_user,           # redirect, widget, or email
     poll_interval=2.0,
     timeout=300.0,
 )
