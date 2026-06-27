@@ -168,6 +168,33 @@ flowchart TD
 Resource tokens need no provisioning step — they're minted on demand from your
 agent's identity via token-exchange.
 
+## How a credential gets into Descope
+
+Before the agent can fetch a **Connection** token, that credential has to exist in
+the Connections vault. There are three ways it gets there — the first is runtime
+(driven by the SDK), the other two are design/admin time:
+
+```mermaid
+flowchart TD
+    User["End user"] -->|"completes OAuth consent<br/>via the connect URL the SDK returns"| Vault[("Connections vault")]
+    Admin["Admin"] -->|"adds an API key by hand<br/>in the Descope Console"| Vault
+    Backend["Your backend / IaC"] -->|"adds an API key via the<br/>Descope Management API"| Vault
+    Vault -.->|"later: connections.get_token()"| Agent["Your agent"]
+```
+
+- **User connect (via the SDK).** When you call `connections.get_token` and the
+  user hasn't connected yet, the SDK raises `ConnectionAuthorizationRequired` with
+  a **connect URL**. Send the user there; they complete the provider's OAuth
+  consent; Descope stores the resulting token in the vault. The next
+  `get_token` call succeeds. (This is the OAuth path — GitHub, Slack, Google, ….)
+- **Console.** An admin pastes an API key into a Connection in the Descope Console
+  (typical for a static third-party API key, at the tenant or user level).
+- **Management API.** Your backend or infrastructure-as-code writes the API key
+  programmatically.
+
+Resource tokens need no provisioning step — they're minted on demand from your
+agent's identity via token-exchange.
+
 ## How the SDK gets those tokens
 
 It starts with **how your agent authenticates to Descope** (phase 1), configured
