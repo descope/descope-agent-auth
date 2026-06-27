@@ -192,6 +192,18 @@ class VaultBackend:
             status_code=resp.status_code,
         )
 
+    async def get_connect_url(
+        self, *, connect_body: Optional[dict], act_as_user_token: Optional[str] = None
+    ) -> Optional[str]:
+        """Proactively generate a connect URL (the explicit authorize path)."""
+        if connect_body is None:
+            return None
+        if act_as_user_token:
+            header = f"Bearer {self._project_id}:{act_as_user_token}"
+        else:
+            header, _privileged = await self._auth_header()
+        return await self._try_connect_url(connect_body, header)
+
     async def _try_connect_url(self, connect_body: Optional[dict], header: str) -> Optional[str]:
         if connect_body is None:
             return None

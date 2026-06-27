@@ -170,6 +170,18 @@ export class VaultBackend {
     );
   }
 
+  /** Proactively generate a connect URL (the explicit authorize path). */
+  async getConnectUrl(
+    connectBody: Record<string, unknown> | undefined,
+    actAsUserToken?: string,
+  ): Promise<string | undefined> {
+    if (!connectBody) return undefined;
+    const header = actAsUserToken
+      ? `Bearer ${this.projectId}:${actAsUserToken}`
+      : await this.authHeader();
+    return this.tryConnectUrl(connectBody, header);
+  }
+
   private async tryConnectUrl(
     connectBody: Record<string, unknown> | undefined,
     header: string,

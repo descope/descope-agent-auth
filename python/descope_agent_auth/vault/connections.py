@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any, Callable, List, Optional
+from typing import Any, List, Optional
 
 from .._endpoints import (
     OUTBOUND_TENANT_TOKEN,
@@ -36,6 +36,29 @@ def _cache_key(
 def _tenant_cache_key(connection: str, tenant_id: str, scopes: Optional[List[str]]) -> str:
     scope_part = ",".join(sorted(scopes)) if scopes else "<defaults>"
     return f"vault:tenant:{connection}:{tenant_id}:{scope_part}"
+
+
+def _build_connect_body(
+    *,
+    connection: str,
+    tenant_id: Optional[str],
+    scopes: Optional[List[str]],
+    redirect_url: Optional[str],
+    connect_options: Optional[dict],
+) -> dict:
+    """Body for the connect URL: the call's scopes + redirect_url, plus any extra
+    provider-specific passthrough fields from connect_options."""
+    options: dict = dict(connect_options or {})
+    if redirect_url:
+        options["redirectUrl"] = redirect_url
+    if scopes:
+        options["scopes"] = list(scopes)
+    connect_body: dict = {"appId": connection}
+    if tenant_id:
+        connect_body["tenantId"] = tenant_id
+    if options:
+        connect_body["options"] = options
+    return connect_body
 
 
 def _build_args(
@@ -64,24 +87,13 @@ def _build_args(
     else:
         path = OUTBOUND_USER_TOKEN_LATEST
 
-    # Connect-URL config lives under `options`. The SDK fills in the two documented
-    # fields -- `redirectUrl` and `scopes` -- so the connect URL requests the SAME
-    # scopes as the token fetch (a user who hasn't connected yet consents to exactly
-    # what this tool needs; omitting scopes falls back to the Connection's default
-    # scopes). `connect_options` is an escape hatch for any additional provider-
-    # specific OAuth passthrough fields; it does NOT bind the URL to a user -- the
-    # connection is associated with whoever the request's bearer token identifies.
-    options: dict = dict(connect_options or {})
-    if redirect_url:
-        options["redirectUrl"] = redirect_url
-    if scopes:
-        options["scopes"] = list(scopes)
-
-    connect_body: dict = {"appId": connection}
-    if tenant_id:
-        connect_body["tenantId"] = tenant_id
-    if options:
-        connect_body["options"] = options
+    connect_body = _build_connect_body(
+        connection=connection,
+        tenant_id=tenant_id,
+        scopes=scopes,
+        redirect_url=redirect_url,
+        connect_options=connect_options,
+    )
 
     return {
         "path": path,
@@ -191,6 +203,40 @@ class ConnectionsClient:
         )
         return await self._execution.fetch_token(**args)
 
+    async def get_connect_url(
+        self,
+        *,
+        connection: str,
+        identifier: str,
+        scopes: Optional[List[str]] = None,
+        tenant_id: Optional[str] = None,
+        redirect_url: Optional[str] = None,
+        connect_options: Optional[dict] = None,
+        act_as_user_token: Optional[str] = None,
+    ) -> Optional[str]:
+        """Generate the URL to send a user through to authorize this Connection.
+
+        The proactive counterpart of catching ``ConnectionAuthorizationRequired``:
+        call this when you want to start the "Connect <provider>" flow yourself (a
+        button, a redirect). Hand the returned URL to the user; they complete the
+        provider's OAuth consent and Descope stores the token, after which
+        ``get_token`` succeeds.
+
+        The URL is tied to the user the call authenticates as, so present that user's
+        token via ``act_as_user_token`` (or configure the client with it).
+        ``identifier`` mirrors ``get_token`` for symmetry.
+        """
+        connect_body = _build_connect_body(
+            connection=connection,
+            tenant_id=tenant_id,
+            scopes=scopes,
+            redirect_url=redirect_url,
+            connect_options=connect_options,
+        )
+        return await self._execution.get_connect_url(
+            connect_body=connect_body, act_as_user_token=act_as_user_token
+        )
+
     async def get_tenant_token(
         self,
         *,
@@ -233,23 +279,16 @@ class ConnectionsClient:
         scopes: Optional[List[str]] = None,
         tenant_id: Optional[str] = None,
         act_as_user_token: Optional[str] = None,
-        on_connect_url: Optional[Callable[[str], None]] = None,
         poll_interval: float = 2.0,
         timeout: float = 300.0,
     ) -> VaultToken:
-        """Block until the user finishes connecting, then return the token.
+        """Poll ``get_token`` until the user finishes connecting, then return the token.
 
-        Polls ``get_token`` until it succeeds. The third-party consent itself is
-        interactive, so the connect URL still has to reach the user: pass
-        ``on_connect_url`` to be handed it the moment it's known (once), deliver it
-        (redirect, email, Slack, ...), and this call returns as soon as the user
-        completes consent and the vault holds the token.
-
-        Raises ``AgentAuthError`` if ``timeout`` seconds elapse first. (For an
-        event-driven alternative to polling, react to a Descope webhook instead.)
+        Use after you've sent the user to the connect URL (see ``get_connect_url``):
+        this re-fetches until the vault holds the token. Raises ``AgentAuthError`` if
+        ``timeout`` seconds elapse first.
         """
         deadline = time.monotonic() + timeout
-        notified = False
         while True:
             try:
                 return await self.get_token(
@@ -261,10 +300,6 @@ class ConnectionsClient:
                     act_as_user_token=act_as_user_token,
                 )
             except ConnectionAuthorizationRequired as exc:
-                if on_connect_url is not None and not notified:
-                    if exc.connect_url:
-                        on_connect_url(exc.connect_url)
-                    notified = True
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     raise AgentAuthError(

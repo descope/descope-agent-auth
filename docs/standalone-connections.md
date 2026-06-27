@@ -46,11 +46,16 @@ flowchart LR
     Authorize -.->|"token now in the vault"| Fetch
 ```
 
-In the SDK, the two meet at one point: a fetch that finds nothing raises
-`ConnectionAuthorizationRequired` (carrying the connect URL) — that's your cue to run
-the authorize step; once the user consents, the next `get_token` just works.
-`wait_for_connection` bridges them (surface the URL, poll until the vault has the
-token). **Who can authorize, and from where**, is covered in
+You get the connect URL for the authorize step two ways:
+
+- **Proactively** — call `get_connect_url` / `getConnectUrl` (e.g. behind a "Connect
+  GitHub" button), hand the user the URL.
+- **Just in time** — `get_token` raises `ConnectionAuthorizationRequired` carrying the
+  URL when the agent tries to act and the user isn't connected.
+
+Either way, once the user consents the next `get_token` just works.
+`wait_for_connection` is an optional helper that polls until the vault has the token.
+**Who can authorize, and from where**, is covered in
 [How a user connects when the agent is a backend process](#how-a-user-connects-when-the-agent-is-a-backend-process).
 
 ## Prerequisites
@@ -421,11 +426,10 @@ folding it into login). Three practical options:
    can't** do this — you need a user token.
 
    ```python
-   try:
-       client.connections.get_token(connection="github", identifier=user_id,
-                                     act_as_user_token=user_token)
-   except ConnectionAuthorizationRequired as e:
-       send_to_user(e.connect_url)          # print / email / in-app
+   url = client.connections.get_connect_url(
+       connection="github", identifier=user_id, act_as_user_token=user_token,
+   )
+   send_to_user(url)                          # print / email / in-app
    token = client.connections.wait_for_connection(
        connection="github", identifier=user_id, act_as_user_token=user_token,
    )                                          # polls until the user consents
@@ -443,18 +447,16 @@ then detect completion by polling with `wait_for_connection`.
 
 ### Waiting for the connection to complete
 
-`wait_for_connection` / `waitForConnection` polls until the user finishes consenting
-(or a timeout), so you don't hand-roll the retry loop. It uses whatever credential the
-client is configured with — the same as `get_token` — so on a user-scoped client you
-pass nothing extra; on a shared client, add `act_as_user_token` to act as that user.
-`on_connect_url` hands you the connect URL the moment it's known, to surface however
-you like (redirect, widget, email):
+Once you've sent the user to the connect URL, `wait_for_connection` /
+`waitForConnection` polls until they finish consenting (or a timeout), so you don't
+hand-roll the retry loop. It uses whatever credential the client is configured with —
+the same as `get_token` — so on a user-scoped client you pass nothing extra; on a
+shared client, add `act_as_user_token` to act as that user.
 
 ```python
 token = client.connections.wait_for_connection(
     connection="github",
     identifier=user_id,
-    on_connect_url=send_to_user,           # redirect, widget, or email
     poll_interval=2.0,
     timeout=300.0,
 )
@@ -465,7 +467,6 @@ token = client.connections.wait_for_connection(
 const token = await client.connections.waitForConnection({
   connection: 'github',
   identifier: userId,
-  onConnectUrl: (url) => sendToUi(url),
   pollIntervalSeconds: 2,
   timeoutSeconds: 300,
 });

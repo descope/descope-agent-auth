@@ -62,6 +62,15 @@ class Execution:
             )
         return await self._backend.fetch(**fetch_args)
 
+    async def get_connect_url(
+        self, *, connect_body: Optional[dict], act_as_user_token: Optional[str] = None
+    ) -> Optional[str]:
+        """Generate a connect URL. Available in both modes -- authorizing a user is
+        independent of whether token fetch or hosted execution is used."""
+        return await self._backend.get_connect_url(
+            connect_body=connect_body, act_as_user_token=act_as_user_token
+        )
+
     async def execute(self, *, request: ToolRequest, **fetch_args: Any) -> Any:
         """Execute path: route the call through Descope's hosted execution endpoint.
 

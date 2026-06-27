@@ -61,9 +61,18 @@ export interface GetTenantConnectionTokenArgs {
   actAsUserToken?: string;
 }
 
+export interface GetConnectUrlArgs {
+  connection: string;
+  /** Mirrors `getToken` for symmetry; the URL binds to the user the call authenticates as. */
+  identifier: string;
+  scopes?: string[];
+  tenantId?: string;
+  redirectUrl?: string;
+  connectOptions?: Record<string, unknown>;
+  actAsUserToken?: string;
+}
+
 export interface WaitForConnectionArgs extends GetConnectionTokenArgs {
-  /** Handed the connect URL once, the moment it's known, so you can deliver it. */
-  onConnectUrl?: (url: string) => void;
   /** Seconds between polls (default 2). */
   pollIntervalSeconds?: number;
   /** Give up and throw after this many seconds (default 300). */
@@ -87,6 +96,24 @@ const tenantCacheKey = (connection: string, tenantId: string, scopes?: string[])
   return `vault:tenant:${connection}:${tenantId}:${scopePart}`;
 };
 
+const buildConnectBody = (args: {
+  connection: string;
+  tenantId?: string;
+  scopes?: string[];
+  redirectUrl?: string;
+  connectOptions?: Record<string, unknown>;
+}): Record<string, unknown> => {
+  // The call's scopes + redirectUrl, plus any extra provider-specific passthrough
+  // fields from connectOptions.
+  const options: Record<string, unknown> = { ...(args.connectOptions ?? {}) };
+  if (args.redirectUrl) options.redirectUrl = args.redirectUrl;
+  if (args.scopes && args.scopes.length) options.scopes = args.scopes;
+  const connectBody: Record<string, unknown> = { appId: args.connection };
+  if (args.tenantId) connectBody.tenantId = args.tenantId;
+  if (Object.keys(options).length > 0) connectBody.options = options;
+  return connectBody;
+};
+
 const buildArgs = (args: GetConnectionTokenArgs): FetchArgs => {
   const { connection, identifier, scopes, tenantId } = args;
   const body: Record<string, unknown> = { appId: connection, userId: identifier };
@@ -105,20 +132,13 @@ const buildArgs = (args: GetConnectionTokenArgs): FetchArgs => {
     body.scopes = scopes;
   }
 
-  // Connect-URL config lives under `options`. The SDK fills in the two documented
-  // fields -- `redirectUrl` and `scopes` -- so the connect URL requests the SAME
-  // scopes as the token fetch (a user who hasn't connected yet consents to exactly
-  // what this tool needs; omitting scopes falls back to the Connection's default
-  // scopes). connectOptions is an escape hatch for additional provider-specific
-  // OAuth passthrough fields; it does NOT bind the URL to a user -- the connection
-  // is associated with whoever the request's bearer token identifies.
-  const options: Record<string, unknown> = { ...(args.connectOptions ?? {}) };
-  if (args.redirectUrl) options.redirectUrl = args.redirectUrl;
-  if (scopes && scopes.length) options.scopes = scopes;
-
-  const connectBody: Record<string, unknown> = { appId: connection };
-  if (tenantId) connectBody.tenantId = tenantId;
-  if (Object.keys(options).length > 0) connectBody.options = options;
+  const connectBody = buildConnectBody({
+    connection,
+    tenantId,
+    scopes,
+    redirectUrl: args.redirectUrl,
+    connectOptions: args.connectOptions,
+  });
 
   return {
     path,
@@ -201,31 +221,43 @@ export class ConnectionsClient {
   }
 
   /**
-   * Block until the user finishes connecting, then resolve with the token.
+   * Generate the URL to send a user through to authorize this Connection — the
+   * proactive counterpart of catching `ConnectionAuthorizationRequired`. Call it
+   * when you want to start the "Connect <provider>" flow yourself (a button, a
+   * redirect). Hand the returned URL to the user; once they complete the provider's
+   * OAuth consent, Descope stores the token and `getToken` succeeds.
    *
-   * Polls `getToken` until it succeeds. The third-party consent itself is
-   * interactive, so the connect URL still has to reach the user: pass
-   * `onConnectUrl` to be handed it once, deliver it (redirect, email, Slack, …),
-   * and this resolves as soon as the user consents and the vault holds the token.
+   * The URL is tied to the user the call authenticates as, so present that user's
+   * token via `actAsUserToken` (or configure the client with it).
+   */
+  async getConnectUrl(args: GetConnectUrlArgs): Promise<string | undefined> {
+    const connectBody = buildConnectBody({
+      connection: args.connection,
+      tenantId: args.tenantId,
+      scopes: args.scopes,
+      redirectUrl: args.redirectUrl,
+      connectOptions: args.connectOptions,
+    });
+    return this.execution.getConnectUrl(connectBody, args.actAsUserToken);
+  }
+
+  /**
+   * Poll `getToken` until the user finishes connecting, then resolve with the token.
    *
-   * Rejects with `AgentAuthError` if `timeoutSeconds` elapse first. (For an
-   * event-driven alternative to polling, react to a Descope webhook instead.)
+   * Use after you've sent the user to the connect URL (see `getConnectUrl`): this
+   * re-fetches until the vault holds the token. Rejects with `AgentAuthError` if
+   * `timeoutSeconds` elapse first.
    */
   async waitForConnection(args: WaitForConnectionArgs): Promise<VaultToken> {
-    const { onConnectUrl, pollIntervalSeconds, timeoutSeconds, ...tokenArgs } = args;
+    const { pollIntervalSeconds, timeoutSeconds, ...tokenArgs } = args;
     const pollMs = (pollIntervalSeconds ?? 2) * 1000;
     const deadline = Date.now() + (timeoutSeconds ?? 300) * 1000;
-    let notified = false;
     for (;;) {
       try {
         // eslint-disable-next-line no-await-in-loop
         return await this.getToken({ ...tokenArgs, forceRefresh: true });
       } catch (err) {
         if (!(err instanceof ConnectionAuthorizationRequired)) throw err;
-        if (onConnectUrl && !notified) {
-          if (err.connectUrl) onConnectUrl(err.connectUrl);
-          notified = true;
-        }
         const remaining = deadline - Date.now();
         if (remaining <= 0) {
           throw new AgentAuthError(
