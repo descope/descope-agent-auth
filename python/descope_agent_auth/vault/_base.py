@@ -9,9 +9,11 @@ the result -- including the headline 404 -> ConnectionAuthorizationRequired path
 from __future__ import annotations
 
 import json
+import time
 from datetime import datetime, timezone
-from typing import Any, Callable, Optional
+from typing import Any, Awaitable, Callable, Optional
 
+from .._async import maybe_await
 from .._endpoints import OUTBOUND_CONNECT
 from .._http import HttpClient
 from ..errors import (
@@ -69,9 +71,9 @@ class VaultBackend:
         *,
         http: HttpClient,
         project_id: str,
-        get_credential: Callable[[], Credential],
+        get_credential: Callable[[], Awaitable[Credential]],
         store: TokenStore,
-        approval_gate: Optional[Callable[["ApprovalRequest"], None]] = None,
+        approval_gate: Optional[Callable[["ApprovalRequest"], Awaitable[None]]] = None,
         skew_seconds: float = 60.0,
     ) -> None:
         self._http = http
@@ -84,15 +86,15 @@ class VaultBackend:
 
     # -- auth ---------------------------------------------------------------
 
-    def _auth_header(self) -> tuple:
+    async def _auth_header(self) -> tuple:
         """Return (header_value, is_privileged) for the current credential."""
-        cred = self._get_credential()
+        cred = await self._get_credential()
         return f"Bearer {self._project_id}:{cred.token}", cred.is_privileged
 
     # -- cache --------------------------------------------------------------
 
-    def _cache_get(self, cache_key: str) -> Optional[VaultToken]:
-        raw = self._store.get(cache_key)
+    async def _cache_get(self, cache_key: str) -> Optional[VaultToken]:
+        raw = await maybe_await(self._store.get(cache_key))
         if raw is None:
             return None
         try:
@@ -101,23 +103,21 @@ class VaultBackend:
             return None
         token = token_object_to_vault_token(obj)
         if token.is_expired(skew_seconds=self._skew):
-            self._store.delete(cache_key)
+            await maybe_await(self._store.delete(cache_key))
             return None
         return token
 
-    def _cache_set(self, cache_key: str, token: VaultToken) -> None:
+    async def _cache_set(self, cache_key: str, token: VaultToken) -> None:
         payload = dict(token.raw or {})
         payload["accessToken"] = token.access_token
         ttl = None
         if token.expires_at is not None:
-            import time as _time
-
-            ttl = max(0.0, token.expires_at - _time.time())
-        self._store.set(cache_key, json.dumps(payload), ttl_seconds=ttl)
+            ttl = max(0.0, token.expires_at - time.time())
+        await maybe_await(self._store.set(cache_key, json.dumps(payload), ttl_seconds=ttl))
 
     # -- exchange -----------------------------------------------------------
 
-    def fetch(
+    async def fetch(
         self,
         *,
         path: str,
@@ -139,10 +139,10 @@ class VaultBackend:
                     "require_approval was set but no approval provider is configured on "
                     "the client; pass approval=CibaProvider(...) to AgentAuthClient"
                 )
-            self._approval_gate(require_approval)
+            await self._approval_gate(require_approval)
 
         if not force_refresh:
-            cached = self._cache_get(cache_key)
+            cached = await self._cache_get(cache_key)
             if cached is not None:
                 return cached
 
@@ -151,19 +151,19 @@ class VaultBackend:
         if act_as_user_token:
             header = f"Bearer {self._project_id}:{act_as_user_token}"
         else:
-            header, _privileged = self._auth_header()
-        resp = self._http.post_json(
+            header, _privileged = await self._auth_header()
+        resp = await self._http.post_json(
             path, json=body, headers={"Authorization": header, "Content-Type": "application/json"}
         )
 
         if resp.ok and resp.json and resp.json.get("token"):
             token = token_object_to_vault_token(resp.json["token"])
-            self._cache_set(cache_key, token)
+            await self._cache_set(cache_key, token)
             return token
 
         # 404 -> user has not connected (or token cleared / wrong scopes).
         if resp.status_code == 404:
-            connect_url = self._try_connect_url(connect_body, header)
+            connect_url = await self._try_connect_url(connect_body, header)
             raise ConnectionAuthorizationRequired(
                 f"connection '{connection}' is not authorized for this identity yet",
                 connect_url=connect_url,
@@ -186,11 +186,11 @@ class VaultBackend:
             status_code=resp.status_code,
         )
 
-    def _try_connect_url(self, connect_body: Optional[dict], header: str) -> Optional[str]:
+    async def _try_connect_url(self, connect_body: Optional[dict], header: str) -> Optional[str]:
         if connect_body is None:
             return None
         try:
-            resp = self._http.post_json(
+            resp = await self._http.post_json(
                 OUTBOUND_CONNECT,
                 json=connect_body,
                 headers={"Authorization": header, "Content-Type": "application/json"},

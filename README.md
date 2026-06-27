@@ -332,6 +332,9 @@ transfer. See each package's README for a copy-pasteable quickstart.
 
 Both languages, identical surfaces:
 
+- **Python is async-first** — use `AsyncAgentAuthClient` (and `with_connection_async`)
+  in async apps; `AgentAuthClient` is a synchronous facade with the same API. TypeScript
+  is async-native.
 - All credential providers: client credentials, device code, CIBA, management key,
   and bring-your-own access token.
 - Connection and Resource token exchange, with the

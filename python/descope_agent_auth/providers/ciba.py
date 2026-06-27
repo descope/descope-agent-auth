@@ -15,6 +15,7 @@ Endpoint paths and the CIBA grant-type string are UNVERIFIED -- see
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import List, Optional
 
@@ -45,15 +46,15 @@ class CibaProvider(CredentialProvider):
         self._scopes = scopes or ["openid"]
         self._max_wait_seconds = max_wait_seconds
 
-    def _acquire(self) -> Credential:
-        return self.authenticate(
+    async def _acquire(self) -> Credential:
+        return await self.authenticate(
             login_hint=self._login_hint,
             binding_message=self._binding_message,
             scopes=self._scopes,
             timeout_seconds=self._max_wait_seconds,
         )
 
-    def authenticate(
+    async def authenticate(
         self,
         *,
         login_hint: str,
@@ -66,12 +67,12 @@ class CibaProvider(CredentialProvider):
         Reused as both the acquisition flow and the phase-2 approval gate. Raises
         ``ApprovalDenied`` / ``ApprovalTimeout`` on rejection or expiry.
         """
-        auth_req_id, interval, deadline = self._initiate(login_hint, binding_message, scopes)
+        auth_req_id, interval, deadline = await self._initiate(login_hint, binding_message, scopes)
         deadline = min(deadline, time.time() + timeout_seconds)
 
         while time.time() < deadline:
-            time.sleep(interval)
-            resp = self.http.post_form(OAUTH2_TOKEN, data=self._poll_body(auth_req_id))
+            await asyncio.sleep(interval)
+            resp = await self.http.post_form(OAUTH2_TOKEN, data=self._poll_body(auth_req_id))
             if resp.ok:
                 return token_response_to_credential(resp.json, kind=self.kind)
             error = (resp.json or {}).get("error")
@@ -89,7 +90,7 @@ class CibaProvider(CredentialProvider):
             )
         raise ApprovalTimeout("CIBA request timed out before user approval")
 
-    def _initiate(
+    async def _initiate(
         self,
         login_hint: str,
         binding_message: Optional[str],
@@ -104,7 +105,7 @@ class CibaProvider(CredentialProvider):
             data["client_secret"] = self._client_secret
         if binding_message:
             data["binding_message"] = binding_message
-        resp = self.http.post_form(CIBA_AUTHENTICATE, data=data)
+        resp = await self.http.post_form(CIBA_AUTHENTICATE, data=data)
         if not resp.ok or not resp.json:
             raise CredentialAcquisitionFailed(
                 f"CIBA initiation failed ({resp.status_code}): {_err(resp.json) or resp.text}"

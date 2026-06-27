@@ -19,8 +19,9 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any, Callable, List, Optional
+from typing import Any, Awaitable, Callable, List, Optional
 
+from .._async import maybe_await
 from .._endpoints import GRANT_TOKEN_EXCHANGE, OAUTH2_TOKEN, TOKEN_TYPE_ACCESS_TOKEN
 from .._http import HttpClient
 from ..errors import AgentAuthError, PolicyDenied, TokenExchangeFailed
@@ -44,10 +45,10 @@ class ResourcesClient:
         self,
         *,
         http: HttpClient,
-        get_credential: Callable[[], Credential],
+        get_credential: Callable[[], Awaitable[Credential]],
         store: TokenStore,
         mode: Mode,
-        approval_gate: Optional[Callable[[ApprovalRequest], None]] = None,
+        approval_gate: Optional[Callable[[ApprovalRequest], Awaitable[None]]] = None,
         skew_seconds: float = 60.0,
     ) -> None:
         self._http = http
@@ -57,7 +58,7 @@ class ResourcesClient:
         self._approval_gate = approval_gate
         self._skew = skew_seconds
 
-    def get_token(
+    async def get_token(
         self,
         *,
         resource: str,
@@ -88,11 +89,11 @@ class ResourcesClient:
                     "require_approval was set but no approval provider is configured on "
                     "the client; pass approval=CibaProvider(...) to AgentAuthClient"
                 )
-            self._approval_gate(require_approval)
+            await self._approval_gate(require_approval)
 
         cache_key = _cache_key(resource, scopes)
         if not force_refresh:
-            cached = self._cache_get(cache_key)
+            cached = await self._cache_get(cache_key)
             if cached is not None:
                 return cached
 
@@ -102,7 +103,7 @@ class ResourcesClient:
         if act_as_user_token:
             subject_token = act_as_user_token
         else:
-            cred = self._get_credential()
+            cred = await self._get_credential()
             if cred.is_privileged:
                 raise AgentAuthError(
                     "Resource tokens use the token-exchange grant and require an OAuth "
@@ -120,7 +121,7 @@ class ResourcesClient:
         if scopes:
             data["scope"] = " ".join(scopes)
 
-        resp = self._http.post_form(OAUTH2_TOKEN, data=data)
+        resp = await self._http.post_form(OAUTH2_TOKEN, data=data)
         if resp.status_code in (401, 403):
             raise PolicyDenied(
                 f"policy denied for resource '{resource}' "
@@ -136,7 +137,7 @@ class ResourcesClient:
             )
 
         token = self._to_vault_token(resp.json, resource)
-        self._cache_set(cache_key, token)
+        await self._cache_set(cache_key, token)
         return token
 
     @staticmethod
@@ -157,8 +158,8 @@ class ResourcesClient:
 
     # -- cache --------------------------------------------------------------
 
-    def _cache_get(self, cache_key: str) -> Optional[VaultToken]:
-        raw = self._store.get(cache_key)
+    async def _cache_get(self, cache_key: str) -> Optional[VaultToken]:
+        raw = await maybe_await(self._store.get(cache_key))
         if raw is None:
             return None
         try:
@@ -173,11 +174,11 @@ class ResourcesClient:
             app_id=obj.get("app_id"),
         )
         if token.is_expired(skew_seconds=self._skew):
-            self._store.delete(cache_key)
+            await maybe_await(self._store.delete(cache_key))
             return None
         return token
 
-    def _cache_set(self, cache_key: str, token: VaultToken) -> None:
+    async def _cache_set(self, cache_key: str, token: VaultToken) -> None:
         payload: dict[str, Any] = {
             "access_token": token.access_token,
             "token_type": token.token_type,
@@ -188,4 +189,4 @@ class ResourcesClient:
         ttl = None
         if token.expires_at is not None:
             ttl = max(0.0, token.expires_at - time.time())
-        self._store.set(cache_key, json.dumps(payload), ttl_seconds=ttl)
+        await maybe_await(self._store.set(cache_key, json.dumps(payload), ttl_seconds=ttl))

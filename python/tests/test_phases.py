@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from descope_agent_auth import (
     AgentAuthClient,
@@ -28,7 +28,7 @@ def _mgmt():
     return ManagementKeyProvider(management_key="K", allow_management_key=True)
 
 
-@patch("time.sleep", lambda *_: None)
+@patch("asyncio.sleep", AsyncMock())
 class TestApprovalGate(common.AgentAuthTest):
     def _client_with_approval(self):
         return AgentAuthClient(
@@ -38,7 +38,7 @@ class TestApprovalGate(common.AgentAuthTest):
             approval=CibaProvider(client_id="cid", login_hint="user@example.com"),
         )
 
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_approved_then_exchange_proceeds(self, mock_request):
         mock_request.side_effect = [
             make_response({"auth_req_id": "areq", "interval": 1, "expires_in": 60}),  # initiate
@@ -58,7 +58,7 @@ class TestApprovalGate(common.AgentAuthTest):
         self.assertEqual(tok.access_token, "gho_downstream_token")
         self.assertEqual(mock_request.call_count, 3)
 
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_denied_blocks_exchange(self, mock_request):
         mock_request.side_effect = [
             make_response({"auth_req_id": "areq", "interval": 1, "expires_in": 60}),
@@ -75,7 +75,7 @@ class TestApprovalGate(common.AgentAuthTest):
         # The exchange never ran (only initiate + denied poll).
         self.assertEqual(mock_request.call_count, 2)
 
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_require_approval_without_provider_errors(self, mock_request):
         mock_request.return_value = make_response({"token": token_obj()})
         client = self.make_client(_mgmt())  # no approval provider configured
@@ -89,7 +89,7 @@ class TestApprovalGate(common.AgentAuthTest):
 
 
 class TestToolWrapper(common.AgentAuthTest):
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_injects_scoped_token(self, mock_request):
         mock_request.return_value = make_response({"token": token_obj()})
         client = self.make_client(_mgmt())
@@ -102,7 +102,7 @@ class TestToolWrapper(common.AgentAuthTest):
 
         self.assertEqual(result, "user@example.com:gho_downstream_token")
 
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_surfaces_reauth_signal(self, mock_request):
         mock_request.side_effect = [
             make_response({"error": "not found"}, status=404),
@@ -120,7 +120,7 @@ class TestToolWrapper(common.AgentAuthTest):
 
 
 class TestExecutionSeam(common.AgentAuthTest):
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_fetch_mode_returns_token(self, mock_request):
         mock_request.return_value = make_response({"token": token_obj()})
         client = self.make_client(_mgmt())  # default mode="fetch"
@@ -129,14 +129,14 @@ class TestExecutionSeam(common.AgentAuthTest):
 
         self.assertEqual(tok.access_token, "gho_downstream_token")
 
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_execute_mode_disables_raw_fetch(self, _mock_request):
         client = self.make_client(_mgmt(), mode="execute")
 
         with self.assertRaises(AgentAuthError):
             client.connections.get_token(connection="github", identifier="user@example.com")
 
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_execute_routes_request_without_returning_token(self, mock_request):
         client = self.make_client(_mgmt(), mode="execute")
 
@@ -149,7 +149,7 @@ class TestExecutionSeam(common.AgentAuthTest):
         # No HTTP exchange was performed (stub raised before any call).
         mock_request.assert_not_called()
 
-    @patch("httpx.Client.request")
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_execute_method_requires_execute_mode(self, _mock_request):
         client = self.make_client(_mgmt())  # fetch mode
 

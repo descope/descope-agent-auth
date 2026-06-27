@@ -41,7 +41,7 @@ class AccessTokenProvider(CredentialProvider):
         self._expires_at = expires_at
         self._refresh_token = refresh_token
 
-    def _acquire(self) -> Credential:
+    async def _acquire(self) -> Credential:
         # The token is supplied, not acquired; just hand it back.
         return Credential(
             token=self._access_token,

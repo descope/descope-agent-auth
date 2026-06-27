@@ -18,6 +18,7 @@ import time
 from abc import ABC, abstractmethod
 from typing import Optional
 
+from .._async import maybe_await
 from .._endpoints import GRANT_REFRESH_TOKEN, OAUTH2_TOKEN
 from .._http import HttpClient
 from ..errors import CredentialAcquisitionFailed
@@ -62,14 +63,14 @@ class CredentialProvider(ABC):
 
     # -- public API ---------------------------------------------------------
 
-    def get_credential(self) -> Credential:
+    async def get_credential(self) -> Credential:
         """Return a current, valid credential, refreshing/acquiring as needed."""
         if self._cached is not None and not self._cached.is_expired():
             return self._cached
 
         # Cold start: nothing in memory -> try the store (survives restarts).
         if self._cached is None:
-            loaded = self._load()
+            loaded = await self._load()
             if loaded is not None:
                 self._cached = loaded
                 if not loaded.is_expired():
@@ -79,24 +80,24 @@ class CredentialProvider(ABC):
         # else acquire fresh.
         if self._cached is not None and self._cached.refresh_token:
             try:
-                self._cached = self._refresh(self._cached)
-                self._save(self._cached)
+                self._cached = await self._refresh(self._cached)
+                await self._save(self._cached)
                 return self._cached
             except CredentialAcquisitionFailed:
                 pass  # fall through to a fresh acquisition
 
-        self._cached = self._acquire()
-        self._save(self._cached)
+        self._cached = await self._acquire()
+        await self._save(self._cached)
         return self._cached
 
-    def refresh(self) -> Credential:
+    async def refresh(self) -> Credential:
         """Force a refresh (or re-acquire if no refresh token is held)."""
-        base = self._cached or self._load()
+        base = self._cached or await self._load()
         if base is not None and base.refresh_token:
-            self._cached = self._refresh(base)
+            self._cached = await self._refresh(base)
         else:
-            self._cached = self._acquire()
-        self._save(self._cached)
+            self._cached = await self._acquire()
+        await self._save(self._cached)
         return self._cached
 
     @property
@@ -106,7 +107,7 @@ class CredentialProvider(ABC):
     # -- subclass hooks -----------------------------------------------------
 
     @abstractmethod
-    def _acquire(self) -> Credential:
+    async def _acquire(self) -> Credential:
         """Run the provider's flow and return a fresh credential."""
 
     def _storage_key(self) -> Optional[str]:
@@ -114,19 +115,19 @@ class CredentialProvider(ABC):
         persistence (e.g. management key, bring-your-own token)."""
         return None
 
-    def _refresh(self, current: Credential) -> Credential:
+    async def _refresh(self, current: Credential) -> Credential:
         """Default refresh via the OAuth2 ``refresh_token`` grant.
 
         Providers without a refresh token (or with a bespoke flow) override this.
         """
         if not current.refresh_token:
-            return self._acquire()
+            return await self._acquire()
         data = {
             "grant_type": GRANT_REFRESH_TOKEN,
             "refresh_token": current.refresh_token,
         }
         data.update(self._refresh_client_auth())
-        resp = self.http.post_form(OAUTH2_TOKEN, data=data)
+        resp = await self.http.post_form(OAUTH2_TOKEN, data=data)
         if not resp.ok:
             raise CredentialAcquisitionFailed(
                 f"refresh failed ({resp.status_code}): {_err(resp.json) or resp.text}"
@@ -139,7 +140,7 @@ class CredentialProvider(ABC):
 
     # -- persistence --------------------------------------------------------
 
-    def _save(self, cred: Credential) -> None:
+    async def _save(self, cred: Credential) -> None:
         key = self._storage_key()
         if key is None or self._store is None:
             return
@@ -153,13 +154,13 @@ class CredentialProvider(ABC):
         )
         # No TTL: the refresh token must outlive the access token's expiry, so the
         # entry persists until overwritten. Expiry is decided from cred.expires_at.
-        self._store.set(key, payload)
+        await maybe_await(self._store.set(key, payload))
 
-    def _load(self) -> Optional[Credential]:
+    async def _load(self) -> Optional[Credential]:
         key = self._storage_key()
         if key is None or self._store is None:
             return None
-        raw = self._store.get(key)
+        raw = await maybe_await(self._store.get(key))
         if not raw:
             return None
         try:

@@ -1,4 +1,4 @@
-"""Thin synchronous HTTP layer over httpx.
+"""Thin asynchronous HTTP layer over httpx.
 
 Responsibilities kept deliberately small: build absolute URLs from ``base_url``,
 apply timeout + bounded retry on transient failures, and -- critically -- never
@@ -8,8 +8,8 @@ Descope through a single ``HttpClient`` instance.
 
 from __future__ import annotations
 
+import asyncio
 import logging
-import time
 from dataclasses import dataclass
 from typing import Any, Dict, Mapping, Optional
 
@@ -75,55 +75,55 @@ class HttpClient:
         timeout: float = 30.0,
         retry: Optional[RetryConfig] = None,
         logger: Optional[logging.Logger] = None,
-        _transport: Optional[httpx.BaseTransport] = None,  # tests inject this
+        _transport: Optional[httpx.AsyncBaseTransport] = None,  # tests inject this
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._retry = retry or RetryConfig()
         self._log = logger or logging.getLogger("descope_agent_auth.http")
-        self._client = httpx.Client(
+        self._client = httpx.AsyncClient(
             base_url=self._base_url,
             timeout=timeout,
             transport=_transport,
             headers={"User-Agent": "descope-agent-auth-python/0.1.0"},
         )
 
-    def close(self) -> None:
-        self._client.close()
+    async def aclose(self) -> None:
+        await self._client.aclose()
 
-    def __enter__(self) -> "HttpClient":
+    async def __aenter__(self) -> "HttpClient":
         return self
 
-    def __exit__(self, *exc: object) -> None:
-        self.close()
+    async def __aexit__(self, *exc: object) -> None:
+        await self.aclose()
 
-    def post_json(
+    async def post_json(
         self,
         path: str,
         *,
         json: Optional[Mapping[str, Any]] = None,
         headers: Optional[Mapping[str, str]] = None,
     ) -> HttpResponse:
-        return self._request("POST", path, json=json, headers=headers)
+        return await self._request("POST", path, json=json, headers=headers)
 
-    def post_form(
+    async def post_form(
         self,
         path: str,
         *,
         data: Mapping[str, Any],
         headers: Optional[Mapping[str, str]] = None,
     ) -> HttpResponse:
-        return self._request("POST", path, data=data, headers=headers)
+        return await self._request("POST", path, data=data, headers=headers)
 
-    def get(
+    async def get(
         self,
         path: str,
         *,
         params: Optional[Mapping[str, Any]] = None,
         headers: Optional[Mapping[str, str]] = None,
     ) -> HttpResponse:
-        return self._request("GET", path, params=params, headers=headers)
+        return await self._request("GET", path, params=params, headers=headers)
 
-    def _request(
+    async def _request(
         self,
         method: str,
         path: str,
@@ -144,18 +144,18 @@ class HttpClient:
                 attempt,
             )
             try:
-                resp = self._client.request(
+                resp = await self._client.request(
                     method, path, json=json, data=data, params=params, headers=headers
                 )
             except httpx.HTTPError as exc:  # transport-level failure
                 last_exc = exc
                 if attempt < self._retry.attempts:
-                    time.sleep(self._retry.backoff_seconds * attempt)
+                    await asyncio.sleep(self._retry.backoff_seconds * attempt)
                     continue
                 raise AgentAuthError(f"HTTP transport error calling {path}: {exc}") from exc
 
             if resp.status_code in self._retry.retry_statuses and attempt < self._retry.attempts:
-                time.sleep(self._retry.backoff_seconds * attempt)
+                await asyncio.sleep(self._retry.backoff_seconds * attempt)
                 continue
 
             parsed: Any = None

@@ -73,6 +73,27 @@ repos = list_repos(identifier="user@example.com")
 # ConnectionAuthorizationRequired propagates if the user must connect first.
 ```
 
+### Async (Python)
+
+The core is async; `AgentAuthClient` is a synchronous facade over it. In an async
+app (FastAPI, LangGraph, …) use `AsyncAgentAuthClient` directly — same arguments and
+methods, just awaited:
+
+```python
+from descope_agent_auth import AsyncAgentAuthClient, AccessTokenProvider
+
+async with AsyncAgentAuthClient(
+    project_id="P2...",
+    credential=AccessTokenProvider(access_token=user_jwt),
+) as client:
+    github = await client.connections.get_token(connection="github", identifier=user_id)
+    # await client.connections.get_tenant_token(...), wait_for_connection(...), etc.
+```
+
+`with_connection_async` is the awaitable counterpart of `with_connection`. The sync
+`AgentAuthClient` keeps working unchanged — it just drives this async core on a
+background event loop.
+
 ---
 
 ## TypeScript

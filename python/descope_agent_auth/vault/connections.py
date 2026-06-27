@@ -8,6 +8,7 @@ real guardrail is Policies, not the default-scope list).
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Any, Callable, List, Optional
 
@@ -135,7 +136,7 @@ class ConnectionsClient:
     def __init__(self, execution: Execution) -> None:
         self._execution = execution
 
-    def get_token(
+    async def get_token(
         self,
         *,
         connection: str,
@@ -188,9 +189,9 @@ class ConnectionsClient:
             require_approval=require_approval,
             act_as_user_token=act_as_user_token,
         )
-        return self._execution.fetch_token(**args)
+        return await self._execution.fetch_token(**args)
 
-    def get_tenant_token(
+    async def get_tenant_token(
         self,
         *,
         connection: str,
@@ -222,9 +223,9 @@ class ConnectionsClient:
             require_approval=require_approval,
             act_as_user_token=act_as_user_token,
         )
-        return self._execution.fetch_token(**args)
+        return await self._execution.fetch_token(**args)
 
-    def wait_for_connection(
+    async def wait_for_connection(
         self,
         *,
         connection: str,
@@ -251,7 +252,7 @@ class ConnectionsClient:
         notified = False
         while True:
             try:
-                return self.get_token(
+                return await self.get_token(
                     connection=connection,
                     identifier=identifier,
                     scopes=scopes,
@@ -270,9 +271,9 @@ class ConnectionsClient:
                         f"timed out after {timeout}s waiting for '{identifier}' to connect "
                         f"'{connection}'"
                     ) from exc
-                time.sleep(min(poll_interval, remaining))
+                await asyncio.sleep(min(poll_interval, remaining))
 
-    def execute(
+    async def execute(
         self,
         *,
         request: ToolRequest,
@@ -302,4 +303,4 @@ class ConnectionsClient:
             require_approval=require_approval,
             act_as_user_token=act_as_user_token,
         )
-        return self._execution.execute(request=request, **args)
+        return await self._execution.execute(request=request, **args)
