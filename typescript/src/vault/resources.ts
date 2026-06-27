@@ -53,6 +53,7 @@ const errMsg = (body: any): string | undefined =>
 
 export class ResourcesClient {
   private readonly skew: number;
+
   private readonly cacheTokens: boolean;
 
   constructor(private readonly deps: ResourcesClientDeps) {
