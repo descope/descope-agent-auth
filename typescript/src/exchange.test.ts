@@ -276,23 +276,20 @@ describe('ConnectionsClient.getTenantToken', () => {
 });
 
 describe('ConnectionsClient.waitForConnection', () => {
-  it('polls until connected, delivering the connect URL once', async () => {
+  it('polls until connected, then returns the token', async () => {
     nock(BASE_URL).post(USER_LATEST).reply(404, { error: 'no' });
     nock(BASE_URL).post(CONNECT_PATH).reply(200, { url: 'https://api.descope.com/connect' });
     nock(BASE_URL).post(USER_LATEST).reply(200, { token: tokenObj() });
 
     const client = agentClient();
-    const delivered: string[] = [];
     const tok = await client.connections.waitForConnection({
       connection: 'github',
       identifier: 'u@x.com',
-      onConnectUrl: (u) => delivered.push(u),
       pollIntervalSeconds: 0,
       timeoutSeconds: 5,
     });
 
     expect(tok.accessToken).toBe('gho_downstream_token');
-    expect(delivered).toEqual(['https://api.descope.com/connect']); // delivered once
   });
 
   it('throws on timeout', async () => {
@@ -306,6 +303,31 @@ describe('ConnectionsClient.waitForConnection', () => {
         timeoutSeconds: 0,
       }),
     ).rejects.toBeInstanceOf(AgentAuthError);
+  });
+});
+
+describe('ConnectionsClient.getConnectUrl', () => {
+  it('returns the connect URL with scopes + redirectUrl, no userId in the body', async () => {
+    let body: any;
+    nock(BASE_URL)
+      .post(CONNECT_PATH, (b) => {
+        body = b;
+        return true;
+      })
+      .reply(200, { url: 'https://api.descope.com/connect?app=github' });
+
+    const client = agentClient();
+    const url = await client.connections.getConnectUrl({
+      connection: 'github',
+      identifier: 'u@x.com',
+      scopes: ['repo'],
+      redirectUrl: 'https://app/cb',
+    });
+
+    expect(url).toBe('https://api.descope.com/connect?app=github');
+    expect(body.options.scopes).toEqual(['repo']);
+    expect(body.options.redirectUrl).toBe('https://app/cb');
+    expect(body.userId).toBeUndefined(); // connect body carries no userId
   });
 });
 

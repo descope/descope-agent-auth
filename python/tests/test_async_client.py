@@ -67,7 +67,6 @@ class TestAsyncClient(common.AgentAuthTest):
             make_response({"url": "https://api.descope.com/connect"}),
             make_response({"token": token_obj()}),
         ]
-        delivered: list = []
 
         async def scenario():
             client = _async_client(
@@ -77,7 +76,6 @@ class TestAsyncClient(common.AgentAuthTest):
                 return await client.connections.wait_for_connection(
                     connection="github",
                     identifier="u@x.com",
-                    on_connect_url=delivered.append,
                     poll_interval=0.0,
                     timeout=5.0,
                 )
@@ -87,7 +85,6 @@ class TestAsyncClient(common.AgentAuthTest):
         tok = asyncio.run(scenario())
 
         self.assertEqual(tok.access_token, "gho_downstream_token")
-        self.assertEqual(delivered, ["https://api.descope.com/connect"])
 
     @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_resources_token_exchange(self, mock_request):

@@ -392,8 +392,9 @@ Both languages, identical surfaces:
   `ConnectionAuthorizationRequired` re-auth signal and the agent-token-vs-management-key
   distinction. User-level, user+tenant, and tenant-level (`get_tenant_token`)
   Connection tokens.
-- `wait_for_connection` / `waitForConnection` — poll until the user finishes
-  connecting (with a connect-URL delivery callback and timeout).
+- `get_connect_url` / `getConnectUrl` — generate the "Connect <provider>" URL to
+  send a user through, and `wait_for_connection` / `waitForConnection` to poll until
+  they finish.
 - A pluggable token store that persists and refreshes credentials (including
   refresh tokens) across restarts.
 - A human-in-the-loop CIBA **approval gate** on sensitive calls.
