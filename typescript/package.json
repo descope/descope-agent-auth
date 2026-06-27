@@ -85,6 +85,6 @@
     "rollup-plugin-dts": "^6.1.0",
     "ts-jest": "^29.1.0",
     "tslib": "^2.6.0",
-    "typescript": "^5.4.0"
+    "typescript": "^6.0.0"
   }
 }
