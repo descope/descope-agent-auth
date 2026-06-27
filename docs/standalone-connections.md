@@ -128,8 +128,7 @@ async with AsyncAgentAuthClient(
 ```
 
 `with_connection_async` is the awaitable counterpart of `with_connection`. The sync
-`AgentAuthClient` keeps working unchanged — it just drives this async core on a
-background event loop.
+`AgentAuthClient` keeps working unchanged.
 
 ---
 
@@ -333,8 +332,7 @@ allowed to fetch it — differ:
 user — one per tenant — and they are **not interchangeable**. Omit `tenant_id` to get
 the user's tenant-less token; pass it to get the tenant-bound one. Asking for a
 tenant-bound token *without* its `tenant_id` reads as "not connected" and raises
-`ConnectionAuthorizationRequired`. (The SDK keys its token cache on the tenant too,
-so the two never collide.)
+`ConnectionAuthorizationRequired`.
 
 **Tenant-level** is the one Connection fetch an **autonomous agent** (client
 credentials, no user token) can perform — the token belongs to the tenant, not a
@@ -379,7 +377,7 @@ sequenceDiagram
     Descope-->>Agent: ConnectionAuthorizationRequired (connect_url)
     Agent->>User: relay connect_url (redirect / email / in-app)
     User->>Provider: open URL, approve OAuth consent
-    Provider-->>Descope: authorization code, exchanged for tokens
+    Provider-->>Descope: consent granted
     Descope->>Descope: store and refresh in the Connections Vault
     Agent->>Descope: wait_for_connection() polls until stored
     Descope-->>Agent: connected
@@ -391,17 +389,9 @@ sequenceDiagram
 ```
 
 A **backend job has neither a browser nor (usually) the user's live session token**,
-so that path doesn't translate directly. The thing to understand first:
-
-> Descope associates a connect URL with the user identified by the **bearer token on
-> the connect request** — the user's session / refresh JWT. The request body is just
-> `appId` + `options{ redirectUrl, scopes }`; there is **no documented field to name
-> an arbitrary user**. So you cannot mint a *user-bound* connect URL from a bare
-> management key plus an identifier — the identifier alone never reaches the consent
-> screen.
-
-That rules out "management key + user id → connect URL" as a server-side shortcut.
-But there's a deeper constraint to be honest about:
+so that path doesn't translate directly. A connect URL is always tied to a specific
+user, so a **bare management key plus an identifier can't authorize one** — you need
+the user present, or a token you can act as on their behalf. And more fundamentally:
 
 > **A first-time third-party consent (GitHub, Slack, …) requires the user in a
 > browser at the connect URL — there's no token-only shortcut.** This *is* the
@@ -425,12 +415,11 @@ folding it into login). Three practical options:
 2. **Mint the URL from the backend and relay it.** This is the same shape as
    Arcade's `auth.start()` → `wait_for_completion()`: the backend generates a
    user-bound connect URL, hands it to the user (print, email, in-app, redirect),
-   and polls until they finish. It needs a **user token** on the request — a stored
-   refresh token from a prior login, or one obtained via **CIBA / device-code** —
-   passed as `act_as_user_token`. (CIBA's role is exactly this: it yields the *user
-   token* that binds the URL; the user still consents to the provider in a browser.)
-   A bare **management key cannot** mint here — Descope binds the URL to the request
-   JWT, with no `user_id` body field like Arcade has.
+   and polls until they finish. It needs a **user token** — a stored refresh token
+   from a prior login, or one obtained via **CIBA / device-code** — passed as
+   `act_as_user_token`. (CIBA's role is exactly this: it gets you the *user token*;
+   the user still consents to the provider in a browser.) A bare **management key
+   can't** do this — you need a user token.
 
    ```python
    try:
@@ -571,15 +560,15 @@ the vault. A cached Connection/Resource token therefore **skips the policy check
 until it expires: if a Policy is tightened or access revoked, a cached token keeps
 working until its TTL lapses.
 
-If you need Policies (or revocation) re-evaluated on **every** call, disable the
-phase-2 cache with `cache_tokens=False` / `cacheTokens: false` so each `get_token`
-hits Descope:
+If you need Policies (or revocation) re-evaluated on **every** call, turn off token
+caching with `cache_tokens=False` / `cacheTokens: false` so each `get_token` hits
+Descope:
 
 ```python
 client = AgentAuthClient(
     project_id="P2...",
     credential=ClientCredentialsProvider(client_id="...", client_secret="..."),
-    cache_tokens=False,   # every fetch re-enforces Policies (no phase-2 caching)
+    cache_tokens=False,   # every fetch re-enforces Policies (no token caching)
 )
 ```
 
@@ -587,11 +576,11 @@ client = AgentAuthClient(
 const client = new AgentAuthClient({
   projectId: 'P2...',
   credential: new ClientCredentialsProvider({ clientId: '...', clientSecret: '...' }),
-  cacheTokens: false, // every fetch re-enforces Policies (no phase-2 caching)
+  cacheTokens: false, // every fetch re-enforces Policies (no token caching)
 });
 ```
 
-This disables only the **phase-2 token cache**. Phase-1 credential persistence
-(device-code / CIBA refresh tokens) is unaffected — that's about not re-running an
-interactive login, not policy. For a one-off fresh fetch instead, pass
-`force_refresh=True` / `forceRefresh: true` on the call.
+This only stops caching the fetched Connection/Resource tokens — your agent's own
+login isn't re-run on each call (device-code / CIBA sessions still persist and
+refresh). For a one-off fresh fetch instead, pass `force_refresh=True` /
+`forceRefresh: true` on the call.
