@@ -293,78 +293,62 @@ That rules out "management key + user id → connect URL" as a server-side short
 But there's a deeper constraint to be honest about:
 
 > **A first-time third-party consent (GitHub, Slack, …) requires the user in a
-> browser at the connect URL. Nothing the backend holds removes that step.** A user
-> token only lets the backend *mint a connect URL bound to the right user* and
-> deliver it — the user still completes the provider's OAuth consent themselves. In
-> particular **CIBA does not solve this**: it authenticates the *user to Descope* and
-> yields a Descope token, which is not a GitHub token. The user still has to consent
-> to GitHub.
+> browser at the connect URL — there's no token-only shortcut.** This *is* the
+> initial token-storage step: the consent is the thing being created, so there's no
+> stored provider token to fall back on. **CIBA does not solve it**: CIBA
+> authenticates the *user to Descope* and yields a Descope token, which is not a
+> GitHub token — the user still has to consent to GitHub interactively.
 
-So a backend-initiated connection is really about getting the right user-bound
-connect URL (or flow) in front of the user. Three routes:
+So a backend-initiated connection is about getting the user to the connect URL (or
+folding it into login). The practical options:
 
-1. **Defer to the user's next interactive moment (simplest).** The backend doesn't
-   build the URL at all. When `get_token` raises `ConnectionAuthorizationRequired`,
-   record that this identity needs to connect (a flag, a queued task) and surface it
-   the next time the user is in your front-end — where their live session token
-   builds the connect URL the normal way. The agent retries once the vault has the
-   token.
+1. **Defer to the user's next interactive moment (the common path).** When
+   `get_token` raises `ConnectionAuthorizationRequired`, flag that this identity needs
+   to connect and surface it the next time the user is in your front-end, where their
+   **live session** builds the connect URL. Two ready-made ways to present it:
+   - **Descope's hosted Outbound Apps widget** — a drop-in UI where users connect and
+     manage their service connections (least code).
+   - **Your own front-end** — a `/connect` route that redirects the user to the
+     connect URL, e.g. on catching `ConnectionAuthorizationRequired`.
 
-2. **Mint a user-bound URL server-side and deliver it out of band.** Use a token you
-   can act as — a **stored refresh token** from a prior login (the `store` keeps it),
-   or one obtained on demand via **CIBA** — as `act_as_user_token`, so the connect
-   URL is bound to that user. Deliver it (email, Slack, in-app); the user opens it and
-   **consents in their browser**; you learn it finished by **polling** (retry
-   `get_token`) or a **Descope webhook**.
+   The agent retries once the vault holds the token — poll with `wait_for_connection`
+   (below) or react to a Descope webhook.
 
-   ```python
-   try:
-       client.connections.get_token(
-           connection="github",
-           identifier=user_id,
-           act_as_user_token=user_jwt,      # binds the connect URL to this user
-       )
-   except ConnectionAuthorizationRequired as e:
-       email_user(user_id, e.connect_url)   # the user still consents in a browser
-       # later: poll get_token(...) again, or react to a Descope webhook, then fetch.
-   ```
-
-3. **Connect *inside* the login flow (unique to Descope).** Because Descope login is
+2. **Connect *inside* the login flow (unique to Descope).** Because Descope login is
    flow-based, you can add a **connection step as a flow action** — so when the user
    authenticates (including via a CIBA flow), they consent to GitHub / HubSpot in that
-   same flow, and there's no separate connect URL to chase afterward. This collapses
-   authentication and connection into one interaction. It's not the common path, but
-   it's an option a token-vault-only design can't offer.
+   same flow, with no separate connect URL afterward. Not the common path, but an
+   option a token-vault-only design can't offer.
 
-The third-party consent itself is always interactive; the backend's job is to put the
-right user-bound URL (or flow) in front of the user, then poll or await a webhook for
-completion.
+Either way the consent is interactive and happens with the user's own session; the
+backend's job is just to detect completion (poll or webhook).
 
 ### Waiting for the connection to complete
 
-Instead of hand-rolling the retry loop, `wait_for_connection` / `waitForConnection`
-polls until the user finishes consenting (or a timeout). Pass `on_connect_url` to be
-handed the connect URL the moment it's known, so you can deliver it in the same call:
+Once the user has been sent to the connect URL, `wait_for_connection` /
+`waitForConnection` polls until they finish consenting (or a timeout) — so you don't
+hand-roll the retry loop. In a context where you hold the user's **live session
+token**, pass it as `act_as_user_token` so the connect URL is user-bound, and use
+`on_connect_url` to hand the URL to your UI (redirect or widget):
 
 ```python
 token = client.connections.wait_for_connection(
     connection="github",
     identifier=user_id,
-    act_as_user_token=user_jwt,                       # binds the connect URL to this user
-    on_connect_url=lambda url: email_user(user_id, url),
+    act_as_user_token=user_session_jwt,    # live session -> a user-bound connect URL
+    on_connect_url=send_to_ui,             # redirect, or show in the widget
     poll_interval=2.0,
     timeout=300.0,
 )
-# Blocks until the user consents in their browser, then returns the token;
-# raises AgentAuthError on timeout.
+# Returns once the user consents and the vault holds the token; AgentAuthError on timeout.
 ```
 
 ```ts
 const token = await client.connections.waitForConnection({
   connection: 'github',
   identifier: userId,
-  actAsUserToken: userJwt,
-  onConnectUrl: (url) => emailUser(userId, url),
+  actAsUserToken: userSessionJwt,
+  onConnectUrl: (url) => sendToUi(url),
   pollIntervalSeconds: 2,
   timeoutSeconds: 300,
 });
