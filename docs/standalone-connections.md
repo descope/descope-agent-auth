@@ -32,22 +32,23 @@ pip install descope-agent-auth
 ```
 
 ```python
-from descope_agent_auth import AgentAuthClient, ClientCredentialsProvider
+from descope_agent_auth import AgentAuthClient, AccessTokenProvider
 from descope_agent_auth.errors import ConnectionAuthorizationRequired
 
+# A *user-level* Connection token is fetched with that user's Descope access token
+# (or a management key). A client-credentials / M2M agent token cannot read user
+# tokens -- it can only fetch tenant-level Connection tokens or mint M2M-scoped
+# Resource tokens. See "Picking a phase-1 provider" below.
 client = AgentAuthClient(
     project_id="P2abc...",
     base_url="https://api.descope.com",
-    credential=ClientCredentialsProvider(
-        client_id="agent-client-id",
-        client_secret="agent-client-secret",
-    ),
+    credential=AccessTokenProvider(access_token=user_jwt),   # the user's Descope token
 )
 
 try:
     github = client.connections.get_token(
         connection="github",
-        identifier="user@example.com",   # the principal the agent acts for
+        identifier="user@example.com",   # the user whose token you're fetching
         # scopes=["repo"],               # optional; overrides the Connection defaults
     )
     # github.access_token is a downstream GitHub token, refreshed as needed.
@@ -83,17 +84,18 @@ npm install @descope/agent-auth
 ```ts
 import {
   AgentAuthClient,
-  ClientCredentialsProvider,
+  AccessTokenProvider,
   ConnectionAuthorizationRequired,
 } from '@descope/agent-auth';
 
+// A *user-level* Connection token is fetched with that user's Descope access token
+// (or a management key). A client-credentials / M2M agent token cannot read user
+// tokens -- it can only fetch tenant-level Connection tokens or mint M2M-scoped
+// Resource tokens. See "Picking a phase-1 provider" below.
 const client = new AgentAuthClient({
   projectId: 'P2abc...',
   baseUrl: 'https://api.descope.com',
-  credential: new ClientCredentialsProvider({
-    clientId: 'agent-client-id',
-    clientSecret: 'agent-client-secret',
-  }),
+  credential: new AccessTokenProvider({ accessToken: userJwt }), // the user's Descope token
 });
 
 try {
@@ -142,6 +144,15 @@ const repos = await listRepos('user@example.com');
 | `CibaProvider` | the agent needs a specific user's approval out of band |
 | `AccessTokenProvider` | you already hold a user's Descope access token (user-scoped access) |
 | `ManagementKeyProvider` | privileged, **not recommended** — bypasses Policies |
+
+> **What a credential can fetch differs.** Phase-1 auth and phase-2 fetch authority
+> are not the same thing. A **user-level Connection token** (the common case —
+> `connections.get_token(identifier=user_id)`) can only be fetched with **that
+> user's access token** (`AccessTokenProvider` / `act_as_user_token`) or a
+> **management key**. A client-credentials / M2M token **cannot** read user-level
+> tokens; it can fetch **tenant-level** Connection tokens (when the client is
+> associated with that tenant — not yet exposed on the SDK surface) and mint
+> **Resource** tokens, which are scoped to the M2M client itself, not a user.
 
 ### User-scoped access
 
@@ -222,6 +233,45 @@ client.connections.get_token(
 > refresh JWT) — there is no documented body field to target an arbitrary user. This
 > is why a backend with only a management key can't mint a user-bound connect URL out
 > of thin air; see [How a user connects when the agent is a backend process](#how-a-user-connects-when-the-agent-is-a-backend-process).
+
+## Token levels: user, user + tenant, and tenant
+
+A Connection's tokens live at one of three levels. Which one you fetch — and who is
+allowed to fetch it — differ:
+
+| Level | Fetch with | Who can fetch |
+| --- | --- | --- |
+| **User** | `get_token(identifier=user_id)` | the user's access token, or a management key |
+| **User + tenant** | `get_token(identifier=user_id, tenant_id=…)` | the user's access token, or a management key |
+| **Tenant** (org-shared, no user) | `get_tenant_token(tenant_id=…)` | an M2M client associated with the tenant, or a management key |
+
+**User vs. user + tenant.** One Connection can hold *several* tokens for the same
+user — one per tenant — and they are **not interchangeable**. Omit `tenant_id` to get
+the user's tenant-less token; pass it to get the tenant-bound one. Asking for a
+tenant-bound token *without* its `tenant_id` reads as "not connected" and raises
+`ConnectionAuthorizationRequired`. (The SDK keys its token cache on the tenant too,
+so the two never collide.)
+
+**Tenant-level** is the one Connection fetch an **autonomous agent** (client
+credentials, no user token) can perform — the token belongs to the tenant, not a
+user. It's admin/IaC-provisioned, so there's no connect-URL fallback on a miss.
+
+```python
+# User-level (the common case) — needs the user's token or a management key:
+gh = client.connections.get_token(connection="github", identifier=user_id)
+
+# Same user, a specific tenant's token for the same Connection:
+gh_acme = client.connections.get_token(connection="github", identifier=user_id, tenant_id="acme")
+
+# Tenant-level (org-shared, no user) — an M2M agent associated with the tenant can fetch it:
+slack = client.connections.get_tenant_token(connection="slack", tenant_id="acme")
+```
+
+```ts
+await client.connections.getToken({ connection: 'github', identifier: userId });
+await client.connections.getToken({ connection: 'github', identifier: userId, tenantId: 'acme' });
+await client.connections.getTenantToken({ connection: 'slack', tenantId: 'acme' });
+```
 
 ## How a user connects when the agent is a backend process
 

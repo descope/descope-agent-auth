@@ -7,7 +7,12 @@
  * subset -- the real guardrail is Policies, not the default-scope list).
  */
 
-import { OUTBOUND_USER_TOKEN, OUTBOUND_USER_TOKEN_LATEST } from '../endpoints';
+import {
+  OUTBOUND_TENANT_TOKEN,
+  OUTBOUND_TENANT_TOKEN_LATEST,
+  OUTBOUND_USER_TOKEN,
+  OUTBOUND_USER_TOKEN_LATEST,
+} from '../endpoints';
 import { Execution, ToolRequest } from '../execution';
 import { ApprovalRequest, VaultToken } from '../types';
 import { FetchArgs } from './base';
@@ -43,9 +48,32 @@ export interface ExecuteConnectionArgs {
   actAsUserToken?: string;
 }
 
-const cacheKey = (connection: string, identifier: string, scopes?: string[]): string => {
+export interface GetTenantConnectionTokenArgs {
+  connection: string;
+  /** The tenant whose org-shared token you want. */
+  tenantId: string;
+  scopes?: string[];
+  withRefreshToken?: boolean;
+  forceRefresh?: boolean;
+  requireApproval?: ApprovalRequest;
+  actAsUserToken?: string;
+}
+
+const cacheKey = (
+  connection: string,
+  identifier: string,
+  scopes?: string[],
+  tenantId?: string,
+): string => {
+  // tenantId is part of the key: one Connection can hold several user tokens for
+  // the same user, one per tenant, and they are NOT interchangeable.
   const scopePart = scopes && scopes.length ? [...scopes].sort().join(',') : '<defaults>';
-  return `vault:user:${connection}:${identifier}:${scopePart}`;
+  return `vault:user:${connection}:${identifier}:${tenantId ?? '<none>'}:${scopePart}`;
+};
+
+const tenantCacheKey = (connection: string, tenantId: string, scopes?: string[]): string => {
+  const scopePart = scopes && scopes.length ? [...scopes].sort().join(',') : '<defaults>';
+  return `vault:tenant:${connection}:${tenantId}:${scopePart}`;
 };
 
 const buildArgs = (args: GetConnectionTokenArgs): FetchArgs => {
@@ -84,10 +112,41 @@ const buildArgs = (args: GetConnectionTokenArgs): FetchArgs => {
   return {
     path,
     body,
-    cacheKey: cacheKey(connection, identifier, scopes),
+    cacheKey: cacheKey(connection, identifier, scopes, tenantId),
     connection,
     identifier,
     connectBody,
+    forceRefresh: Boolean(args.forceRefresh),
+    requireApproval: args.requireApproval,
+    actAsUserToken: args.actAsUserToken,
+  };
+};
+
+const buildTenantArgs = (args: GetTenantConnectionTokenArgs): FetchArgs => {
+  const { connection, tenantId, scopes } = args;
+  const body: Record<string, unknown> = { appId: connection, tenantId };
+  if (args.withRefreshToken || args.forceRefresh) {
+    body.options = {
+      withRefreshToken: Boolean(args.withRefreshToken),
+      forceRefresh: Boolean(args.forceRefresh),
+    };
+  }
+
+  let path = OUTBOUND_TENANT_TOKEN_LATEST;
+  if (scopes && scopes.length) {
+    path = OUTBOUND_TENANT_TOKEN;
+    body.scopes = scopes;
+  }
+
+  // No connectBody: a tenant-level Connection token is admin/IaC-provisioned (a
+  // shared org credential), not minted by a per-user OAuth consent, so there is no
+  // connect URL to build on a miss.
+  return {
+    path,
+    body,
+    cacheKey: tenantCacheKey(connection, tenantId, scopes),
+    connection,
+    connectBody: undefined,
     forceRefresh: Boolean(args.forceRefresh),
     requireApproval: args.requireApproval,
     actAsUserToken: args.actAsUserToken,
@@ -98,14 +157,36 @@ export class ConnectionsClient {
   constructor(private readonly execution: Execution) {}
 
   /**
-   * Return a currently-valid downstream token for `identifier`. Throws
-   * `ConnectionAuthorizationRequired` (carrying `connectUrl`) when the user hasn't
-   * connected the account yet, `PolicyDenied` when an agent token lacks policy
-   * permission, `ApprovalDenied` / `ApprovalTimeout` if a `requireApproval` gate
-   * fails, or `TokenExchangeFailed` otherwise.
+   * Return a currently-valid **user-level** downstream token for `identifier`.
+   *
+   * `tenantId` selects which of a user's tokens to fetch: one Connection can hold
+   * several tokens for the same user, one per tenant. Omit it for the user's
+   * tenant-less token; pass it for the tenant-bound one. They are distinct — asking
+   * for a tenant-bound token *without* its `tenantId` reads as "not connected". For
+   * an org-shared token not tied to a user, use `getTenantToken`.
+   *
+   * Throws `ConnectionAuthorizationRequired` (carrying `connectUrl`) when the user
+   * hasn't connected the account yet, `PolicyDenied` when an agent token lacks
+   * policy permission, `ApprovalDenied` / `ApprovalTimeout` if a `requireApproval`
+   * gate fails, or `TokenExchangeFailed` otherwise.
    */
   async getToken(args: GetConnectionTokenArgs): Promise<VaultToken> {
     return this.execution.fetchToken(buildArgs(args));
+  }
+
+  /**
+   * Return a currently-valid **tenant-level** downstream token — a single
+   * credential shared by a whole tenant/organization, keyed by `tenantId` with no
+   * user. Because it isn't tied to a user, this is the one Connection fetch an
+   * autonomous agent (client-credentials, no user token) can perform, provided its
+   * identity is associated with the tenant.
+   *
+   * There is no connect-URL fallback (a tenant token is admin/IaC-provisioned, not
+   * minted by a per-user consent); a miss throws `ConnectionAuthorizationRequired`
+   * with no `connectUrl`.
+   */
+  async getTenantToken(args: GetTenantConnectionTokenArgs): Promise<VaultToken> {
+    return this.execution.fetchToken(buildTenantArgs(args));
   }
 
   /**

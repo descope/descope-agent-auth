@@ -20,6 +20,8 @@ from .common import PROJECT_ID, make_response, token_obj
 
 USER_LATEST = "/v1/mgmt/outbound/app/user/token/latest"
 USER_SCOPED = "/v1/mgmt/outbound/app/user/token"
+TENANT_LATEST = "/v1/mgmt/outbound/app/tenant/token/latest"
+TENANT_SCOPED = "/v1/mgmt/outbound/app/tenant/token"
 CONNECT = "/v1/mgmt/outbound/app/connect"
 
 CRED = {"access_token": "agent_at", "expires_in": 3600}
@@ -148,6 +150,78 @@ class TestConnectionsExchange(common.AgentAuthTest):
         client.connections.get_token(connection="github", identifier="user@example.com")
 
         self.assertEqual(mock_request.call_count, 1)  # second served from cache
+
+    @patch("httpx.Client.request")
+    def test_user_token_threads_tenant_id_into_body(self, mock_request):
+        mock_request.side_effect = [make_response(CRED), make_response({"token": token_obj()})]
+        client = self._agent_client()
+
+        client.connections.get_token(
+            connection="github", identifier="user@example.com", tenant_id="t1"
+        )
+
+        _, kwargs = mock_request.call_args
+        self.assertEqual(kwargs["json"]["tenantId"], "t1")
+
+    @patch("httpx.Client.request")
+    def test_same_user_different_tenant_not_cache_collision(self, mock_request):
+        # A user can hold one token per tenant for the same Connection; the two must
+        # not collide in cache. Each distinct tenant_id hits the network.
+        mock_request.side_effect = [
+            make_response({"token": token_obj()}),
+            make_response({"token": token_obj()}),
+        ]
+        client = self._mgmt_client()  # mgmt key: no phase-1 acquire call
+
+        client.connections.get_token(connection="github", identifier="u@x.com", tenant_id="t1")
+        client.connections.get_token(connection="github", identifier="u@x.com", tenant_id="t2")
+
+        self.assertEqual(mock_request.call_count, 2)  # not served from cache
+
+    @patch("httpx.Client.request")
+    def test_tenant_token_latest(self, mock_request):
+        mock_request.side_effect = [make_response(CRED), make_response({"token": token_obj()})]
+        client = self._agent_client()  # autonomous agent: tenant tokens need no user
+
+        tok = client.connections.get_tenant_token(connection="github", tenant_id="t1")
+
+        self.assertEqual(tok.access_token, "gho_downstream_token")
+        args, kwargs = mock_request.call_args
+        self.assertEqual(args[1], TENANT_LATEST)
+        self.assertEqual(kwargs["json"]["tenantId"], "t1")
+        self.assertNotIn("userId", kwargs["json"])
+
+    @patch("httpx.Client.request")
+    def test_tenant_token_scoped(self, mock_request):
+        mock_request.side_effect = [
+            make_response(CRED),
+            make_response({"token": token_obj(scopes=["read"])}),
+        ]
+        client = self._agent_client()
+
+        client.connections.get_tenant_token(
+            connection="github", tenant_id="t1", scopes=["read"]
+        )
+
+        args, kwargs = mock_request.call_args
+        self.assertEqual(args[1], TENANT_SCOPED)
+        self.assertEqual(kwargs["json"]["scopes"], ["read"])
+
+    @patch("httpx.Client.request")
+    def test_tenant_token_miss_raises_without_connect_url(self, mock_request):
+        # Tenant tokens are admin-provisioned: a miss has no connect URL, and the
+        # SDK must NOT attempt a connect call.
+        mock_request.side_effect = [
+            make_response(CRED),
+            make_response({"error": "not found"}, status=404),
+        ]
+        client = self._agent_client()
+
+        with self.assertRaises(ConnectionAuthorizationRequired) as ctx:
+            client.connections.get_tenant_token(connection="github", tenant_id="t1")
+
+        self.assertIsNone(ctx.exception.connect_url)
+        self.assertEqual(mock_request.call_count, 2)  # no third (connect) call
 
 
 @patch("time.sleep", lambda *_: None)

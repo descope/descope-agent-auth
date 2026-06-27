@@ -54,10 +54,9 @@ OUTBOUND_USER_TOKEN_LATEST = "/v1/mgmt/outbound/app/user/token/latest"
 # VERIFIED. Fetch a stored outbound-app user token for an explicit scope set.
 OUTBOUND_USER_TOKEN = "/v1/mgmt/outbound/app/user/token"
 
-# VERIFIED. Tenant-scoped Connection tokens (a tenant-level API key for your org),
-# distinct from Resource tokens (which use the token-exchange grant below).
-# Reserved for a future tenant-level connections path; not yet exposed on the SDK
-# surface.
+# VERIFIED. Tenant-scoped Connection tokens (a tenant-level API key / org-shared
+# OAuth token), distinct from Resource tokens (which use the token-exchange grant
+# below). Exposed via ConnectionsClient.get_tenant_token.
 OUTBOUND_TENANT_TOKEN_LATEST = "/v1/mgmt/outbound/app/tenant/token/latest"
 OUTBOUND_TENANT_TOKEN = "/v1/mgmt/outbound/app/tenant/token"
 

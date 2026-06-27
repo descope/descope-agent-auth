@@ -49,10 +49,9 @@ export const OUTBOUND_USER_TOKEN_LATEST = '/v1/mgmt/outbound/app/user/token/late
 export const OUTBOUND_USER_TOKEN = '/v1/mgmt/outbound/app/user/token';
 
 /**
- * VERIFIED. Tenant-scoped Connection tokens (a tenant-level API key for your org),
- * distinct from Resource tokens (which use the token-exchange grant below).
- * Reserved for a future tenant-level connections path; not yet exposed on the SDK
- * surface.
+ * VERIFIED. Tenant-scoped Connection tokens (a tenant-level API key / org-shared
+ * OAuth token), distinct from Resource tokens (which use the token-exchange grant
+ * below). Exposed via ConnectionsClient.getTenantToken.
  */
 export const OUTBOUND_TENANT_TOKEN_LATEST = '/v1/mgmt/outbound/app/tenant/token/latest';
 export const OUTBOUND_TENANT_TOKEN = '/v1/mgmt/outbound/app/tenant/token';

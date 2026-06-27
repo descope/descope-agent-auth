@@ -10,14 +10,29 @@ from __future__ import annotations
 
 from typing import Any, List, Optional
 
-from .._endpoints import OUTBOUND_USER_TOKEN, OUTBOUND_USER_TOKEN_LATEST
+from .._endpoints import (
+    OUTBOUND_TENANT_TOKEN,
+    OUTBOUND_TENANT_TOKEN_LATEST,
+    OUTBOUND_USER_TOKEN,
+    OUTBOUND_USER_TOKEN_LATEST,
+)
 from ..execution import Execution, ToolRequest
 from ..types import ApprovalRequest, VaultToken
 
 
-def _cache_key(connection: str, identifier: str, scopes: Optional[List[str]]) -> str:
+def _cache_key(
+    connection: str, identifier: str, scopes: Optional[List[str]], tenant_id: Optional[str]
+) -> str:
+    # tenant_id is part of the key: one Connection can hold several user tokens for
+    # the same user, one per tenant, and they are NOT interchangeable.
     scope_part = ",".join(sorted(scopes)) if scopes else "<defaults>"
-    return f"vault:user:{connection}:{identifier}:{scope_part}"
+    tenant_part = tenant_id or "<none>"
+    return f"vault:user:{connection}:{identifier}:{tenant_part}:{scope_part}"
+
+
+def _tenant_cache_key(connection: str, tenant_id: str, scopes: Optional[List[str]]) -> str:
+    scope_part = ",".join(sorted(scopes)) if scopes else "<defaults>"
+    return f"vault:tenant:{connection}:{tenant_id}:{scope_part}"
 
 
 def _build_args(
@@ -68,10 +83,46 @@ def _build_args(
     return {
         "path": path,
         "body": body,
-        "cache_key": _cache_key(connection, identifier, scopes),
+        "cache_key": _cache_key(connection, identifier, scopes, tenant_id),
         "connection": connection,
         "identifier": identifier,
         "connect_body": connect_body,
+        "force_refresh": force_refresh,
+        "require_approval": require_approval,
+        "act_as_user_token": act_as_user_token,
+    }
+
+
+def _build_tenant_args(
+    *,
+    connection: str,
+    tenant_id: str,
+    scopes: Optional[List[str]],
+    with_refresh_token: bool,
+    force_refresh: bool,
+    require_approval: Optional[ApprovalRequest],
+    act_as_user_token: Optional[str],
+) -> dict:
+    body: dict = {"appId": connection, "tenantId": tenant_id}
+    if with_refresh_token or force_refresh:
+        body["options"] = {"withRefreshToken": with_refresh_token, "forceRefresh": force_refresh}
+
+    if scopes:
+        path = OUTBOUND_TENANT_TOKEN
+        body["scopes"] = list(scopes)
+    else:
+        path = OUTBOUND_TENANT_TOKEN_LATEST
+
+    # No connect_body: a tenant-level Connection token is admin/IaC-provisioned
+    # (a shared org credential), not minted by a per-user OAuth consent, so there
+    # is no connect URL to build on a miss.
+    return {
+        "path": path,
+        "body": body,
+        "cache_key": _tenant_cache_key(connection, tenant_id, scopes),
+        "connection": connection,
+        "identifier": None,
+        "connect_body": None,
         "force_refresh": force_refresh,
         "require_approval": require_approval,
         "act_as_user_token": act_as_user_token,
@@ -96,7 +147,15 @@ class ConnectionsClient:
         require_approval: Optional[ApprovalRequest] = None,
         act_as_user_token: Optional[str] = None,
     ) -> VaultToken:
-        """Return a currently-valid downstream token for ``identifier``.
+        """Return a currently-valid **user-level** downstream token for ``identifier``.
+
+        ``tenant_id`` selects *which* of a user's tokens to fetch: a single
+        Connection can hold several tokens for the same user, one per tenant. Omit
+        ``tenant_id`` to get the user's tenant-less token; pass it to get the token
+        bound to that tenant. They are distinct -- asking for a tenant-bound token
+        *without* its ``tenant_id`` reads as "not connected" (raises
+        ``ConnectionAuthorizationRequired``). For an org-shared token that isn't tied
+        to any user, use ``get_tenant_token`` instead.
 
         Pass ``act_as_user_token`` to run this single call as a specific user --
         present that user's Descope access token (from your authorization-code /
@@ -124,6 +183,40 @@ class ConnectionsClient:
             force_refresh=force_refresh,
             redirect_url=redirect_url,
             connect_options=connect_options,
+            require_approval=require_approval,
+            act_as_user_token=act_as_user_token,
+        )
+        return self._execution.fetch_token(**args)
+
+    def get_tenant_token(
+        self,
+        *,
+        connection: str,
+        tenant_id: str,
+        scopes: Optional[List[str]] = None,
+        with_refresh_token: bool = False,
+        force_refresh: bool = False,
+        require_approval: Optional[ApprovalRequest] = None,
+        act_as_user_token: Optional[str] = None,
+    ) -> VaultToken:
+        """Return a currently-valid **tenant-level** downstream token.
+
+        A tenant-level Connection token is a single credential shared by a whole
+        tenant/organization (e.g. an org API key, or an org-wide OAuth token), keyed
+        by ``tenant_id`` with no user. Because it isn't tied to a user, this is the
+        one Connection fetch an **autonomous agent** (client-credentials, no user
+        token) can perform -- provided its identity is associated with the tenant.
+
+        Unlike ``get_token`` there is no connect-URL fallback: a tenant token is
+        provisioned by an admin / IaC, not by a per-user OAuth consent. A miss raises
+        ``ConnectionAuthorizationRequired`` with no ``connect_url``.
+        """
+        args = _build_tenant_args(
+            connection=connection,
+            tenant_id=tenant_id,
+            scopes=scopes,
+            with_refresh_token=with_refresh_token,
+            force_refresh=force_refresh,
             require_approval=require_approval,
             act_as_user_token=act_as_user_token,
         )
