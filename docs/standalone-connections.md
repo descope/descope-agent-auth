@@ -140,7 +140,6 @@ const repos = await listRepos('user@example.com');
 | --- | --- |
 | `ClientCredentialsProvider` | autonomous agent, no user in the loop |
 | `DeviceCodeProvider` | headless agent (no browser); shows a verification URL + code |
-| `AuthorizationCodeProvider` | agent with a browser available (PKCE) |
 | `CibaProvider` | the agent needs a specific user's approval out of band |
 | `AccessTokenProvider` | you already hold a user's Descope access token (user-scoped access) |
 | `ManagementKeyProvider` | privileged, **not recommended** — bypasses Policies |
@@ -151,14 +150,14 @@ const repos = await listRepos('user@example.com');
 > user's access token** (`AccessTokenProvider` / `act_as_user_token`) or a
 > **management key**. A client-credentials / M2M token **cannot** read user-level
 > tokens; it can fetch **tenant-level** Connection tokens (when the client is
-> associated with that tenant — not yet exposed on the SDK surface) and mint
+> associated with that tenant — via `get_tenant_token` / `getTenantToken`) and mint
 > **Resource** tokens, which are scoped to the M2M client itself, not a user.
 
 ### User-scoped access
 
 To act as a specific user — and to mint **user-scoped Resource tokens** — present
-that user's Descope access token (from your authorization-code / device-code / CIBA
-login). Either configure the client with `AccessTokenProvider`, or pass
+that user's Descope access token (from your app's login, device-code, or CIBA).
+Either configure the client with `AccessTokenProvider`, or pass
 `act_as_user_token` / `actAsUserToken` per call on a shared client:
 
 ```python
@@ -341,6 +340,39 @@ The third-party consent itself is always interactive; the backend's job is to pu
 right user-bound URL (or flow) in front of the user, then poll or await a webhook for
 completion.
 
+### Waiting for the connection to complete
+
+Instead of hand-rolling the retry loop, `wait_for_connection` / `waitForConnection`
+polls until the user finishes consenting (or a timeout). Pass `on_connect_url` to be
+handed the connect URL the moment it's known, so you can deliver it in the same call:
+
+```python
+token = client.connections.wait_for_connection(
+    connection="github",
+    identifier=user_id,
+    act_as_user_token=user_jwt,                       # binds the connect URL to this user
+    on_connect_url=lambda url: email_user(user_id, url),
+    poll_interval=2.0,
+    timeout=300.0,
+)
+# Blocks until the user consents in their browser, then returns the token;
+# raises AgentAuthError on timeout.
+```
+
+```ts
+const token = await client.connections.waitForConnection({
+  connection: 'github',
+  identifier: userId,
+  actAsUserToken: userJwt,
+  onConnectUrl: (url) => emailUser(userId, url),
+  pollIntervalSeconds: 2,
+  timeoutSeconds: 300,
+});
+```
+
+For a fully event-driven flow, skip polling and react to a **Descope webhook** on
+connection completion instead.
+
 ## Human-in-the-loop approval (CIBA gate)
 
 For a sensitive exchange, require a fresh user sign-off on a trusted device before
@@ -401,10 +433,9 @@ The `store` holds **both** phases: the phase-1 Descope credential (including its
 downstream tokens. Everything is refreshed lazily on access — you ask for a token
 and get a currently-valid one.
 
-This matters most for **device code / authorization code / CIBA**: their tokens are
-persisted with the refresh token, so a restarted or multi-process agent **refreshes
-instead of re-running the interactive flow** (no second device prompt, browser
-redirect, or CIBA push). `ClientCredentials` is simply re-acquired (no user
+This matters most for **device code / CIBA**: their tokens are persisted with the
+refresh token, so a restarted or multi-process agent **refreshes instead of
+re-running the interactive flow** (no second device prompt or CIBA push). `ClientCredentials` is simply re-acquired (no user
 interaction); `ManagementKey` and bring-your-own `AccessTokenProvider` tokens are
 not persisted.
 

@@ -8,7 +8,7 @@
  * Credentials are cached in memory and, when the provider exposes a stable storage
  * key, persisted to the pluggable `TokenStore` -- including the refresh token, kept
  * beyond the access token's expiry so a restarted/multi-process agent can refresh
- * instead of re-running an interactive flow (device code, authorization code, CIBA).
+ * instead of re-running an interactive flow (device code, CIBA).
  */
 
 import { GRANT_REFRESH_TOKEN, OAUTH2_TOKEN } from '../endpoints';

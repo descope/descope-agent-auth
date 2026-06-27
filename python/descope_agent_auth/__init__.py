@@ -15,7 +15,6 @@ from .errors import (
 )
 from .providers import (
     AccessTokenProvider,
-    AuthorizationCodeProvider,
     CibaProvider,
     ClientCredentialsProvider,
     CredentialProvider,
@@ -41,7 +40,6 @@ __all__ = [
     "CredentialProvider",
     "ClientCredentialsProvider",
     "DeviceCodeProvider",
-    "AuthorizationCodeProvider",
     "CibaProvider",
     "ManagementKeyProvider",
     "AccessTokenProvider",

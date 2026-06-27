@@ -24,12 +24,9 @@ from __future__ import annotations
 
 # --- Phase 1: OAuth2 / OIDC (acquisition) -----------------------------------
 
-# VERIFIED. Used for authorization_code (+PKCE), client_credentials, refresh_token,
-# device_code, and CIBA token-polling grants.
+# VERIFIED. Used for client_credentials, refresh_token, device_code, and CIBA
+# token-polling grants.
 OAUTH2_TOKEN = "/oauth2/v1/token"
-
-# VERIFIED. Authorization-code redirect entry point.
-OAUTH2_AUTHORIZE = "/oauth2/v1/authorize"
 
 # VERIFIED (inbound-apps authorization server). Alternative token endpoint when the
 # agent authenticates as an inbound app client rather than the project OIDC server.
@@ -67,7 +64,6 @@ OUTBOUND_CONNECT = "/v1/mgmt/outbound/app/connect"
 # --- grant types -------------------------------------------------------------
 
 GRANT_CLIENT_CREDENTIALS = "client_credentials"
-GRANT_AUTHORIZATION_CODE = "authorization_code"
 GRANT_REFRESH_TOKEN = "refresh_token"
 GRANT_DEVICE_CODE = "urn:ietf:params:oauth:grant-type:device_code"  # VERIFIED
 GRANT_CIBA = "urn:openid:params:grant-type:ciba"  # UNVERIFIED -- confirm via discovery

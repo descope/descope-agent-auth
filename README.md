@@ -178,7 +178,6 @@ once at init — and you have three options:
   access token using whichever **grant** fits:
   - `ClientCredentialsProvider` — autonomous agent, no user
   - `DeviceCodeProvider` — headless agent (device code)
-  - `AuthorizationCodeProvider` — browser present (authorization code + PKCE)
   - `CibaProvider` — out-of-band user approval (CIBA)
 - **A user's access token you already hold** (`AccessTokenProvider`) — if your app
   already logged the user in with Descope, hand that token to the agent directly
@@ -189,8 +188,8 @@ once at init — and you have three options:
   recommended path (requires explicit opt-in).
 
 Which one depends on **where the agent runs** — and a backend job/service usually
-can't do an interactive `authorization_code` login itself (there's no browser at the
-agent; that happens in your front-end app):
+can't do an interactive browser login itself (that happens in your front-end app,
+which then hands the resulting user token to the SDK):
 
 | Where the agent runs | Use |
 | --- | --- |
@@ -198,7 +197,6 @@ agent; that happens in your front-end app):
 | Backend, reading a **user's** Connection token | `AccessTokenProvider` (user's token handed from your app) or `ManagementKeyProvider` — a client-credentials token **cannot** read user tokens; see below |
 | Backend, needs a specific user **out of band** | `CibaProvider` (push approval, yields a user token) |
 | CLI / headless dev tool | `DeviceCodeProvider` |
-| The agent *is* a web app | `AuthorizationCodeProvider` |
 
 Then, at runtime (phase 2), the SDK **exchanges** that phase-1 credential for the
 token the agent actually needs:
@@ -256,7 +254,7 @@ slack = client.connections.get_tenant_token(connection="slack", tenant_id="acme"
 **Acting for a user (the agent wields the user's own Descope token).** To read a
 user's Connection token — and especially to mint a **user-scoped Resource token**
 (the user's token becomes the token-exchange `subject_token`) — supply that user's
-access token (the one you got from authorization code / device code / CIBA), or use
+access token (the one you got from your app's login, device code, or CIBA), or use
 a management key. Two ways with a user token:
 
 ```python
@@ -284,11 +282,10 @@ await client.connections.getToken({ connection: 'github', identifier: userId, ac
 await client.resources.getToken({ resource: 'urn:my-api', actAsUserToken: userJwt });
 ```
 
-> Where does `user_jwt` come from? Your app authenticates the user with Descope
-> (authorization code, device code, or CIBA) and gets their access token; you hand
-> that token to the SDK. The `DeviceCodeProvider` / `AuthorizationCodeProvider` /
-> `CibaProvider` can also acquire it for you — their resulting credential is the
-> user's token and flows into phase 2 the same way.
+> Where does `user_jwt` come from? Your app authenticates the user with Descope (its
+> own login, device code, or CIBA) and gets their access token; you hand that token
+> to the SDK. The `DeviceCodeProvider` / `CibaProvider` can also acquire it for you —
+> their resulting credential is the user's token and flows into phase 2 the same way.
 
 ## End-to-end at runtime
 
@@ -301,7 +298,7 @@ sequenceDiagram
     participant Service as Provider / your API
 
     Note over Agent,Descope: Phase 1 — acquire (once)
-    Agent->>Descope: authenticate (client credentials / device / authcode / CIBA)
+    Agent->>Descope: authenticate (client credentials / device code / CIBA)
     Descope-->>Agent: Descope OAuth access token
 
     Note over Agent,Descope: Phase 2 — exchange (per call)
@@ -335,11 +332,14 @@ transfer. See each package's README for a copy-pasteable quickstart.
 
 Both languages, identical surfaces:
 
-- All credential providers: client credentials, device code, authorization code
-  (PKCE), CIBA, management key, and bring-your-own access token.
+- All credential providers: client credentials, device code, CIBA, management key,
+  and bring-your-own access token.
 - Connection and Resource token exchange, with the
   `ConnectionAuthorizationRequired` re-auth signal and the agent-token-vs-management-key
-  distinction.
+  distinction. User-level, user+tenant, and tenant-level (`get_tenant_token`)
+  Connection tokens.
+- `wait_for_connection` / `waitForConnection` — poll until the user finishes
+  connecting (with a connect-URL delivery callback and timeout).
 - A pluggable token store that persists and refreshes credentials (including
   refresh tokens) across restarts.
 - A human-in-the-loop CIBA **approval gate** on sensitive calls.

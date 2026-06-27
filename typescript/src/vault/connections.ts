@@ -13,6 +13,8 @@ import {
   OUTBOUND_USER_TOKEN,
   OUTBOUND_USER_TOKEN_LATEST,
 } from '../endpoints';
+import { AgentAuthError, ConnectionAuthorizationRequired } from '../errors';
+import { sleep } from '../httpClient';
 import { Execution, ToolRequest } from '../execution';
 import { ApprovalRequest, VaultToken } from '../types';
 import { FetchArgs } from './base';
@@ -57,6 +59,15 @@ export interface GetTenantConnectionTokenArgs {
   forceRefresh?: boolean;
   requireApproval?: ApprovalRequest;
   actAsUserToken?: string;
+}
+
+export interface WaitForConnectionArgs extends GetConnectionTokenArgs {
+  /** Handed the connect URL once, the moment it's known, so you can deliver it. */
+  onConnectUrl?: (url: string) => void;
+  /** Seconds between polls (default 2). */
+  pollIntervalSeconds?: number;
+  /** Give up and throw after this many seconds (default 300). */
+  timeoutSeconds?: number;
 }
 
 const cacheKey = (
@@ -187,6 +198,45 @@ export class ConnectionsClient {
    */
   async getTenantToken(args: GetTenantConnectionTokenArgs): Promise<VaultToken> {
     return this.execution.fetchToken(buildTenantArgs(args));
+  }
+
+  /**
+   * Block until the user finishes connecting, then resolve with the token.
+   *
+   * Polls `getToken` until it succeeds. The third-party consent itself is
+   * interactive, so the connect URL still has to reach the user: pass
+   * `onConnectUrl` to be handed it once, deliver it (redirect, email, Slack, …),
+   * and this resolves as soon as the user consents and the vault holds the token.
+   *
+   * Rejects with `AgentAuthError` if `timeoutSeconds` elapse first. (For an
+   * event-driven alternative to polling, react to a Descope webhook instead.)
+   */
+  async waitForConnection(args: WaitForConnectionArgs): Promise<VaultToken> {
+    const { onConnectUrl, pollIntervalSeconds, timeoutSeconds, ...tokenArgs } = args;
+    const pollMs = (pollIntervalSeconds ?? 2) * 1000;
+    const deadline = Date.now() + (timeoutSeconds ?? 300) * 1000;
+    let notified = false;
+    for (;;) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        return await this.getToken({ ...tokenArgs, forceRefresh: true });
+      } catch (err) {
+        if (!(err instanceof ConnectionAuthorizationRequired)) throw err;
+        if (onConnectUrl && !notified) {
+          if (err.connectUrl) onConnectUrl(err.connectUrl);
+          notified = true;
+        }
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) {
+          throw new AgentAuthError(
+            `timed out after ${timeoutSeconds ?? 300}s waiting for '${args.identifier}' ` +
+              `to connect '${args.connection}'`,
+          );
+        }
+        // eslint-disable-next-line no-await-in-loop
+        await sleep(Math.min(pollMs, remaining));
+      }
+    }
   }
 
   /**

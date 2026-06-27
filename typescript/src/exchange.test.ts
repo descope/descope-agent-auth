@@ -259,6 +259,40 @@ describe('ConnectionsClient.getTenantToken', () => {
   });
 });
 
+describe('ConnectionsClient.waitForConnection', () => {
+  it('polls until connected, delivering the connect URL once', async () => {
+    nock(BASE_URL).post(USER_LATEST).reply(404, { error: 'no' });
+    nock(BASE_URL).post(CONNECT_PATH).reply(200, { url: 'https://api.descope.com/connect' });
+    nock(BASE_URL).post(USER_LATEST).reply(200, { token: tokenObj() });
+
+    const client = agentClient();
+    const delivered: string[] = [];
+    const tok = await client.connections.waitForConnection({
+      connection: 'github',
+      identifier: 'u@x.com',
+      onConnectUrl: (u) => delivered.push(u),
+      pollIntervalSeconds: 0,
+      timeoutSeconds: 5,
+    });
+
+    expect(tok.accessToken).toBe('gho_downstream_token');
+    expect(delivered).toEqual(['https://api.descope.com/connect']); // delivered once
+  });
+
+  it('throws on timeout', async () => {
+    nock(BASE_URL).post(USER_LATEST).reply(404, { error: 'no' });
+    nock(BASE_URL).post(CONNECT_PATH).reply(200, { url: 'https://api.descope.com/connect' });
+    const client = agentClient();
+    await expect(
+      client.connections.waitForConnection({
+        connection: 'github',
+        identifier: 'u@x.com',
+        timeoutSeconds: 0,
+      }),
+    ).rejects.toBeInstanceOf(AgentAuthError);
+  });
+});
+
 describe('AgentAuthClient', () => {
   it("constructs in mode='execute' but disables raw token fetch (seam)", async () => {
     const client = new AgentAuthClient({

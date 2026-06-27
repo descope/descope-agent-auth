@@ -1,14 +1,14 @@
 """The phase-1 credential provider contract.
 
 A provider encodes one acquisition strategy (client credentials, device code,
-authorization code, CIBA, management key). The client never cares which provider
-it holds; it just asks for a current credential and the provider refreshes
+CIBA, management key, or bring-your-own access token). The client never cares which
+provider it holds; it just asks for a current credential and the provider refreshes
 transparently underneath.
 
 Credentials are cached in memory and, when the provider exposes a stable storage
 key, persisted to the pluggable ``TokenStore`` -- including the refresh token, kept
 beyond the access token's expiry so a restarted/multi-process agent can refresh
-instead of re-running an interactive flow (device code, authorization code, CIBA).
+instead of re-running an interactive flow (device code, CIBA).
 """
 
 from __future__ import annotations

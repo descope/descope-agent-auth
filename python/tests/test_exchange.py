@@ -223,6 +223,43 @@ class TestConnectionsExchange(common.AgentAuthTest):
         self.assertIsNone(ctx.exception.connect_url)
         self.assertEqual(mock_request.call_count, 2)  # no third (connect) call
 
+    @patch("httpx.Client.request")
+    def test_wait_for_connection_returns_once_connected(self, mock_request):
+        # phase 1, then poll 1: 404 + connect-url (not connected), then poll 2: token.
+        mock_request.side_effect = [
+            make_response(CRED),
+            make_response({"error": "no"}, status=404),
+            make_response({"url": "https://api.descope.com/connect"}),
+            make_response({"token": token_obj()}),
+        ]
+        client = self._agent_client()
+        delivered: list = []
+
+        tok = client.connections.wait_for_connection(
+            connection="github",
+            identifier="u@x.com",
+            on_connect_url=delivered.append,
+            poll_interval=0.0,
+            timeout=5.0,
+        )
+
+        self.assertEqual(tok.access_token, "gho_downstream_token")
+        self.assertEqual(delivered, ["https://api.descope.com/connect"])  # delivered once
+
+    @patch("httpx.Client.request")
+    def test_wait_for_connection_times_out(self, mock_request):
+        mock_request.side_effect = [
+            make_response(CRED),
+            make_response({"error": "no"}, status=404),
+            make_response({"url": "https://api.descope.com/connect"}),
+        ]
+        client = self._agent_client()
+
+        with self.assertRaises(AgentAuthError):
+            client.connections.wait_for_connection(
+                connection="github", identifier="u@x.com", timeout=0.0
+            )
+
 
 @patch("time.sleep", lambda *_: None)
 class TestResourcesExchange(common.AgentAuthTest):
