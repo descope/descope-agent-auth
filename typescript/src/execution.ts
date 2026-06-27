@@ -51,6 +51,17 @@ export class Execution {
   }
 
   /**
+   * Generate a connect URL. Available in both modes — authorizing a user is
+   * independent of whether token fetch or hosted execution is used.
+   */
+  async getConnectUrl(
+    connectBody: Record<string, unknown> | undefined,
+    actAsUserToken?: string,
+  ): Promise<string | undefined> {
+    return this.backend.getConnectUrl(connectBody, actAsUserToken);
+  }
+
+  /**
    * Execute path: route the call through Descope's hosted execution endpoint.
    * Stubbed until that endpoint ships; the seam exists so enabling it is a `mode`
    * change for the developer, not a rewrite.

@@ -18,7 +18,7 @@ import asyncio
 import logging
 import threading
 from concurrent.futures import Future
-from typing import Any, Awaitable, Callable, Dict, List, Optional, TypeVar, Union
+from typing import Any, Awaitable, Dict, List, Optional, TypeVar, Union
 
 from ._http import HttpClient, RetryConfig
 from .errors import AgentAuthError
@@ -206,6 +206,29 @@ class _SyncConnections:
             )
         )
 
+    def get_connect_url(
+        self,
+        *,
+        connection: str,
+        identifier: str,
+        scopes: Optional[List[str]] = None,
+        tenant_id: Optional[str] = None,
+        redirect_url: Optional[str] = None,
+        connect_options: Optional[Dict[str, Any]] = None,
+        act_as_user_token: Optional[str] = None,
+    ) -> Optional[str]:
+        return self._bridge.run(
+            self._inner.get_connect_url(
+                connection=connection,
+                identifier=identifier,
+                scopes=scopes,
+                tenant_id=tenant_id,
+                redirect_url=redirect_url,
+                connect_options=connect_options,
+                act_as_user_token=act_as_user_token,
+            )
+        )
+
     def get_tenant_token(
         self,
         *,
@@ -237,7 +260,6 @@ class _SyncConnections:
         scopes: Optional[List[str]] = None,
         tenant_id: Optional[str] = None,
         act_as_user_token: Optional[str] = None,
-        on_connect_url: Optional[Callable[[str], None]] = None,
         poll_interval: float = 2.0,
         timeout: float = 300.0,
     ) -> VaultToken:
@@ -248,7 +270,6 @@ class _SyncConnections:
                 scopes=scopes,
                 tenant_id=tenant_id,
                 act_as_user_token=act_as_user_token,
-                on_connect_url=on_connect_url,
                 poll_interval=poll_interval,
                 timeout=timeout,
             )

@@ -46,11 +46,16 @@ flowchart LR
     Authorize -.->|"token now in the vault"| Fetch
 ```
 
-In the SDK, the two meet at one point: a fetch that finds nothing raises
-`ConnectionAuthorizationRequired` (carrying the connect URL) — that's your cue to run
-the authorize step; once the user consents, the next `get_token` just works.
-`wait_for_connection` bridges them (surface the URL, poll until the vault has the
-token). **Who can authorize, and from where**, is covered in
+You get the connect URL for the authorize step two ways:
+
+- **Proactively** — call `get_connect_url` / `getConnectUrl` (e.g. behind a "Connect
+  GitHub" button), hand the user the URL.
+- **Just in time** — `get_token` raises `ConnectionAuthorizationRequired` carrying the
+  URL when the agent tries to act and the user isn't connected.
+
+Either way, once the user consents the next `get_token` just works.
+`wait_for_connection` is an optional helper that polls until the vault has the token.
+**Who can authorize, and from where**, is covered in
 [How a user connects when the agent is a backend process](#how-a-user-connects-when-the-agent-is-a-backend-process).
 
 ## Prerequisites
@@ -421,11 +426,10 @@ folding it into login). Three practical options:
    can't** do this — you need a user token.
 
    ```python
-   try:
-       client.connections.get_token(connection="github", identifier=user_id,
-                                     act_as_user_token=user_token)
-   except ConnectionAuthorizationRequired as e:
-       send_to_user(e.connect_url)          # print / email / in-app
+   url = client.connections.get_connect_url(
+       connection="github", identifier=user_id, act_as_user_token=user_token,
+   )
+   send_to_user(url)                          # print / email / in-app
    token = client.connections.wait_for_connection(
        connection="github", identifier=user_id, act_as_user_token=user_token,
    )                                          # polls until the user consents
@@ -443,18 +447,16 @@ then detect completion by polling with `wait_for_connection`.
 
 ### Waiting for the connection to complete
 
-`wait_for_connection` / `waitForConnection` polls until the user finishes consenting
-(or a timeout), so you don't hand-roll the retry loop. It uses whatever credential the
-client is configured with — the same as `get_token` — so on a user-scoped client you
-pass nothing extra; on a shared client, add `act_as_user_token` to act as that user.
-`on_connect_url` hands you the connect URL the moment it's known, to surface however
-you like (redirect, widget, email):
+Once you've sent the user to the connect URL, `wait_for_connection` /
+`waitForConnection` polls until they finish consenting (or a timeout), so you don't
+hand-roll the retry loop. It uses whatever credential the client is configured with —
+the same as `get_token` — so on a user-scoped client you pass nothing extra; on a
+shared client, add `act_as_user_token` to act as that user.
 
 ```python
 token = client.connections.wait_for_connection(
     connection="github",
     identifier=user_id,
-    on_connect_url=send_to_user,           # redirect, widget, or email
     poll_interval=2.0,
     timeout=300.0,
 )
@@ -465,10 +467,84 @@ token = client.connections.wait_for_connection(
 const token = await client.connections.waitForConnection({
   connection: 'github',
   identifier: userId,
-  onConnectUrl: (url) => sendToUi(url),
   pollIntervalSeconds: 2,
   timeoutSeconds: 300,
 });
+```
+
+## Common deployment patterns
+
+Which calls you use depends on **whose account the agent acts against.**
+
+### Per-user connections (each user connects their own account)
+
+The default. Each user authorizes their own GitHub / Gmail / … once (interactive —
+see [above](#how-a-user-connects-when-the-agent-is-a-backend-process)); thereafter
+the agent fetches that user's token by `identifier`:
+
+```python
+gh = client.connections.get_token(connection="github", identifier=user_id)
+```
+
+### Org-managed (shared) credentials
+
+One connection that **every user calls against** — a single org Gmail, Salesforce, or
+GitHub — without each user authenticating separately. Store it as a **tenant-level**
+connection and fetch it with `get_tenant_token`. An autonomous agent (client
+credentials associated with the tenant) or a management key can read it:
+
+```python
+# client credentials (tenant-associated) — or ManagementKeyProvider
+client = AgentAuthClient(
+    project_id="P2...",
+    credential=ClientCredentialsProvider(client_id="...", client_secret="..."),
+)
+gmail = client.connections.get_tenant_token(connection="gmail", tenant_id="acme")
+```
+
+### Background agent acting for many users
+
+A single service account that runs work for many `userID`s. Use a **management key**
+(it reads any user's token by `identifier`) and fetch per user:
+
+```python
+client = AgentAuthClient(
+    project_id="P2...",
+    credential=ManagementKeyProvider(management_key="K...", allow_management_key=True),
+)
+for user_id in batch:
+    gh = client.connections.get_token(connection="github", identifier=user_id)
+    ...
+```
+
+The catch: a management key **reads** tokens but can't mint a user's *initial* connect
+URL (that needs the user's own session). So host a connect UI — Descope's **Outbound
+Apps widget** or your own `/connect` page — where each user links their account once;
+after that the background agent just fetches.
+
+### Pre-authenticating users (custom UI / pre-flight)
+
+To connect users **outside** an agent run — onboarding, a settings page, or a
+pre-flight check before a task — generate the URL with `get_connect_url`, send the
+user through, and wait:
+
+```python
+url = client.connections.get_connect_url(connection="gmail", identifier=user_id)
+send_to_user(url)                       # redirect, button, or email
+client.connections.wait_for_connection(connection="gmail", identifier=user_id)
+```
+
+To verify several required connections up front, loop and collect the ones still
+needing a link:
+
+```python
+needs_connect = []
+for conn in ["gmail", "github"]:
+    try:
+        client.connections.get_token(connection=conn, identifier=user_id)
+    except ConnectionAuthorizationRequired as e:
+        needs_connect.append((conn, e.connect_url))
+# send each connect URL to the user, then proceed once needs_connect is empty
 ```
 
 ## Human-in-the-loop approval (CIBA gate)

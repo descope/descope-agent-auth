@@ -46,6 +46,7 @@ export type { GetConnectionTokenArgs, GetResourceTokenArgs } from './vault';
 export type {
   ExecuteConnectionArgs,
   GetTenantConnectionTokenArgs,
+  GetConnectUrlArgs,
   WaitForConnectionArgs,
 } from './vault/connections';
 

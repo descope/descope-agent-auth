@@ -248,18 +248,38 @@ class TestConnectionsExchange(common.AgentAuthTest):
             make_response({"token": token_obj()}),
         ]
         client = self._agent_client()
-        delivered: list = []
 
         tok = client.connections.wait_for_connection(
             connection="github",
             identifier="u@x.com",
-            on_connect_url=delivered.append,
             poll_interval=0.0,
             timeout=5.0,
         )
 
         self.assertEqual(tok.access_token, "gho_downstream_token")
-        self.assertEqual(delivered, ["https://api.descope.com/connect"])  # delivered once
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_get_connect_url(self, mock_request):
+        mock_request.side_effect = [
+            make_response(CRED),  # phase 1
+            make_response({"url": "https://api.descope.com/connect?app=github"}),  # connect
+        ]
+        client = self._agent_client()
+
+        url = client.connections.get_connect_url(
+            connection="github",
+            identifier="u@x.com",
+            scopes=["repo"],
+            redirect_url="https://app/cb",
+        )
+
+        self.assertEqual(url, "https://api.descope.com/connect?app=github")
+        args, kwargs = mock_request.call_args  # the connect call
+        self.assertEqual(args[1], CONNECT)
+        opts = kwargs["json"]["options"]
+        self.assertEqual(opts["scopes"], ["repo"])
+        self.assertEqual(opts["redirectUrl"], "https://app/cb")
+        self.assertNotIn("userId", kwargs["json"])  # connect body carries no userId
 
     @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_wait_for_connection_times_out(self, mock_request):
