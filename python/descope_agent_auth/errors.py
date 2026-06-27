@@ -3,7 +3,7 @@
 Each error is specific enough that a coding agent generating an integration can
 handle the re-auth and approval cases correctly without guessing. The headline
 case -- "connection not yet authorized" -- is modeled as a first-class signal
-carrying the connect URL, mirroring how Auth0 models interrupts.
+carrying the connect URL the caller redirects the user to.
 """
 
 from __future__ import annotations

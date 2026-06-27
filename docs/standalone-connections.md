@@ -291,8 +291,18 @@ so that path doesn't translate directly. The thing to understand first:
 > screen.
 
 That rules out "management key + user id → connect URL" as a server-side shortcut.
-A backend-initiated connection therefore has to get a **user credential into the
-loop** by one of these routes:
+But there's a deeper constraint to be honest about:
+
+> **A first-time third-party consent (GitHub, Slack, …) requires the user in a
+> browser at the connect URL. Nothing the backend holds removes that step.** A user
+> token only lets the backend *mint a connect URL bound to the right user* and
+> deliver it — the user still completes the provider's OAuth consent themselves. In
+> particular **CIBA does not solve this**: it authenticates the *user to Descope* and
+> yields a Descope token, which is not a GitHub token. The user still has to consent
+> to GitHub.
+
+So a backend-initiated connection is really about getting the right user-bound
+connect URL (or flow) in front of the user. Three routes:
 
 1. **Defer to the user's next interactive moment (simplest).** The backend doesn't
    build the URL at all. When `get_token` raises `ConnectionAuthorizationRequired`,
@@ -301,48 +311,35 @@ loop** by one of these routes:
    builds the connect URL the normal way. The agent retries once the vault has the
    token.
 
-2. **Act as the user with a token you already hold.** If you've previously logged
-   the user in (authorization-code / device-code / CIBA) and **persisted their
-   refresh token** (the `store` keeps it), present that token via `act_as_user_token`
-   so the connect URL is minted server-side under their identity. Deliver the URL
-   **out of band** — email, Slack, in-app — and learn it finished by **polling**
-   (retry `get_token`) or a **Descope webhook**.
+2. **Mint a user-bound URL server-side and deliver it out of band.** Use a token you
+   can act as — a **stored refresh token** from a prior login (the `store` keeps it),
+   or one obtained on demand via **CIBA** — as `act_as_user_token`, so the connect
+   URL is bound to that user. Deliver it (email, Slack, in-app); the user opens it and
+   **consents in their browser**; you learn it finished by **polling** (retry
+   `get_token`) or a **Descope webhook**.
 
    ```python
    try:
        client.connections.get_token(
            connection="github",
            identifier=user_id,
-           act_as_user_token=stored_user_jwt,   # mints the connect URL as this user
+           act_as_user_token=user_jwt,      # binds the connect URL to this user
        )
    except ConnectionAuthorizationRequired as e:
-       email_user(user_id, e.connect_url)       # out-of-band delivery
+       email_user(user_id, e.connect_url)   # the user still consents in a browser
        # later: poll get_token(...) again, or react to a Descope webhook, then fetch.
    ```
 
-3. **Ask the user out of band via CIBA.** With no token on hand, use a `CibaProvider`
-   to get a user-scoped Descope token through an out-of-band push to the user's
-   device, then use it as `act_as_user_token` as in (2). CIBA is also the right tool
-   when you want a fresh per-exchange approval — see the CIBA gate section below.
+3. **Connect *inside* the login flow (unique to Descope).** Because Descope login is
+   flow-based, you can add a **connection step as a flow action** — so when the user
+   authenticates (including via a CIBA flow), they consent to GitHub / HubSpot in that
+   same flow, and there's no separate connect URL to chase afterward. This collapses
+   authentication and connection into one interaction. It's not the common path, but
+   it's an option a token-vault-only design can't offer.
 
-Whichever route, completion is asynchronous: **poll** by retrying `get_token` (it
-succeeds once the vault holds the token) or subscribe to a **Descope webhook**.
-
-### How other platforms model this
-
-The contrast is worth stating plainly, because some platforms *do* key the connect
-URL by your stable user id server-side with no session token:
-
-| Platform | Backend-initiated connect |
-| --- | --- |
-| **Arcade** | `tools.authorize(tool, user_id=…)` returns an auth URL + id keyed by **your user id**; poll `auth.wait_for_completion(id)`. No user session needed. |
-| **Scalekit** | "Connected accounts": create a connection link for a **user id**, hosted consent, email / magic-link delivery, **webhook** on completion. |
-| **Auth0 (Token Vault)** | Interactive flows surface the authorize URL as an **interrupt**; async/backend uses **CIBA** to ask a specific user out of band. |
-| **Descope** | The connect URL is bound by the **user token on the request**, not a body id — so a backend supplies that token (stored refresh token via `act_as_user_token`, or CIBA), or defers URL creation to the user's interactive moment. |
-
-The practical upshot: with Descope you reach the same out-of-band outcome, but the
-user identity comes from **a token you act as**, not an identifier in the connect
-body.
+The third-party consent itself is always interactive; the backend's job is to put the
+right user-bound URL (or flow) in front of the user, then poll or await a webhook for
+completion.
 
 ## Human-in-the-loop approval (CIBA gate)
 
