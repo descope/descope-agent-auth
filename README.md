@@ -105,8 +105,16 @@ carrying a connect URL.
 A **Resource** is an API *you* build and protect with **Descope as the OAuth
 authorization server**. The SDK obtains a Descope-issued OAuth token scoped to that
 Resource using the **OAuth token-exchange grant**
-(`urn:ietf:params:oauth:grant-type:token-exchange`) — exchanging the agent's Descope
-token for a Resource-scoped one.
+(`urn:ietf:params:oauth:grant-type:token-exchange`) — exchanging a Descope token for
+a Resource-scoped one. **What you exchange determines the scope:**
+
+- a **user's** Descope token (`act_as_user_token` / `AccessTokenProvider`) → a Resource
+  token **scoped to that user**;
+- the agent's **client-credentials** token → a Resource token **scoped to the client
+  (M2M) identity**, not a user.
+
+Unlike Connection tokens, a Resource token needs **no prior authorization step** —
+it's minted on demand from whichever identity you present.
 
 | Your agent needs to… | Method | Token you get | Source |
 | --- | --- | --- | --- |

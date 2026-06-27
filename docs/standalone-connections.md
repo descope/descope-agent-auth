@@ -16,6 +16,25 @@ Descope vault.
 Refresh of both the Descope credential and the downstream tokens happens
 transparently underneath — you ask for a token and get a currently-valid one.
 
+## Authorize once, fetch every time
+
+A Connection has **two separate operations** — keep them distinct:
+
+1. **Authorize a user (once per user per connection).** The user grants your agent
+   access: you send them a connect URL, they complete the provider's OAuth consent,
+   and **Descope stores their tokens in the Connections Vault and keeps them
+   refreshed**. You never handle the OAuth callback or store tokens yourself.
+2. **Fetch the token (every time the agent acts).** `get_token` returns the
+   **stored, currently-valid** token from the vault — no user, no browser, no refresh
+   handling.
+
+In the SDK, the two meet at one point: a fetch that finds nothing raises
+`ConnectionAuthorizationRequired` (carrying the connect URL) — that's your cue to run
+the authorize step; once the user consents, the next `get_token` just works.
+`wait_for_connection` bridges them (surface the URL, poll until the vault has the
+token). **Who can authorize, and from where**, is covered in
+[How a user connects when the agent is a backend process](#how-a-user-connects-when-the-agent-is-a-backend-process).
+
 ## Prerequisites
 
 - A Descope project, and an **Outbound App / Connection** configured for the
@@ -277,27 +296,9 @@ prompted to connect more than once as different tools need new scopes (increment
 consent). To get a single up-front consent, set the Connection's **default scopes**
 to the superset (and call tools without `scopes`), or request the superset.
 
-The connect endpoint nests these under `options`. The two documented fields are
-`redirectUrl` and `scopes`, and the SDK fills both in for you (from `redirect_url`
-and the call's `scopes`). `connect_options` (Python) / `connectOptions` (TS) is an
-escape hatch for any **additional provider-specific OAuth passthrough** fields your
-Connection supports — it is not a documented, user-binding mechanism:
-
-```python
-client.connections.get_token(
-    connection="github",
-    identifier=user_id,
-    scopes=["repo"],
-    redirect_url="https://app/cb",
-    connect_options={"prompt": ["consent"]},   # provider passthrough; verify support
-)
-```
-
-> **`connect_options` does not pick the user.** Descope binds the connection to
-> whoever the connect request's **bearer token** identifies (the user's session /
-> refresh JWT) — there is no documented body field to target an arbitrary user. This
-> is why a backend with only a management key can't mint a user-bound connect URL out
-> of thin air; see [How a user connects when the agent is a backend process](#how-a-user-connects-when-the-agent-is-a-backend-process).
+Pass `redirect_url` / `redirectUrl` to control where the user lands after consenting.
+(`connect_options` / `connectOptions` is an advanced escape hatch for extra
+provider-specific OAuth params like `prompt` — most apps never need it.)
 
 ## Token levels: user, user + tenant, and tenant
 
