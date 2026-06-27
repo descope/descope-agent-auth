@@ -105,8 +105,16 @@ carrying a connect URL.
 A **Resource** is an API *you* build and protect with **Descope as the OAuth
 authorization server**. The SDK obtains a Descope-issued OAuth token scoped to that
 Resource using the **OAuth token-exchange grant**
-(`urn:ietf:params:oauth:grant-type:token-exchange`) — exchanging the agent's Descope
-token for a Resource-scoped one.
+(`urn:ietf:params:oauth:grant-type:token-exchange`) — exchanging a Descope token for
+a Resource-scoped one. **What you exchange determines the scope:**
+
+- a **user's** Descope token (`act_as_user_token` / `AccessTokenProvider`) → a Resource
+  token **scoped to that user**;
+- the agent's **client-credentials** token → a Resource token **scoped to the client
+  (M2M) identity**, not a user.
+
+Unlike Connection tokens, a Resource token needs **no prior authorization step** —
+it's minted on demand from whichever identity you present.
 
 | Your agent needs to… | Method | Token you get | Source |
 | --- | --- | --- | --- |
@@ -157,9 +165,8 @@ flowchart TD
   a **connect URL**. Send the user there — via your own UI or Descope's hosted
   **Outbound Apps widget** — and they complete the provider's OAuth consent; Descope
   stores the resulting token in the vault. The next `get_token` call succeeds. (This
-  is the OAuth path — GitHub, Slack, Google, ….) The connect URL is bound to the user
-  by the **token on the request**, so a pure backend job (no browser, no live session)
-  takes a slightly different route — see [How a user connects when the agent is a backend process](docs/standalone-connections.md#how-a-user-connects-when-the-agent-is-a-backend-process).
+  is the OAuth path — GitHub, Slack, Google, ….) A pure backend job (no browser, no
+  user present) takes a slightly different route — see [How a user connects when the agent is a backend process](docs/standalone-connections.md#how-a-user-connects-when-the-agent-is-a-backend-process).
 - **Console.** An admin pastes an API key into a Connection in the Descope Console
   (typical for a static third-party API key, at the tenant or user level).
 - **Management API.** Your backend or infrastructure-as-code writes the API key
@@ -313,6 +320,23 @@ await client.resources.getToken({ resource: 'urn:my-api', actAsUserToken: userJw
 > own login, device code, or CIBA) and gets their access token; you hand that token
 > to the SDK. The `DeviceCodeProvider` / `CibaProvider` can also acquire it for you —
 > their resulting credential is the user's token and flows into phase 2 the same way.
+
+**Management key (trusted backend, no user token).** A common server-side shape: the
+agent has no user token but needs a specific user's already-connected token. A
+management key fetches **any** user's token by `identifier` (and `tenant_id` for a
+tenant-bound one). It **bypasses Policies** — guard this path — and it can only
+*read* tokens, not perform a user's initial OAuth consent (that's still interactive).
+
+```python
+from descope_agent_auth import ManagementKeyProvider
+
+client = AgentAuthClient(
+    project_id="P2...",
+    credential=ManagementKeyProvider(management_key="K...", allow_management_key=True),
+)
+gh = client.connections.get_token(connection="github", identifier=user_id)              # any user
+gh = client.connections.get_token(connection="github", identifier=user_id, tenant_id="acme")  # + tenant
+```
 
 ## End-to-end at runtime
 
