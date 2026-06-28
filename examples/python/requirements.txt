@@ -3,3 +3,6 @@ descope-agent-auth
 
 # ...or develop against this repo's local copy instead:
 #   pip install -e ../../python
+
+# Extra deps for langchain_agent.py only (install when you run that example):
+#   pip install 'langchain>=0.3' 'langchain-openai>=0.2'
