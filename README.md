@@ -372,6 +372,10 @@ Both languages, identical surfaces:
 - A human-in-the-loop CIBA **approval gate** on sensitive calls.
 - The `with_connection` / `withConnection` tool wrapper, plus a LangGraph
   `interrupt()` helper.
+- An **MCP auth adapter** that feeds a vaulted token into a remote MCP server
+  connection — `descopeMcpConnectionAuthProvider` / `descopeMcpResourceAuthProvider`
+  (TS, an MCP `OAuthClientProvider`) and `connection_auth` / `resource_auth` (Python,
+  an `httpx.Auth`). See the [framework cookbook](docs/FRAMEWORKS.md#connecting-to-a-remote-mcp-server).
 
 `mode: "execute"` (routing calls through Descope so the token never enters the
 agent process) is reserved — the client accepts it today and turns it on when
