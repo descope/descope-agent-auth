@@ -204,6 +204,7 @@ const repos = await listRepos('user@example.com');
 | `DeviceCodeProvider` | headless agent (no browser); shows a verification URL + code |
 | `CibaProvider` | the agent needs a specific user's approval out of band |
 | `AccessTokenProvider` | you already hold a user's Descope access token (user-scoped access) |
+| `JwtBearerProvider` | you hold a signed JWT from a Descope-registered trusted issuer (RFC 7523 — e.g. a cloud workload-identity token) |
 | `ManagementKeyProvider` | privileged, **not recommended** — bypasses Policies |
 
 > **What a credential can fetch differs.** Phase-1 auth and phase-2 fetch authority

@@ -26,6 +26,8 @@ import { ApprovalGate } from './base';
 export interface GetResourceTokenArgs {
   resource: string;
   scopes?: string[];
+  /** RFC 8693 audience claim, when the provider requires a specific audience. */
+  audience?: string[];
   requireApproval?: ApprovalRequest;
   forceRefresh?: boolean;
   /** Mint a user-scoped Resource token using this user's Descope access token. */
@@ -43,9 +45,10 @@ export interface ResourcesClientDeps {
   cacheTokens?: boolean;
 }
 
-const cacheKey = (resource: string, scopes?: string[]): string => {
+const cacheKey = (resource: string, scopes?: string[], audience?: string[]): string => {
   const scopePart = scopes && scopes.length ? [...scopes].sort().join(',') : '<defaults>';
-  return `vault:resource:${resource}:${scopePart}`;
+  const audPart = audience && audience.length ? [...audience].sort().join(',') : '<none>';
+  return `vault:resource:${resource}:${audPart}:${scopePart}`;
 };
 
 const errMsg = (body: any): string | undefined =>
@@ -78,7 +81,7 @@ export class ResourcesClient {
       await this.deps.approvalGate(args.requireApproval);
     }
 
-    const key = cacheKey(args.resource, args.scopes);
+    const key = cacheKey(args.resource, args.scopes, args.audience);
     if (this.cacheTokens && !args.forceRefresh) {
       const cached = await this.cacheGet(key);
       if (cached) return cached;
@@ -101,13 +104,14 @@ export class ResourcesClient {
       subjectToken = cred.token;
     }
 
-    const data: Record<string, string> = {
+    const data: Record<string, string | string[]> = {
       grant_type: GRANT_TOKEN_EXCHANGE,
       subject_token: subjectToken,
       subject_token_type: TOKEN_TYPE_ACCESS_TOKEN,
       resource: args.resource,
     };
     if (args.scopes && args.scopes.length) data.scope = args.scopes.join(' ');
+    if (args.audience && args.audience.length) data.audience = args.audience;
 
     const resp = await this.deps.http.postForm(OAUTH2_TOKEN, data);
     if (resp.statusCode === 401 || resp.statusCode === 403) {

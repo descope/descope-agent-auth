@@ -14,6 +14,7 @@ export {
   ClientCredentialsProvider,
   DeviceCodeProvider,
   CibaProvider,
+  JwtBearerProvider,
   ManagementKeyProvider,
 } from './providers';
 export type {
@@ -22,6 +23,7 @@ export type {
   DeviceCodeOptions,
   CibaOptions,
   CibaAuthenticateArgs,
+  JwtBearerOptions,
   ManagementKeyOptions,
 } from './providers';
 

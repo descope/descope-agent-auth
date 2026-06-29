@@ -29,9 +29,12 @@ from ..store.base import TokenStore
 from ..types import ApprovalRequest, Credential, Mode, VaultToken
 
 
-def _cache_key(resource: str, scopes: Optional[List[str]]) -> str:
+def _cache_key(
+    resource: str, scopes: Optional[List[str]], audience: Optional[List[str]]
+) -> str:
     scope_part = ",".join(sorted(scopes)) if scopes else "<defaults>"
-    return f"vault:resource:{resource}:{scope_part}"
+    aud_part = ",".join(sorted(audience)) if audience else "<none>"
+    return f"vault:resource:{resource}:{aud_part}:{scope_part}"
 
 
 def _err(body: Optional[dict]) -> Optional[str]:
@@ -67,15 +70,18 @@ class ResourcesClient:
         *,
         resource: str,
         scopes: Optional[List[str]] = None,
+        audience: Optional[List[str]] = None,
         require_approval: Optional[ApprovalRequest] = None,
         force_refresh: bool = False,
         act_as_user_token: Optional[str] = None,
     ) -> VaultToken:
         """Mint a Resource token via the token-exchange grant.
 
-        Pass ``act_as_user_token`` to mint a **user-scoped** Resource token: that
-        user's Descope access token becomes the ``subject_token`` of the exchange,
-        instead of the client's own credential.
+        ``resource`` is the RFC 8707 resource indicator (the API you want a token
+        for); ``audience`` sets the token-exchange ``audience`` claim when the
+        provider requires it. Pass ``act_as_user_token`` to mint a **user-scoped**
+        Resource token: that user's Descope access token becomes the ``subject_token``
+        of the exchange, instead of the client's own credential.
 
         Raises ``ApprovalDenied`` / ``ApprovalTimeout`` if a ``require_approval``
         gate fails, ``PolicyDenied`` on 401/403, or ``TokenExchangeFailed`` on
@@ -95,7 +101,7 @@ class ResourcesClient:
                 )
             await self._approval_gate(require_approval)
 
-        cache_key = _cache_key(resource, scopes)
+        cache_key = _cache_key(resource, scopes, audience)
         if self._cache_tokens and not force_refresh:
             cached = await self._cache_get(cache_key)
             if cached is not None:
@@ -116,7 +122,7 @@ class ResourcesClient:
                 )
             subject_token = cred.token
 
-        data = {
+        data: dict = {
             "grant_type": GRANT_TOKEN_EXCHANGE,
             "subject_token": subject_token,
             "subject_token_type": TOKEN_TYPE_ACCESS_TOKEN,
@@ -124,6 +130,9 @@ class ResourcesClient:
         }
         if scopes:
             data["scope"] = " ".join(scopes)
+        if audience:
+            # RFC 8693 audience; sent as repeated form params when multi-valued.
+            data["audience"] = audience
 
         resp = await self._http.post_form(OAUTH2_TOKEN, data=data)
         if resp.status_code in (401, 403):

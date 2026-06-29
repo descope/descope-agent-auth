@@ -313,6 +313,7 @@ class _SyncResources:
         *,
         resource: str,
         scopes: Optional[List[str]] = None,
+        audience: Optional[List[str]] = None,
         require_approval: Optional[ApprovalRequest] = None,
         force_refresh: bool = False,
         act_as_user_token: Optional[str] = None,
@@ -321,6 +322,7 @@ class _SyncResources:
             self._inner.get_token(
                 resource=resource,
                 scopes=scopes,
+                audience=audience,
                 require_approval=require_approval,
                 force_refresh=force_refresh,
                 act_as_user_token=act_as_user_token,

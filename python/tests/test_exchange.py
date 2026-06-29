@@ -331,6 +331,19 @@ class TestResourcesExchange(common.AgentAuthTest):
         self.assertEqual(kwargs["data"]["subject_token"], "agent_at")
 
     @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_resource_token_sends_audience(self, mock_request):
+        mock_request.side_effect = [
+            make_response({"access_token": "agent_at", "expires_in": 3600}),  # phase 1
+            make_response({"access_token": "resource_at", "token_type": "Bearer"}),
+        ]
+        client = self._agent_client()
+
+        client.resources.get_token(resource="urn:my-api", audience=["https://api.acme.com"])
+
+        _, kwargs = mock_request.call_args  # the token-exchange call
+        self.assertEqual(kwargs["data"]["audience"], ["https://api.acme.com"])
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_management_key_rejected_for_resources(self, mock_request):
         client = self.make_client(
             ManagementKeyProvider(management_key="K", allow_management_key=True)
