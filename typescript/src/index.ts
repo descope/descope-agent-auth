@@ -38,6 +38,16 @@ export type { WithConnectionOptions, ToolFn } from './tools';
 // integrations (optional, framework-specific)
 export { langgraphConnectionTool, interruptPayload } from './integrations/langgraph';
 export type { LangGraphConnectionOptions, InterruptFn } from './integrations/langgraph';
+export {
+  descopeMcpConnectionAuthProvider,
+  descopeMcpResourceAuthProvider,
+} from './integrations/mcp';
+export type {
+  McpAuthProvider,
+  McpOAuthTokens,
+  McpConnectionAuthOptions,
+  McpResourceAuthOptions,
+} from './integrations/mcp';
 
 // execution seam
 export { Execution } from './execution';

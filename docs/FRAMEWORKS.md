@@ -451,6 +451,63 @@ Adapt the wrapper call to whatever shape the framework's tool function expects.
 
 ---
 
+## Connecting to a remote MCP server
+
+Everything above is for tools **you implement**. A different case: your agent is an
+MCP *client* connecting to a remote MCP *server* (GitHub's, Linear's, your own), and
+you want Descope to supply the token for that connection instead of having the MCP
+client run its own OAuth.
+
+MCP clients expose a pluggable auth seam — an `OAuthClientProvider` (TS) or an
+`httpx.Auth` on the transport (Python). This SDK ships an adapter for it: Descope
+already holds and refreshes the token in the vault, so the adapter just hands it to
+the transport. The token is the **provider's own** token (a real GitHub/Linear token
+from a Descope Connection), so the MCP server accepts it natively — no extra trust
+setup, as long as the server accepts that provider's tokens with the given scopes.
+
+**TypeScript** (Vercel AI SDK / the official MCP SDK — both take `authProvider`):
+
+```ts
+import { createMCPClient } from '@ai-sdk/mcp';
+import { descopeMcpConnectionAuthProvider } from '@descope/agent-auth';
+
+const mcp = await createMCPClient({
+  transport: {
+    type: 'http',
+    url: 'https://mcp.linear.app',
+    authProvider: descopeMcpConnectionAuthProvider(client, {
+      connection: 'linear',
+      identifier: userId,        // resolved server-side, never from the model
+    }),
+  },
+});
+// Catch ConnectionAuthorizationRequired where you run the agent and redirect to
+// e.connectUrl; after the user consents, the next call just works.
+```
+
+**Python** (the `httpx.Auth` plugs into the MCP client transport):
+
+```python
+from mcp.client.streamable_http import streamablehttp_client
+from descope_agent_auth.integrations.mcp import connection_auth
+
+auth = connection_auth(client, connection="linear", identifier=user_id)
+async with streamablehttp_client("https://mcp.linear.app", auth=auth) as (r, w, _):
+    ...   # ConnectionAuthorizationRequired propagates if the user must connect first
+```
+
+If the MCP server instead uses **Descope** as its own authorization server, use the
+Resource variant — `descopeMcpResourceAuthProvider` / `resource_auth` — which injects
+a Descope-minted Resource token (pass `audience` when the server requires it).
+
+Two caveats: (1) this only works for MCP clients that let you inject the provider
+(the MCP SDK, AI SDK, Mastra, …) — fully managed runtimes (AgentCore, AI Foundry,
+hosted assistant connectors) own that seam themselves; (2) a server that strictly
+requires an audience-bound token (RFC 8707) for *its* resource won't accept a generic
+provider token — use the Resource variant or set the Connection up accordingly.
+
+---
+
 ## High-risk tools: require approval
 
 Any of the above can gate a sensitive call on a fresh out-of-band user approval
