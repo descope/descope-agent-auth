@@ -1,0 +1,37 @@
+# Descope Agent Auth SDK
+
+> Client-side SDK (Python `descope-agent-auth` and TypeScript `@descope/agent-auth`)
+> for custom-built AI agents. It does two things: signs your agent in to Descope, then
+> fetches the tokens its tools need — Connection tokens (third-party/internal APIs via
+> the Descope vault) or Resource tokens (your own Descope-OAuth-protected APIs). It is
+> the OAuth *client* side; it is not for building or protecting MCP servers.
+
+If you are an AI agent integrating this SDK, read AGENTS.md first — it is a decision
+procedure plus complete, copy-pasteable recipes. The other docs are reference.
+
+Key rule that prevents the most common mistake: a client-credentials (M2M) sign-in
+**cannot** read a *user-level* Connection token. Reading a user's token requires that
+user's access token or a management key. See AGENTS.md → Rules.
+
+## Start here (agents)
+
+- [AGENTS.md](AGENTS.md): Decision procedure (which token, which sign-in) + complete recipes for both languages, the invariant rules, and error handling. The single best file to act from.
+
+## Guides
+
+- [docs/quickstart.md](docs/quickstart.md): Full walkthrough — authorize-once/fetch-every-time model, choosing a sign-in provider, scopes, token levels (user / user+tenant / tenant), connecting users from a backend, deployment patterns, the CIBA approval gate, and token storage & refresh.
+- [docs/FRAMEWORKS.md](docs/FRAMEWORKS.md): Copy-paste tool snippet per framework (LangChain, LangGraph, Google ADK, OpenAI, Vercel AI, Mastra, LlamaIndex, Cloudflare Agents, CrewAI, AG2, Anthropic SDK, and any function-tool framework).
+
+## Reference
+
+- [docs/api-reference.md](docs/api-reference.md): Every public symbol, exact signatures, and types — clients, sign-in providers, `connections`/`resources` methods, the tool wrapper, token store, and errors.
+- [README.md](README.md): Project overview and the two-token mental model.
+
+## Packages
+
+- [python/README.md](python/README.md): Python install + quickstart (async-first core, sync facade).
+- [typescript/README.md](typescript/README.md): TypeScript install + quickstart (Node, Cloudflare Workers, Deno, Bun, browsers).
+
+## Examples
+
+- [examples/README.md](examples/README.md): Runnable Python + TypeScript agents and their environment variables.

@@ -3,9 +3,8 @@
 Every public symbol in `descope-agent-auth` (Python) / `@descope/agent-auth`
 (TypeScript). TypeScript names are the camelCase of the Python ones unless noted.
 
-The shape is always: **configure a client once** (phase 1 — how the agent
-authenticates to Descope), then **fetch tokens repeatedly** (phase 2). All fetches
-refresh transparently.
+The shape is always: **configure a client once** (how the agent authenticates to
+Descope), then **fetch tokens repeatedly**. All fetches refresh transparently.
 
 ## Clients
 
@@ -27,7 +26,7 @@ AgentAuthClient(
 ```
 
 Methods: `get_credential()`, `refresh_credential()`, `close()` (async: `aclose()`),
-context-manager support, and the two phase-2 entry points `.connections` and
+context-manager support, and the two token-fetch entry points `.connections` and
 `.resources`.
 
 ## Connections — `client.connections`
@@ -54,7 +53,7 @@ Descope-issued OAuth tokens for **your own** APIs, minted via token-exchange.
 | --- | --- | --- |
 | `get_token(*, resource, scopes=None, audience=None, require_approval=None, force_refresh=False, act_as_user_token=None)` | `VaultToken` | Mint a Resource token. `resource` is the RFC 8707 indicator; `audience` sets the RFC 8693 audience claim. A **user** token (`act_as_user_token`) → user-scoped; client credentials → client-scoped. |
 
-## Phase-1 providers
+## Sign-in providers
 
 How the agent authenticates to Descope. Pass one as `credential=`.
 
@@ -91,15 +90,15 @@ All extend `AgentAuthError`; match with `isinstance` / `instanceof`.
 | `ConnectionAuthorizationRequired` | user hasn't connected; carries `connect_url` / `connectUrl`, `connection`, `identifier` |
 | `PolicyDenied` | the credential lacks Policy permission |
 | `ApprovalDenied` / `ApprovalTimeout` | a CIBA approval gate was rejected / timed out |
-| `CredentialAcquisitionFailed` | phase-1 acquisition failed |
-| `TokenExchangeFailed` | other phase-2 failure |
+| `CredentialAcquisitionFailed` | the agent couldn't sign in to Descope |
+| `TokenExchangeFailed` | other token-fetch failure |
 
 ## Types
 
 - `VaultToken` — `access_token`, `token_type`, `expires_at`, `scopes`, `refresh_token`,
   `has_refresh_token`, `app_id`, `user_id`, `raw` (TS: camelCase). `str()` never leaks
   the token.
-- `Credential` — a phase-1 Descope credential (`token`, `kind`, `expires_at`, `refresh_token`).
+- `Credential` — the agent's Descope sign-in credential (`token`, `kind`, `expires_at`, `refresh_token`).
 - `ApprovalRequest` — `login_hint`, `binding_message`, `scopes`, `timeout_seconds`.
 - `PendingAuthorization` — device-code / CIBA "user action required" details.
 - `Mode` — `"fetch"` | `"execute"`. `CredentialKind` — `"agent_token"` | `"management_key"`.

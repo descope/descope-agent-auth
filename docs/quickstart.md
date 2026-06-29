@@ -1,19 +1,21 @@
-# Standalone Connections quickstart
+# Quickstart
 
-Use `descope-agent-auth` on its own: your agent acquires a Descope credential and
-exchanges it for downstream provider tokens (GitHub, Slack, Google, ...) from the
-Descope vault.
+Your agent signs in to Descope once, then trades that sign-in for the provider
+tokens (GitHub, Slack, Google, …) it needs to call APIs on a user's behalf. The
+tokens come from the Descope vault, already scoped and refreshed.
 
 > Building an MCP server? Use this SDK inside your tool handlers to fetch downstream
 > tokens. (To *protect* the MCP server itself, use Descope's
 > [MCP server SDKs](https://docs.descope.com/mcp) — this SDK is the client side.)
 
-## The two phases
+## How it works
 
-1. **Acquire** a Descope credential (configured once at init).
-2. **Exchange** it for a Connection token (called repeatedly at runtime).
+There are two moving parts:
 
-Refresh of both the Descope credential and the downstream tokens happens
+1. **Sign in.** You configure how the agent authenticates to Descope once, at init.
+2. **Get tokens.** At runtime the agent calls `get_token` whenever it needs one.
+
+Both the agent's own credential and the downstream provider tokens refresh
 transparently underneath — you ask for a token and get a currently-valid one.
 
 ## Authorize once, fetch every time
@@ -80,7 +82,7 @@ from descope_agent_auth.errors import ConnectionAuthorizationRequired
 # A *user-level* Connection token is fetched with that user's Descope access token
 # (or a management key). A client-credentials / M2M agent token cannot read user
 # tokens -- it can only fetch tenant-level Connection tokens or mint M2M-scoped
-# Resource tokens. See "Picking a phase-1 provider" below.
+# Resource tokens. See "Choosing how the agent signs in" below.
 client = AgentAuthClient(
     project_id="P2abc...",
     base_url="https://api.descope.com",
@@ -153,7 +155,7 @@ import {
 // A *user-level* Connection token is fetched with that user's Descope access token
 // (or a management key). A client-credentials / M2M agent token cannot read user
 // tokens -- it can only fetch tenant-level Connection tokens or mint M2M-scoped
-// Resource tokens. See "Picking a phase-1 provider" below.
+// Resource tokens. See "Choosing how the agent signs in" below.
 const client = new AgentAuthClient({
   projectId: 'P2abc...',
   baseUrl: 'https://api.descope.com',
@@ -196,7 +198,7 @@ const repos = await listRepos('user@example.com');
 
 ---
 
-## Picking a phase-1 provider
+## Choosing how the agent signs in
 
 | Provider | Use when |
 | --- | --- |
@@ -207,8 +209,9 @@ const repos = await listRepos('user@example.com');
 | `JwtBearerProvider` | you hold a signed JWT from a Descope-registered trusted issuer (RFC 7523 — e.g. a cloud workload-identity token) |
 | `ManagementKeyProvider` | privileged, **not recommended** — bypasses Policies |
 
-> **What a credential can fetch differs.** Phase-1 auth and phase-2 fetch authority
-> are not the same thing. A **user-level Connection token** (the common case —
+> **What a credential can fetch differs.** How the agent signs in and what it's
+> then allowed to fetch are not the same thing. A **user-level Connection token**
+> (the common case —
 > `connections.get_token(identifier=user_id)`) can only be fetched with **that
 > user's access token** (`AccessTokenProvider` / `act_as_user_token`) or a
 > **management key**. A client-credentials / M2M token **cannot** read user-level
@@ -598,15 +601,15 @@ const token = await client.connections.getToken({
 | `ConnectionAuthorizationRequired` | user hasn't connected the account; carries `connect_url` / `connectUrl` |
 | `PolicyDenied` | agent token lacks Policy permission |
 | `ApprovalDenied` / `ApprovalTimeout` | the CIBA gate was rejected or timed out |
-| `CredentialAcquisitionFailed` | phase 1 failed (bad client creds, device-flow timeout, ...) |
-| `TokenExchangeFailed` | other phase-2 transport/validation failure |
+| `CredentialAcquisitionFailed` | the agent couldn't sign in to Descope (bad client creds, device-flow timeout, ...) |
+| `TokenExchangeFailed` | other token-fetch transport/validation failure |
 
 ## Token storage & refresh
 
-The `store` holds **both** phases: the phase-1 Descope credential (including its
-**refresh token**, kept beyond the access token's expiry) and the phase-2
-downstream tokens. Everything is refreshed lazily on access — you ask for a token
-and get a currently-valid one.
+The `store` holds **both** kinds of token: the agent's own Descope credential
+(including its **refresh token**, kept beyond the access token's expiry) and the
+downstream provider tokens. Everything is refreshed lazily on access — you ask for a
+token and get a currently-valid one.
 
 This matters most for **device code / CIBA**: their tokens are persisted with the
 refresh token, so a restarted or multi-process agent **refreshes instead of

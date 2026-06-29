@@ -1,14 +1,14 @@
 # Descope Agent Auth SDK
 
-A client-side SDK (Python and TypeScript) that makes it easy to wire a custom
-agent to Descope. It does two things and only two things:
+A client-side SDK (Python and TypeScript) for wiring a custom agent to Descope. It
+does two things:
 
-1. **Acquire** a Descope credential for the agent.
-2. **Exchange** that credential for **Connection tokens** or **Resource tokens** from the Descope vault.
+1. **Signs your agent in** to Descope.
+2. **Gets the tokens** it needs — **Connection tokens** or **Resource tokens** from the Descope vault.
 
-Everything else — tool code, API wrappers, a connector catalog — is out of scope
-by design. This is the auth substrate an agent's tool calls sit on top of, not a
-runtime tool catalog.
+Everything else — tool code, API wrappers, a connector catalog — is out of scope by
+design. This is the auth layer your agent's tool calls sit on top of, not a tool
+catalog.
 
 ## What it looks like
 
@@ -26,7 +26,7 @@ except ConnectionAuthorizationRequired as e:
 ```
 
 Runnable samples (Python + TypeScript) in **[`examples/`](examples/)**. Full
-walkthrough: **[standalone Connections quickstart](docs/standalone-connections.md)**.
+walkthrough: **[quickstart](docs/quickstart.md)**.
 
 ## Who this is for
 
@@ -105,19 +105,17 @@ carrying a connect URL.
 ### 2. A Resource token — `client.resources.get_token(...)`
 
 A **Resource** is an API *you* build and protect with **Descope as the OAuth
-authorization server**. The SDK obtains a Descope-issued OAuth token scoped to that
-Resource using the **OAuth token-exchange grant**
-(`urn:ietf:params:oauth:grant-type:token-exchange`) — exchanging a Descope token for
-a Resource-scoped one. **What you exchange determines the scope:**
+authorization server**. The SDK mints a Descope-issued OAuth token scoped to that
+Resource via the **token-exchange grant**. What you sign in with sets the scope:
 
-- a **user's** Descope token (`act_as_user_token` / `AccessTokenProvider`) → a Resource
-  token **scoped to that user**;
-- the agent's **client-credentials** token → a Resource token **scoped to the client
-  (M2M) identity**, not a user.
+- a **user's** Descope token (`act_as_user_token` / `AccessTokenProvider`) → a token
+  **scoped to that user**;
+- the agent's **client-credentials** token → a token **scoped to the client (M2M)
+  identity**, not a user.
 
 Unlike Connection tokens, a Resource token needs **no prior authorization step** —
-it's minted on demand from whichever identity you present. `resource` is the RFC 8707
-resource indicator; pass `scopes` and, when the provider needs it, `audience`.
+it's minted on demand. `resource` is the RFC 8707 resource indicator; pass `scopes`
+and, when the provider needs it, `audience`.
 
 | Your agent needs to… | Method | Token you get | Source |
 | --- | --- | --- | --- |
@@ -169,7 +167,7 @@ flowchart TD
   **Outbound Apps widget** — and they complete the provider's OAuth consent; Descope
   stores the resulting token in the vault. The next `get_token` call succeeds. (This
   is the OAuth path — GitHub, Slack, Google, ….) A pure backend job (no browser, no
-  user present) takes a slightly different route — see [How a user connects when the agent is a backend process](docs/standalone-connections.md#how-a-user-connects-when-the-agent-is-a-backend-process).
+  user present) takes a slightly different route — see [How a user connects when the agent is a backend process](docs/quickstart.md#how-a-user-connects-when-the-agent-is-a-backend-process).
 - **Console.** An admin pastes an API key into a Connection in the Descope Console
   (typical for a static third-party API key, at the tenant or user level).
 - **Management API.** Your backend or infrastructure-as-code writes the API key
@@ -178,37 +176,10 @@ flowchart TD
 Resource tokens need no provisioning step — they're minted on demand from your
 agent's identity via token-exchange.
 
-## How a credential gets into Descope
+## How your agent gets the tokens
 
-Before the agent can fetch a **Connection** token, that credential has to exist in
-the Connections vault. There are three ways it gets there — the first is runtime
-(driven by the SDK), the other two are design/admin time:
-
-```mermaid
-flowchart TD
-    User["End user"] -->|"completes OAuth consent<br/>via the connect URL the SDK returns"| Vault[("Connections vault")]
-    Admin["Admin"] -->|"adds an API key by hand<br/>in the Descope Console"| Vault
-    Backend["Your backend / IaC"] -->|"adds an API key via the<br/>Descope Management API"| Vault
-    Vault -.->|"later: connections.get_token()"| Agent["Your agent"]
-```
-
-- **User connect (via the SDK).** When you call `connections.get_token` and the
-  user hasn't connected yet, the SDK raises `ConnectionAuthorizationRequired` with
-  a **connect URL**. Send the user there; they complete the provider's OAuth
-  consent; Descope stores the resulting token in the vault. The next
-  `get_token` call succeeds. (This is the OAuth path — GitHub, Slack, Google, ….)
-- **Console.** An admin pastes an API key into a Connection in the Descope Console
-  (typical for a static third-party API key, at the tenant or user level).
-- **Management API.** Your backend or infrastructure-as-code writes the API key
-  programmatically.
-
-Resource tokens need no provisioning step — they're minted on demand from your
-agent's identity via token-exchange.
-
-## How the SDK gets those tokens
-
-It starts with **how your agent authenticates to Descope** (phase 1), configured
-once at init — and you have three options:
+First you decide **how your agent signs in to Descope**, configured once at init.
+Three options:
 
 - **OAuth Client ID + Client Secret** (the common case) — your agent is a
   first-class identity in your **Agent Directory**. The SDK gets a Descope OAuth
@@ -234,36 +205,34 @@ which then hands the resulting user token to the SDK):
 | Backend, no user (agent acts **as itself** — Resource tokens, tenant-level Connections) | `ClientCredentialsProvider` |
 | Backend, reading a **user's** Connection token | `AccessTokenProvider` (user's token handed from your app) or `ManagementKeyProvider` — a client-credentials token **cannot** read user tokens; see below |
 | Backend, needs a specific user **out of band** | `CibaProvider` (push approval, yields a user token) |
+| Backend holding a signed JWT from a trusted issuer (cloud workload identity, federated IdP) | `JwtBearerProvider` (RFC 7523; exchanges the assertion — scope follows the JWT's subject) |
 | CLI / headless dev tool | `DeviceCodeProvider` |
 
-Then, at runtime (phase 2), the SDK **exchanges** that phase-1 credential for the
-token the agent actually needs:
+Then, at runtime, the agent uses that sign-in to fetch the token it actually needs:
 
 ```mermaid
 flowchart LR
     CID["OAuth Client ID + Secret<br/>(agent in your Agent Directory)"] --> Tok["Descope<br/>OAuth access token"]
     MK["Management Key<br/>(no Agent Directory identity)"] -. "not recommended" .-> Tok
 
-    Tok -->|"phase 2"| Conn["connections.get_token()"]
-    Tok -->|"phase 2"| ResM["resources.get_token()"]
+    Tok -->|"fetch"| Conn["connections.get_token()"]
+    Tok -->|"fetch"| ResM["resources.get_token()"]
 
     Conn --> CTok["Connection token<br/>API key / OAuth · governed by Policies"]
     ResM --> RTok["Resource token<br/>via token-exchange grant"]
 ```
 
-- A **Connection token** is pulled from the vault. When the phase-1 credential is
-  an agent OAuth token, **Policies** govern what it may obtain; a
-  Management Key is unrestricted.
+- A **Connection token** is pulled from the vault. When the agent signs in with an
+  OAuth token, **Policies** govern what it may obtain; a Management Key is unrestricted.
 - A **Resource token** is minted via the **token-exchange** grant. (This needs an
   OAuth agent identity — it does not apply to a Management Key.)
 
-Configure phase 1 once; call phase 2 repeatedly — you ask for a token and get a
-currently-valid one. Refresh/persistence matters most for a **user grant the backend
-holds across runs** (`CIBA`, or a handed-off user token that carries a refresh
-token): the SDK refreshes it without re-prompting the user. `ClientCredentials`
-simply re-acquires. Either way, Descope refreshes the **downstream** provider tokens
-in the vault for you. See
-[token storage & refresh](docs/standalone-connections.md#token-storage--refresh).
+Set up sign-in once, then fetch tokens repeatedly — you ask for a token and get a
+currently-valid one. Refresh matters most for a **user grant the backend holds across
+runs** (`CIBA`, or a handed-off user token that carries a refresh token): the SDK
+refreshes it without re-prompting the user. `ClientCredentials` simply re-acquires.
+Either way, Descope refreshes the **downstream** provider tokens in the vault for you.
+See [token storage & refresh](docs/quickstart.md#token-storage--refresh).
 
 ## Autonomous vs. acting for a user
 
@@ -290,10 +259,9 @@ slack = client.connections.get_tenant_token(connection="slack", tenant_id="acme"
 > backend presents it via `AccessTokenProvider` / `act_as_user_token`, as below.
 
 **Acting for a user (the agent wields the user's own Descope token).** To read a
-user's Connection token — and especially to mint a **user-scoped Resource token**
-(the user's token becomes the token-exchange `subject_token`) — supply that user's
-access token (the one you got from your app's login, device code, or CIBA), or use
-a management key. Two ways with a user token:
+user's Connection token — and to mint a **user-scoped Resource token** — supply that
+user's access token (from your app's login, device code, or CIBA), or use a
+management key. Two ways with a user token:
 
 ```python
 # A) You already hold the user's token (e.g. from your app's login):
@@ -323,7 +291,7 @@ await client.resources.getToken({ resource: 'urn:my-api', actAsUserToken: userJw
 > Where does `user_jwt` come from? Your app authenticates the user with Descope (its
 > own login, device code, or CIBA) and gets their access token; you hand that token
 > to the SDK. The `DeviceCodeProvider` / `CibaProvider` can also acquire it for you —
-> their resulting credential is the user's token and flows into phase 2 the same way.
+> their resulting credential is the user's token and flows into the token fetch the same way.
 
 **Management key (trusted backend, no user token).** A common server-side shape: the
 agent has no user token but needs a specific user's already-connected token. A
@@ -352,11 +320,11 @@ sequenceDiagram
     participant User
     participant Service as Provider / your API
 
-    Note over Agent,Descope: Phase 1 — acquire (once)
+    Note over Agent,Descope: Sign in (once)
     Agent->>Descope: authenticate (client credentials / device code / CIBA)
     Descope-->>Agent: Descope OAuth access token
 
-    Note over Agent,Descope: Phase 2 — exchange (per call)
+    Note over Agent,Descope: Get tokens (per call)
     Agent->>Descope: connections.get_token(connection, identifier)
     alt user has not connected this account yet
         Descope-->>Agent: ConnectionAuthorizationRequired (connect_url)
@@ -370,8 +338,8 @@ sequenceDiagram
     Service-->>Agent: result
 ```
 
-For a sensitive step you can also require a fresh CIBA **approval** before the
-exchange — see [docs/standalone-connections.md](docs/standalone-connections.md).
+For a sensitive step you can also require a fresh CIBA **approval** before the token
+is handed back — see the [quickstart](docs/quickstart.md).
 
 ## Packages
 
@@ -409,10 +377,9 @@ Both languages, identical surfaces:
 agent process) is reserved — the client accepts it today and turns it on when
 Descope's hosted execution endpoint becomes available.
 
-Quickstart: [standalone Connections](docs/standalone-connections.md). Full
-[SDK reference](docs/api-reference.md) (every public function). Runnable
-[examples](examples/) (Python + TypeScript). Per-framework snippets:
-[framework cookbook](docs/FRAMEWORKS.md).
+[Quickstart](docs/quickstart.md). Full [SDK reference](docs/api-reference.md)
+(every public function). Runnable [examples](examples/) (Python + TypeScript).
+Per-framework snippets: [framework cookbook](docs/FRAMEWORKS.md).
 
 ## Development
 

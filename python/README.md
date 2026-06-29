@@ -2,8 +2,8 @@
 
 Client-side SDK for **homegrown / custom-built agents**. It does two things:
 
-1. **Acquire** a Descope credential for the agent (phase 1).
-2. **Exchange** that credential for Connection or Resource tokens from the Descope vault (phase 2).
+1. **Signs your agent in** to Descope.
+2. **Gets the tokens** it needs — Connection or Resource tokens from the Descope vault.
 
 Everything else (tool code, API wrappers, a connector catalog) is out of scope by design.
 
@@ -45,14 +45,16 @@ except ConnectionAuthorizationRequired as e:
     print("connect first:", e.connect_url)
 ```
 
-## Phase-1 providers
+## Sign-in providers
+
+How the agent authenticates to Descope — pass one as `credential=`.
 
 | Provider | When |
 | --- | --- |
 | `ClientCredentialsProvider` | autonomous agent, no user |
 | `DeviceCodeProvider` | headless agent (no browser) |
 | `AuthorizationCodeProvider` | agent with a browser (PKCE) |
-| `CibaProvider` | out-of-band user approval (also backs the phase-2 approval gate) |
+| `CibaProvider` | out-of-band user approval (also backs the approval gate) |
 | `AccessTokenProvider` | bring your own Descope access token (e.g. a user's token from your app's login) for user-scoped access |
 | `ManagementKeyProvider` | privileged, **not recommended** (bypasses Policies; requires `allow_management_key=True`) |
 
@@ -71,8 +73,8 @@ consent — not the default-scope list.
 All credential providers, Connection and Resource token exchange, a pluggable
 token store that persists and refreshes credentials across restarts, a CIBA
 approval gate (`require_approval`), the `with_connection` tool wrapper, and the
-fetch/execute `mode` seam. See
-[docs/standalone-connections.md](../docs/standalone-connections.md) and the
+fetch/execute `mode` seam. See the
+[quickstart](../docs/quickstart.md) and the
 [framework cookbook](../docs/FRAMEWORKS.md).
 
 `mode="execute"` is reserved for Descope's hosted execution endpoint and turns on
