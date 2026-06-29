@@ -3,7 +3,7 @@ import {
   descopeMcpResourceAuthProvider,
 } from './integrations/mcp';
 import type { AgentAuthClient } from './client';
-import { ConnectionAuthorizationRequired } from './errors';
+import { ConnectionAuthorizationRequired, PolicyDenied } from './errors';
 import type { VaultToken } from './types';
 
 const vaultToken = (over: Partial<VaultToken> = {}): VaultToken => ({
@@ -136,10 +136,12 @@ describe('descopeMcpResourceAuthProvider', () => {
     const { client, calls } = fakeClient({
       resource: () => Promise.resolve(vaultToken({ accessToken: 'res_at', scopes: ['read'] })),
     });
+    const requireApproval = { loginHint: 'user@example.com', bindingMessage: 'approve' };
     const provider = descopeMcpResourceAuthProvider(client, {
       resource: 'urn:my-mcp',
       scopes: ['read'],
       audience: ['https://mcp.acme.com'],
+      requireApproval,
     });
 
     const tokens = await provider.tokens();
@@ -149,7 +151,16 @@ describe('descopeMcpResourceAuthProvider', () => {
       scopes: ['read'],
       audience: ['https://mcp.acme.com'],
       actAsUserToken: undefined,
+      requireApproval,
     });
+  });
+
+  it('propagates errors from the token mint', async () => {
+    const { client } = fakeClient({
+      resource: () => Promise.reject(new PolicyDenied('no policy permission')),
+    });
+    const provider = descopeMcpResourceAuthProvider(client, { resource: 'urn:my-mcp' });
+    await expect(provider.tokens()).rejects.toBeInstanceOf(PolicyDenied);
   });
 
   it('has no redirect target (non-interactive grant)', () => {

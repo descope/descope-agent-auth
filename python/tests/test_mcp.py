@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-from descope_agent_auth.errors import ConnectionAuthorizationRequired
+from descope_agent_auth.errors import ConnectionAuthorizationRequired, PolicyDenied
 from descope_agent_auth.integrations.mcp import connection_auth, resource_auth
 from descope_agent_auth.types import ApprovalRequest
 
@@ -95,11 +95,13 @@ def test_connection_auth_propagates_consent_required():
 
 def test_resource_auth_injects_bearer_and_forwards():
     client, calls = _fake_client()
+    approval = ApprovalRequest(login_hint="user@example.com", binding_message="approve")
     auth = resource_auth(
         client,
         resource="urn:my-mcp",
         scopes=["read"],
         audience=["https://mcp.acme.com"],
+        require_approval=approval,
     )
     request = _first_request(auth)
     assert request.headers["Authorization"] == "Bearer res_at"
@@ -108,8 +110,39 @@ def test_resource_auth_injects_bearer_and_forwards():
         "scopes": ["read"],
         "audience": ["https://mcp.acme.com"],
         "act_as_user_token": None,
-        "require_approval": None,
+        "require_approval": approval,
     }
+
+
+def test_resource_auth_propagates_errors():
+    async def raises(**kwargs):
+        raise PolicyDenied("no policy permission")
+
+    client, _ = _fake_client(res=raises)
+    auth = resource_auth(client, resource="urn:my-mcp")
+    with pytest.raises(PolicyDenied):
+        _first_request(auth)
+
+
+def test_auth_injects_header_through_real_httpx_client():
+    """End-to-end through httpx's own auth machinery (how the MCP transport drives
+    it), not just by hand-cranking async_auth_flow."""
+    client, _ = _fake_client()
+    auth = connection_auth(client, connection="github", identifier="u1")
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["authorization"] = request.headers.get("Authorization")
+        return httpx.Response(200, json={"ok": True})
+
+    async def run() -> None:
+        async with httpx.AsyncClient(
+            transport=httpx.MockTransport(handler), auth=auth
+        ) as http:
+            await http.post("https://mcp.example/")
+
+    asyncio.run(run())
+    assert seen["authorization"] == "Bearer gh_tok"
 
 
 def test_sync_auth_flow_is_rejected():
