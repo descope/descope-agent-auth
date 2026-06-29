@@ -23,6 +23,7 @@ const SENSITIVE_KEYS = new Set([
   'management_key',
   'device_code',
   'auth_req_id',
+  'assertion',
 ]);
 
 const sleep = (ms: number): Promise<void> =>
@@ -114,11 +115,17 @@ export class HttpClient {
 
   async postForm(
     path: string,
-    data: Record<string, string>,
+    data: Record<string, string | string[]>,
     headers?: Record<string, string>,
   ): Promise<HttpResponse> {
+    // Array values are appended as repeated params (e.g. audience=a&audience=b).
+    const params = new URLSearchParams();
+    Object.entries(data).forEach(([key, value]) => {
+      if (Array.isArray(value)) value.forEach((v) => params.append(key, v));
+      else params.append(key, value);
+    });
     return this.request('POST', path, {
-      body: new URLSearchParams(data).toString(),
+      body: params.toString(),
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...(headers ?? {}) },
       logBody: data,
     });

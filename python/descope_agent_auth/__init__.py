@@ -19,6 +19,7 @@ from .providers import (
     ClientCredentialsProvider,
     CredentialProvider,
     DeviceCodeProvider,
+    JwtBearerProvider,
     ManagementKeyProvider,
 )
 from .store import MemoryTokenStore, TokenStore
@@ -42,6 +43,7 @@ __all__ = [
     "ClientCredentialsProvider",
     "DeviceCodeProvider",
     "CibaProvider",
+    "JwtBearerProvider",
     "ManagementKeyProvider",
     "AccessTokenProvider",
     # store

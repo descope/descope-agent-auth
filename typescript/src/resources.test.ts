@@ -43,6 +43,24 @@ describe('ResourcesClient.getToken (token-exchange)', () => {
     expect(body.subject_token).toBe('agent_at');
   });
 
+  it('sends the audience claim (repeated params) on the token exchange', async () => {
+    const client = agentClient();
+    let body: any;
+    nock(BASE_URL)
+      .post(TOKEN_PATH, (b) => {
+        body = b;
+        return true;
+      })
+      .reply(200, { access_token: 'resource_at', token_type: 'Bearer' });
+
+    await client.resources.getToken({
+      resource: 'urn:my-api',
+      audience: ['https://api.acme.com', 'https://api2.acme.com'],
+    });
+
+    expect(body.audience).toEqual(['https://api.acme.com', 'https://api2.acme.com']);
+  });
+
   it('rejects a Management Key (token-exchange needs an OAuth identity)', async () => {
     const client = makeClient(
       new ManagementKeyProvider({

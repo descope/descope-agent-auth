@@ -62,6 +62,9 @@ export const GRANT_CLIENT_CREDENTIALS = 'client_credentials';
 export const GRANT_REFRESH_TOKEN = 'refresh_token';
 export const GRANT_DEVICE_CODE = 'urn:ietf:params:oauth:grant-type:device_code'; // VERIFIED
 export const GRANT_CIBA = 'urn:openid:params:grant-type:ciba'; // UNVERIFIED -- confirm via discovery
+// VERIFIED. Exchange a signed external JWT (from a Descope-registered trusted issuer)
+// for a Descope token; the client must enable JWT Bearer + register the issuer.
+export const GRANT_JWT_BEARER = 'urn:ietf:params:oauth:grant-type:jwt-bearer';
 
 // Resource tokens are minted by exchanging the agent's Descope access token for a
 // Resource-scoped token via the RFC 8693 token-exchange grant against OAUTH2_TOKEN.

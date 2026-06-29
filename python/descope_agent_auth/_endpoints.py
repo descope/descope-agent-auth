@@ -66,6 +66,9 @@ OUTBOUND_CONNECT = "/v1/mgmt/outbound/app/connect"
 GRANT_CLIENT_CREDENTIALS = "client_credentials"
 GRANT_REFRESH_TOKEN = "refresh_token"
 GRANT_DEVICE_CODE = "urn:ietf:params:oauth:grant-type:device_code"  # VERIFIED
+# VERIFIED. Exchange a signed external JWT (from a Descope-registered trusted issuer)
+# for a Descope token. The client must enable the JWT Bearer grant + register the issuer.
+GRANT_JWT_BEARER = "urn:ietf:params:oauth:grant-type:jwt-bearer"
 GRANT_CIBA = "urn:openid:params:grant-type:ciba"  # UNVERIFIED -- confirm via discovery
 
 # Resource tokens are minted by exchanging the agent's Descope access token for a

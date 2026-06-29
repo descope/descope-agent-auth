@@ -116,7 +116,8 @@ a Resource-scoped one. **What you exchange determines the scope:**
   (M2M) identity**, not a user.
 
 Unlike Connection tokens, a Resource token needs **no prior authorization step** —
-it's minted on demand from whichever identity you present.
+it's minted on demand from whichever identity you present. `resource` is the RFC 8707
+resource indicator; pass `scopes` and, when the provider needs it, `audience`.
 
 | Your agent needs to… | Method | Token you get | Source |
 | --- | --- | --- | --- |
@@ -215,6 +216,7 @@ once at init — and you have three options:
   - `ClientCredentialsProvider` — autonomous agent, no user
   - `DeviceCodeProvider` — headless agent (device code)
   - `CibaProvider` — out-of-band user approval (CIBA)
+  - `JwtBearerProvider` — exchange a signed JWT from a trusted issuer (RFC 7523)
 - **A user's access token you already hold** (`AccessTokenProvider`) — if your app
   already logged the user in with Descope, hand that token to the agent directly
   (no re-authentication) for **user-scoped** access.
@@ -388,8 +390,8 @@ Both languages, identical surfaces:
 - **Python is async-first** — use `AsyncAgentAuthClient` (and `with_connection_async`)
   in async apps; `AgentAuthClient` is a synchronous facade with the same API. TypeScript
   is async-native.
-- All credential providers: client credentials, device code, CIBA, management key,
-  and bring-your-own access token.
+- All credential providers: client credentials, device code, CIBA, JWT bearer
+  (RFC 7523), management key, and bring-your-own access token.
 - Connection and Resource token exchange, with the
   `ConnectionAuthorizationRequired` re-auth signal and the agent-token-vs-management-key
   distinction. User-level, user+tenant, and tenant-level (`get_tenant_token`)
@@ -407,7 +409,8 @@ Both languages, identical surfaces:
 agent process) is reserved — the client accepts it today and turns it on when
 Descope's hosted execution endpoint becomes available.
 
-Quickstart: [standalone Connections](docs/standalone-connections.md). Runnable
+Quickstart: [standalone Connections](docs/standalone-connections.md). Full
+[SDK reference](docs/api-reference.md) (every public function). Runnable
 [examples](examples/) (Python + TypeScript). Per-framework snippets:
 [framework cookbook](docs/FRAMEWORKS.md).
 

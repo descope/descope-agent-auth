@@ -8,6 +8,7 @@ from descope_agent_auth import (
     CibaProvider,
     ClientCredentialsProvider,
     DeviceCodeProvider,
+    JwtBearerProvider,
     ManagementKeyProvider,
 )
 from descope_agent_auth.errors import (
@@ -171,3 +172,40 @@ class TestManagementKeyProvider(common.AgentAuthTest):
 
         self.assertEqual(cred.token, "K123")
         self.assertTrue(cred.is_privileged)
+
+
+class TestJwtBearerProvider(common.AgentAuthTest):
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_exchanges_assertion_for_credential(self, mock_request):
+        mock_request.return_value = make_response({"access_token": "jb_at", "expires_in": 3600})
+        client = self.make_client(
+            JwtBearerProvider(client_id="cid", assertion="signed.jwt.here", scopes=["openid"])
+        )
+
+        cred = client.get_credential()
+
+        self.assertEqual(cred.token, "jb_at")
+        _, kwargs = mock_request.call_args
+        self.assertEqual(
+            kwargs["data"]["grant_type"], "urn:ietf:params:oauth:grant-type:jwt-bearer"
+        )
+        self.assertEqual(kwargs["data"]["assertion"], "signed.jwt.here")
+        self.assertEqual(kwargs["data"]["client_id"], "cid")
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_assertion_callable_resolved_each_acquire(self, mock_request):
+        mock_request.return_value = make_response({"access_token": "jb_at", "expires_in": 3600})
+        client = self.make_client(JwtBearerProvider(client_id="cid", assertion=lambda: "fresh.jwt"))
+
+        client.get_credential()
+
+        _, kwargs = mock_request.call_args
+        self.assertEqual(kwargs["data"]["assertion"], "fresh.jwt")
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_failure_raises(self, mock_request):
+        mock_request.return_value = make_response({"error": "invalid_grant"}, status=400)
+        client = self.make_client(JwtBearerProvider(client_id="cid", assertion="bad"))
+
+        with self.assertRaises(CredentialAcquisitionFailed):
+            client.get_credential()

@@ -4,6 +4,7 @@ import {
   CibaProvider,
   ClientCredentialsProvider,
   DeviceCodeProvider,
+  JwtBearerProvider,
   ManagementKeyProvider,
 } from './providers';
 import { ApprovalDenied, ApprovalTimeout, CredentialAcquisitionFailed } from './errors';
@@ -226,5 +227,50 @@ describe('ManagementKeyProvider', () => {
     const cred = await client.getCredential();
     expect(cred.token).toBe('K123');
     expect(client.credential.isPrivileged).toBe(true);
+  });
+});
+
+describe('JwtBearerProvider', () => {
+  it('exchanges a signed assertion for a credential', async () => {
+    let body: any;
+    nock(BASE_URL)
+      .post(TOKEN_PATH, (b) => {
+        body = b;
+        return true;
+      })
+      .reply(200, { access_token: 'jb_at', expires_in: 3600 });
+
+    const client = makeClient(
+      new JwtBearerProvider({ clientId: 'cid', assertion: 'signed.jwt.here', scopes: ['openid'] }),
+    );
+    const cred = await client.getCredential();
+
+    expect(cred.token).toBe('jb_at');
+    expect(body.grant_type).toBe('urn:ietf:params:oauth:grant-type:jwt-bearer');
+    expect(body.assertion).toBe('signed.jwt.here');
+    expect(body.client_id).toBe('cid');
+  });
+
+  it('resolves an async assertion function each acquisition', async () => {
+    let body: any;
+    nock(BASE_URL)
+      .post(TOKEN_PATH, (b) => {
+        body = b;
+        return true;
+      })
+      .reply(200, { access_token: 'jb_at', expires_in: 3600 });
+
+    const client = makeClient(
+      new JwtBearerProvider({ clientId: 'cid', assertion: async () => 'fresh.jwt' }),
+    );
+    await client.getCredential();
+
+    expect(body.assertion).toBe('fresh.jwt');
+  });
+
+  it('throws CredentialAcquisitionFailed on a bad assertion', async () => {
+    nock(BASE_URL).post(TOKEN_PATH).reply(400, { error: 'invalid_grant' });
+    const client = makeClient(new JwtBearerProvider({ clientId: 'cid', assertion: 'bad' }));
+    await expect(client.getCredential()).rejects.toBeInstanceOf(CredentialAcquisitionFailed);
   });
 });
