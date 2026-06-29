@@ -38,7 +38,7 @@ framework-agnostic core SDK**. Here's why that's enough:
   *approval* interrupt back to the user — and that's a `try/except` around the
   exchange, shown once below and reused everywhere.
 
-So there is nothing to install per framework. Pick your phase-1 provider, build one
+So there is nothing to install per framework. Pick your sign-in provider, build one
 client, and drop the wrapper into your tools.
 
 ### Runtime support
@@ -456,4 +456,4 @@ Adapt the wrapper call to whatever shape the framework's tool function expects.
 Any of the above can gate a sensitive call on a fresh out-of-band user approval
 (CIBA) by configuring `approval=` / `approval:` on the client and passing
 `require_approval` / `requireApproval` to the exchange — see the
-[approval gate section](standalone-connections.md#human-in-the-loop-approval-ciba-gate).
+[approval gate section](quickstart.md#human-in-the-loop-approval-ciba-gate).
