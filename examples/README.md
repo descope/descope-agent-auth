@@ -45,7 +45,7 @@ python tool_ergonomic.py                 # the @with_connection tool wrapper
 
 # LangChain agent whose tools fetch a Resource token + a tenant-level Connection key.
 # Needs extra deps and an LLM key:
-pip install 'langchain>=0.3' 'langchain-openai>=0.2'
+pip install 'langchain>=1.0' 'langchain-openai>=0.2'
 export OPENAI_API_KEY=sk-...
 python langchain_agent.py "look up Acme Corp, then check the internal API for their plan"
 ```
