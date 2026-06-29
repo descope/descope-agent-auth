@@ -40,7 +40,10 @@ walkthrough: **[quickstart](docs/quickstart.md)**.
   Descope into your MCP client's auth seam, so Descope supplies and refreshes the
   token for that server connection (GitHub's, Linear's, your own) instead of the
   client running its own OAuth. Works with any MCP client you can hand an auth
-  provider — the official MCP SDK, the Vercel AI SDK, Mastra, …
+  provider (the official MCP SDK, the Vercel AI SDK, Mastra, …) — **but not fully
+  managed runtimes that own the connection themselves** (AWS Bedrock AgentCore,
+  Azure AI Foundry, hosted assistant connectors), where you register credentials
+  with the platform's own identity layer instead.
 - ❌ **Not** for building MCP *servers*. Protecting an MCP server (DCR, metadata
   endpoints, token validation, `tools/list` filtering) is a different job — the
   *resource-server* side. This SDK is the *client* side: it acquires and uses tokens.
@@ -48,25 +51,6 @@ walkthrough: **[quickstart](docs/quickstart.md)**.
 > **Scope in one line:** this SDK manages the **tokens your agent needs** — both for
 > the tools you implement and for the remote MCP servers it connects to. It doesn't
 > build or protect MCP servers.
-
-<details>
-<summary><strong>Using your agent as an MCP client to remote servers?</strong></summary>
-
-Yes — that's what the **MCP auth adapter** is for. Rather than have the MCP client run
-its own OAuth to the server, Descope holds and refreshes the token in the vault and
-the adapter hands it over through the client's standard auth seam:
-`descopeMcpConnectionAuthProvider` / `descopeMcpResourceAuthProvider` (TypeScript, an
-MCP `OAuthClientProvider`) or `connection_auth` / `resource_auth` (Python, an
-`httpx.Auth`). See
-[Connecting to a remote MCP server](docs/FRAMEWORKS.md#connecting-to-a-remote-mcp-server).
-
-**The one limit:** this needs an MCP client that lets you *inject* the auth provider —
-the official MCP SDK, the Vercel AI SDK, Mastra, and the like. Fully managed runtimes
-that own the connection themselves (**AWS Bedrock AgentCore**, **Azure AI Foundry**,
-hosted assistant connectors) don't expose that seam — there you register credentials
-with the platform's own identity layer, and this adapter doesn't apply.
-
-</details>
 
 <details>
 <summary><strong>Building an MCP <em>server</em>?</strong></summary>
