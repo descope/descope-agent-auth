@@ -205,6 +205,7 @@ which then hands the resulting user token to the SDK):
 | Backend, no user (agent acts **as itself** — Resource tokens, tenant-level Connections) | `ClientCredentialsProvider` |
 | Backend, reading a **user's** Connection token | `AccessTokenProvider` (user's token handed from your app) or `ManagementKeyProvider` — a client-credentials token **cannot** read user tokens; see below |
 | Backend, needs a specific user **out of band** | `CibaProvider` (push approval, yields a user token) |
+| Backend holding a signed JWT from a trusted issuer (cloud workload identity, federated IdP) | `JwtBearerProvider` (RFC 7523; exchanges the assertion — scope follows the JWT's subject) |
 | CLI / headless dev tool | `DeviceCodeProvider` |
 
 Then, at runtime, the agent uses that sign-in to fetch the token it actually needs:
