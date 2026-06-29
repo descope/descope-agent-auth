@@ -58,6 +58,11 @@ npm install                              # installs @descope/agent-auth + tsx
 
 npm run user        -- # or: npx tsx --env-file=../.env userConnection.ts
 npm run autonomous  -- # npx tsx --env-file=../.env autonomousAgent.ts
+
+# LangChain agent (Resource token + tenant-level Connection key). Extra deps + LLM key:
+npm install langchain @langchain/openai @langchain/core zod
+export OPENAI_API_KEY=sk-...
+npm run langchain   -- "look up Acme Corp, then check the internal API for their plan"
 ```
 
 (Node 20+ reads `.env` via `--env-file`; the npm scripts wire that up for you.)
