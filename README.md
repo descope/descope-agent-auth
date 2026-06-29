@@ -35,26 +35,36 @@ walkthrough: **[quickstart](docs/quickstart.md)**.
   LlamaIndex, Cloudflare Agents, AG2/AutoGen, CrewAI, TanStack AI, the Anthropic
   SDK, and more). It manages the tokens the **tools you implement** need to call
   downstream APIs — putting your agent on the **OAuth client** side.
-- ❌ **Not** for building MCP servers. Protecting an MCP server (DCR, metadata
+- ✅ **Agents that connect to remote MCP servers** — the
+  [MCP auth adapter](docs/FRAMEWORKS.md#connecting-to-a-remote-mcp-server) plugs
+  Descope into your MCP client's auth seam, so Descope supplies and refreshes the
+  token for that server connection (GitHub's, Linear's, your own) instead of the
+  client running its own OAuth. Works with any MCP client you can hand an auth
+  provider — the official MCP SDK, the Vercel AI SDK, Mastra, …
+- ❌ **Not** for building MCP *servers*. Protecting an MCP server (DCR, metadata
   endpoints, token validation, `tools/list` filtering) is a different job — the
   *resource-server* side. This SDK is the *client* side: it acquires and uses tokens.
 
-> **Scope in one line:** this SDK manages the tokens **the tools you implement**
-> need — not your agent's OAuth connection to a third-party MCP server. Use it
-> *inside* your tool code.
+> **Scope in one line:** this SDK manages the **tokens your agent needs** — both for
+> the tools you implement and for the remote MCP servers it connects to. It doesn't
+> build or protect MCP servers.
 
 <details>
-<summary><strong>Using your agent as an MCP client to third-party servers?</strong></summary>
+<summary><strong>Using your agent as an MCP client to remote servers?</strong></summary>
 
-If your agent connects to remote MCP servers as a *client* — calling tools those
-servers expose rather than tools you wrote — this SDK is not the right layer. The
-OAuth between the agent and those servers is handled by your MCP client stack, and
-you're usually not implementing those tools yourself.
+Yes — that's what the **MCP auth adapter** is for. Rather than have the MCP client run
+its own OAuth to the server, Descope holds and refreshes the token in the vault and
+the adapter hands it over through the client's standard auth seam:
+`descopeMcpConnectionAuthProvider` / `descopeMcpResourceAuthProvider` (TypeScript, an
+MCP `OAuthClientProvider`) or `connection_auth` / `resource_auth` (Python, an
+`httpx.Auth`). See
+[Connecting to a remote MCP server](docs/FRAMEWORKS.md#connecting-to-a-remote-mcp-server).
 
-**This SDK belongs in tool code you implement** — a custom function, a Lambda action
-group, a framework-native tool — to fetch downstream API tokens for APIs your agent
-calls directly. It is not a replacement for the auth your MCP client uses to reach
-third-party MCP servers.
+**The one limit:** this needs an MCP client that lets you *inject* the auth provider —
+the official MCP SDK, the Vercel AI SDK, Mastra, and the like. Fully managed runtimes
+that own the connection themselves (**AWS Bedrock AgentCore**, **Azure AI Foundry**,
+hosted assistant connectors) don't expose that seam — there you register credentials
+with the platform's own identity layer, and this adapter doesn't apply.
 
 </details>
 
