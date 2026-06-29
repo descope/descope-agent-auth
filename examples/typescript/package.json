@@ -7,7 +7,8 @@
   "scripts": {
     "user": "tsx --env-file=../.env userConnection.ts",
     "autonomous": "tsx --env-file=../.env autonomousAgent.ts",
-    "tool": "tsx --env-file=../.env toolErgonomic.ts"
+    "tool": "tsx --env-file=../.env toolErgonomic.ts",
+    "langchain": "tsx --env-file=../.env langchainAgent.ts"
   },
   "dependencies": {
     "@descope/agent-auth": "^0.1.0"

@@ -42,6 +42,12 @@ set -a; source ../.env; set +a           # load env vars
 python user_connection.py                # fetch a user's Connection token (+ connect-URL flow)
 python autonomous_agent.py               # Resource token + tenant-level Connection token
 python tool_ergonomic.py                 # the @with_connection tool wrapper
+
+# LangChain agent whose tools fetch a Resource token + a tenant-level Connection key.
+# Needs extra deps and an LLM key:
+pip install 'langchain>=1.0' 'langchain-openai>=0.2'
+export OPENAI_API_KEY=sk-...
+python langchain_agent.py "look up Acme Corp, then check the internal API for their plan"
 ```
 
 ## TypeScript
@@ -52,6 +58,11 @@ npm install                              # installs @descope/agent-auth + tsx
 
 npm run user        -- # or: npx tsx --env-file=../.env userConnection.ts
 npm run autonomous  -- # npx tsx --env-file=../.env autonomousAgent.ts
+
+# LangChain agent (Resource token + tenant-level Connection key). Extra deps + LLM key:
+npm install langchain @langchain/openai @langchain/core zod
+export OPENAI_API_KEY=sk-...
+npm run langchain   -- "look up Acme Corp, then check the internal API for their plan"
 ```
 
 (Node 20+ reads `.env` via `--env-file`; the npm scripts wire that up for you.)
