@@ -409,7 +409,8 @@ Both languages, identical surfaces:
 agent process) is reserved — the client accepts it today and turns it on when
 Descope's hosted execution endpoint becomes available.
 
-Quickstart: [standalone Connections](docs/standalone-connections.md). Runnable
+Quickstart: [standalone Connections](docs/standalone-connections.md). Full
+[SDK reference](docs/api-reference.md) (every public function). Runnable
 [examples](examples/) (Python + TypeScript). Per-framework snippets:
 [framework cookbook](docs/FRAMEWORKS.md).
 
