@@ -39,6 +39,8 @@ from typing import TYPE_CHECKING, AsyncGenerator, Awaitable, Callable, Generator
 
 import httpx
 
+from ..types import ApprovalRequest
+
 if TYPE_CHECKING:
     from ..client import AsyncAgentAuthClient
 
@@ -80,12 +82,14 @@ def connection_auth(
     scopes: Optional[List[str]] = None,
     tenant_id: Optional[str] = None,
     act_as_user_token: Optional[str] = None,
+    require_approval: Optional[ApprovalRequest] = None,
 ) -> httpx.Auth:
     """Build an ``httpx.Auth`` that injects a Descope **Connection** token (the
     provider's own OAuth token) for ``identifier`` on each MCP request.
 
     ``identifier`` is the user the agent acts for -- resolve it server-side, never
-    from model input.
+    from model input. Pass ``require_approval`` to gate the fetch on a fresh CIBA
+    approval (needs an ``approval`` provider configured on the client).
     """
 
     async def fetch() -> str:
@@ -95,6 +99,7 @@ def connection_auth(
             scopes=scopes,
             tenant_id=tenant_id,
             act_as_user_token=act_as_user_token,
+            require_approval=require_approval,
         )
         return token.access_token
 
@@ -108,9 +113,13 @@ def resource_auth(
     scopes: Optional[List[str]] = None,
     audience: Optional[List[str]] = None,
     act_as_user_token: Optional[str] = None,
+    require_approval: Optional[ApprovalRequest] = None,
 ) -> httpx.Auth:
     """Build an ``httpx.Auth`` that injects a Descope-minted **Resource** token (for
-    an MCP server that uses Descope as its OAuth authorization server)."""
+    an MCP server that uses Descope as its OAuth authorization server).
+
+    Pass ``require_approval`` to gate the mint on a fresh CIBA approval (needs an
+    ``approval`` provider configured on the client)."""
 
     async def fetch() -> str:
         token = await client.resources.get_token(
@@ -118,6 +127,7 @@ def resource_auth(
             scopes=scopes,
             audience=audience,
             act_as_user_token=act_as_user_token,
+            require_approval=require_approval,
         )
         return token.access_token
 

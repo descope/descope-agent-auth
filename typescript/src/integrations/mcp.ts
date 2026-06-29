@@ -40,6 +40,7 @@
  */
 
 import type { AgentAuthClient } from '../client';
+import type { ApprovalRequest } from '../types';
 
 /** Minimal OAuth token shape the MCP transports read (subset of MCP's `OAuthTokens`). */
 export interface McpOAuthTokens {
@@ -75,6 +76,8 @@ export interface McpConnectionAuthOptions {
   tenantId?: string;
   /** Act as a specific user on a shared client (the user's Descope access token). */
   actAsUserToken?: string;
+  /** Require a fresh CIBA approval (needs an `approval` provider on the client). */
+  requireApproval?: ApprovalRequest;
   /** Reported as the provider's `redirectUrl`; the brokered flow doesn't use it. */
   redirectUrl?: string;
 }
@@ -86,6 +89,8 @@ export interface McpResourceAuthOptions {
   /** Token-exchange `audience` claim, when the resource requires it. */
   audience?: string[];
   actAsUserToken?: string;
+  /** Require a fresh CIBA approval (needs an `approval` provider on the client). */
+  requireApproval?: ApprovalRequest;
 }
 
 const brokeredProvider = (
@@ -141,6 +146,7 @@ export function descopeMcpConnectionAuthProvider(
         scopes: options.scopes,
         tenantId: options.tenantId,
         actAsUserToken: options.actAsUserToken,
+        requireApproval: options.requireApproval,
       }),
     options.redirectUrl,
   );
@@ -160,6 +166,7 @@ export function descopeMcpResourceAuthProvider(
       scopes: options.scopes,
       audience: options.audience,
       actAsUserToken: options.actAsUserToken,
+      requireApproval: options.requireApproval,
     }),
   );
 }

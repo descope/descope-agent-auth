@@ -14,6 +14,7 @@ import pytest
 
 from descope_agent_auth.errors import ConnectionAuthorizationRequired
 from descope_agent_auth.integrations.mcp import connection_auth, resource_auth
+from descope_agent_auth.types import ApprovalRequest
 
 
 def _fake_client(*, conn=None, res=None):
@@ -55,6 +56,7 @@ def test_connection_auth_injects_bearer():
 
 def test_connection_auth_forwards_arguments():
     client, calls = _fake_client()
+    approval = ApprovalRequest(login_hint="user@example.com", binding_message="approve")
     auth = connection_auth(
         client,
         connection="github",
@@ -62,6 +64,7 @@ def test_connection_auth_forwards_arguments():
         scopes=["repo"],
         tenant_id="acme",
         act_as_user_token="user_jwt",
+        require_approval=approval,
     )
     _first_request(auth)
     assert calls["connection"][0] == {
@@ -70,6 +73,7 @@ def test_connection_auth_forwards_arguments():
         "scopes": ["repo"],
         "tenant_id": "acme",
         "act_as_user_token": "user_jwt",
+        "require_approval": approval,
     }
 
 
@@ -104,6 +108,7 @@ def test_resource_auth_injects_bearer_and_forwards():
         "scopes": ["read"],
         "audience": ["https://mcp.acme.com"],
         "act_as_user_token": None,
+        "require_approval": None,
     }
 
 

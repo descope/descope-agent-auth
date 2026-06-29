@@ -58,14 +58,16 @@ describe('descopeMcpConnectionAuthProvider', () => {
     });
   });
 
-  it('forwards connection, identifier, scopes, tenant, and act-as-user', async () => {
+  it('forwards connection, identifier, scopes, tenant, act-as-user, and approval', async () => {
     const { client, calls } = fakeClient({});
+    const requireApproval = { loginHint: 'user@example.com', bindingMessage: 'approve' };
     const provider = descopeMcpConnectionAuthProvider(client, {
       connection: 'github',
       identifier: 'user_123',
       scopes: ['repo'],
       tenantId: 'acme',
       actAsUserToken: 'user_jwt',
+      requireApproval,
     });
 
     await provider.tokens();
@@ -75,6 +77,7 @@ describe('descopeMcpConnectionAuthProvider', () => {
       scopes: ['repo'],
       tenantId: 'acme',
       actAsUserToken: 'user_jwt',
+      requireApproval,
     });
   });
 
