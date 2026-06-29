@@ -16,11 +16,13 @@ mirror images — TypeScript names are the camelCase of the Python ones.
 | The user is building… | Use this SDK? |
 | --- | --- |
 | A **custom agent** (any framework) whose **tools call APIs** and need tokens | ✅ **Yes** — this is exactly it. |
+| An agent that connects to **remote MCP servers** and needs tokens for them | ✅ **Yes** — use the MCP auth adapter (Recipe E), as long as the MCP client lets you inject an auth provider. |
+| An agent on a **fully managed runtime** that owns the MCP connection (AWS Bedrock AgentCore, Azure AI Foundry, hosted assistant connectors) | ❌ No — you can't inject an auth provider there; register credentials with the platform's identity layer instead. |
 | An **MCP server** they need to protect (validate tokens, DCR, `tools/list`) | ❌ No — use Descope's MCP server SDKs (`@descope/mcp-express` or `descope-mcp`). Inside that server's tool handlers, you *may* use this SDK to fetch downstream tokens. |
-| An agent that is only an **MCP client** to third-party MCP servers | ❌ No — the MCP client stack owns that OAuth. This SDK has no place to plug in unless you implement the tools yourself. |
 
 This SDK is the **OAuth client side**: it gets the tokens the **tools you implement**
-need. If Step 0 is ✅, continue.
+need, and (via the MCP adapter) the tokens your agent presents to **remote MCP
+servers**. If Step 0 is ✅, continue.
 
 ---
 
@@ -224,6 +226,54 @@ const repos = await listRepos(userId);
 
 Per-framework snippets (LangChain, LangGraph, ADK, OpenAI, Vercel AI, Mastra,
 LlamaIndex, Cloudflare, CrewAI, AG2, …): see [docs/FRAMEWORKS.md](docs/FRAMEWORKS.md).
+
+---
+
+## Recipe E — Supply the token for a remote MCP server connection
+
+Use when the agent is an MCP **client** connecting to a remote MCP **server**
+(GitHub's, Linear's, your own) and you want Descope to manage that connection's token
+instead of the MCP client running its own OAuth. The adapter occupies the MCP client's
+standard auth seam and returns the vaulted token. Requires an MCP client you can hand
+an auth provider (the official MCP SDK, the Vercel AI SDK, Mastra, …); it does **not**
+apply to managed runtimes that own the connection (see Step 0).
+
+**TypeScript** — `descopeMcpConnectionAuthProvider` returns an MCP `OAuthClientProvider`:
+
+```ts
+import { createMCPClient } from '@ai-sdk/mcp';
+import { descopeMcpConnectionAuthProvider } from '@descope/agent-auth';
+
+const mcp = await createMCPClient({
+  transport: {
+    type: 'http',
+    url: 'https://mcp.linear.app',
+    authProvider: descopeMcpConnectionAuthProvider(client, {
+      connection: 'linear',
+      identifier: userId,        // resolved server-side, never from the model
+    }),
+  },
+});
+// tokens() throws ConnectionAuthorizationRequired if the user hasn't connected yet —
+// catch it where you run the agent and redirect to e.connectUrl, then retry.
+```
+
+**Python** — `connection_auth` returns an `httpx.Auth` for the MCP transport:
+
+```python
+from mcp.client.streamable_http import streamablehttp_client
+from descope_agent_auth.integrations.mcp import connection_auth
+
+auth = connection_auth(client, connection="linear", identifier=user_id)
+async with streamablehttp_client("https://mcp.linear.app", auth=auth) as (r, w, _):
+    ...   # ConnectionAuthorizationRequired propagates if the user must connect first
+```
+
+The **Connection** variant injects the provider's own token (a provider-OAuth MCP
+server accepts it natively). If the server uses **Descope** as its authorization
+server, use the Resource variant — `descopeMcpResourceAuthProvider` / `resource_auth`
+(pass `audience` when the server requires it). Both accept `requireApproval` /
+`require_approval` for a CIBA gate.
 
 ---
 

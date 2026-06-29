@@ -2,9 +2,12 @@
 
 > Client-side SDK (Python `descope-agent-auth` and TypeScript `@descope/agent-auth`)
 > for custom-built AI agents. It does two things: signs your agent in to Descope, then
-> fetches the tokens its tools need — Connection tokens (third-party/internal APIs via
-> the Descope vault) or Resource tokens (your own Descope-OAuth-protected APIs). It is
-> the OAuth *client* side; it is not for building or protecting MCP servers.
+> fetches the tokens it needs — Connection tokens (third-party/internal APIs via the
+> Descope vault) or Resource tokens (your own Descope-OAuth-protected APIs). Use those
+> tokens in the tools you implement, or feed them to a remote MCP server connection via
+> the MCP auth adapter. It is the OAuth *client* side; it does not build or protect MCP
+> servers, and the MCP adapter needs a client you can hand an auth provider (not a
+> managed runtime like Bedrock AgentCore).
 
 If you are an AI agent integrating this SDK, read AGENTS.md first — it is a decision
 procedure plus complete, copy-pasteable recipes. The other docs are reference.
@@ -20,7 +23,7 @@ user's access token or a management key. See AGENTS.md → Rules.
 ## Guides
 
 - [docs/quickstart.md](docs/quickstart.md): Full walkthrough — authorize-once/fetch-every-time model, choosing a sign-in provider, scopes, token levels (user / user+tenant / tenant), connecting users from a backend, deployment patterns, the CIBA approval gate, and token storage & refresh.
-- [docs/FRAMEWORKS.md](docs/FRAMEWORKS.md): Copy-paste tool snippet per framework (LangChain, LangGraph, Google ADK, OpenAI, Vercel AI, Mastra, LlamaIndex, Cloudflare Agents, CrewAI, AG2, Anthropic SDK, and any function-tool framework).
+- [docs/FRAMEWORKS.md](docs/FRAMEWORKS.md): Copy-paste tool snippet per framework (LangChain, LangGraph, Google ADK, OpenAI, Vercel AI, Mastra, LlamaIndex, Cloudflare Agents, CrewAI, AG2, Anthropic SDK, and any function-tool framework), plus **Connecting to a remote MCP server** (the MCP auth adapter).
 
 ## Reference
 
