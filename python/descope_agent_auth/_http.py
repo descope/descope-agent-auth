@@ -31,6 +31,7 @@ _SENSITIVE_KEYS = {
     "management_key",
     "device_code",
     "auth_req_id",
+    "assertion",
 }
 
 

@@ -23,6 +23,7 @@ const SENSITIVE_KEYS = new Set([
   'management_key',
   'device_code',
   'auth_req_id',
+  'assertion',
 ]);
 
 const sleep = (ms: number): Promise<void> =>
