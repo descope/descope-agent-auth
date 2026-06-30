@@ -1,34 +1,30 @@
 # Quickstart
 
-Your agent signs in to Descope once, then trades that sign-in for the provider
-tokens (GitHub, Slack, Google, …) it needs to call APIs on a user's behalf. The
-tokens come from the Descope vault, already scoped and refreshed.
+Your agent signs in to Descope once, then trades that for the provider tokens
+(GitHub, Slack, Google, …) its tools need. Tokens come from the Descope vault,
+already scoped and refreshed.
 
 > Building an MCP server? Use this SDK inside your tool handlers to fetch downstream
-> tokens. (To *protect* the MCP server itself, use Descope's
-> [MCP server SDKs](https://docs.descope.com/mcp) — this SDK is the client side.)
+> tokens. To *protect* the server itself, use Descope's
+> [MCP server SDKs](https://docs.descope.com/mcp) — this SDK is the client side.
 
 ## How it works
 
-There are two moving parts:
+1. **Sign in** — configure how the agent authenticates to Descope, once at init.
+2. **Get tokens** — call `get_token` at runtime whenever you need one.
 
-1. **Sign in.** You configure how the agent authenticates to Descope once, at init.
-2. **Get tokens.** At runtime the agent calls `get_token` whenever it needs one.
-
-Both the agent's own credential and the downstream provider tokens refresh
-transparently underneath — you ask for a token and get a currently-valid one.
+Both the agent's credential and the downstream tokens refresh underneath; you always
+get a currently-valid token.
 
 ## Authorize once, fetch every time
 
-A Connection has **two separate operations** — keep them distinct:
+A Connection has two distinct operations:
 
-1. **Authorize a user (once per user per connection).** The user grants your agent
-   access: you send them a connect URL, they complete the provider's OAuth consent,
-   and **Descope stores their tokens in the Connections Vault and keeps them
-   refreshed**. You never handle the OAuth callback or store tokens yourself.
-2. **Fetch the token (every time the agent acts).** `get_token` returns the
-   **stored, currently-valid** token from the vault — no user, no browser, no refresh
-   handling.
+1. **Authorize a user** (once per user per connection) — send them a connect URL, they
+   complete OAuth consent, and Descope stores and refreshes their tokens in the vault.
+   You never handle the callback or store tokens.
+2. **Fetch the token** (every time the agent acts) — `get_token` returns the stored,
+   valid token. No user, no browser.
 
 ```mermaid
 flowchart LR
@@ -48,24 +44,23 @@ flowchart LR
     Authorize -.->|"token now in the vault"| Fetch
 ```
 
-You get the connect URL for the authorize step two ways:
+You get the connect URL two ways:
 
-- **Proactively** — call `get_connect_url` / `getConnectUrl` (e.g. behind a "Connect
-  GitHub" button), hand the user the URL.
+- **Proactively** — `get_connect_url` / `getConnectUrl` (e.g. behind a "Connect GitHub"
+  button).
 - **Just in time** — `get_token` raises `ConnectionAuthorizationRequired` carrying the
-  URL when the agent tries to act and the user isn't connected.
+  URL when the user isn't connected.
 
-Either way, once the user consents the next `get_token` just works.
-`wait_for_connection` is an optional helper that polls until the vault has the token.
-**Who can authorize, and from where**, is covered in
-[How a user connects when the agent is a backend process](#how-a-user-connects-when-the-agent-is-a-backend-process).
+Once the user consents, the next `get_token` works. `wait_for_connection` optionally
+polls until the token lands. For backend agents with no browser, see
+[below](#how-a-user-connects-when-the-agent-is-a-backend-process).
 
 ## Prerequisites
 
-- A Descope project, and an **Outbound App / Connection** configured for the
-  provider you want (e.g. `github`), set up at design time in the Descope Console
-  or via the Descope MCP server. Default scopes live on the Connection.
-- A way for the agent to authenticate to Descope (see provider table below).
+- A Descope project with an **Outbound App / Connection** configured for your provider
+  (e.g. `github`), set up in the Descope Console or via the Descope MCP server. Default
+  scopes live on the Connection.
+- A way for the agent to authenticate to Descope (see the provider table below).
 
 ---
 
@@ -79,13 +74,10 @@ pip install descope-agent-auth
 from descope_agent_auth import AgentAuthClient, AccessTokenProvider
 from descope_agent_auth.errors import ConnectionAuthorizationRequired
 
-# A *user-level* Connection token is fetched with that user's Descope access token
-# (or a management key). A client-credentials / M2M agent token cannot read user
-# tokens -- it can only fetch tenant-level Connection tokens or mint M2M-scoped
-# Resource tokens. See "Choosing how the agent signs in" below.
+# A user-level Connection token needs that user's Descope token (or a management key);
+# see "Choosing how the agent signs in" below.
 client = AgentAuthClient(
     project_id="P2abc...",
-    base_url="https://api.descope.com",
     credential=AccessTokenProvider(access_token=user_jwt),   # the user's Descope token
 )
 
@@ -95,15 +87,13 @@ try:
         identifier="user@example.com",   # the user whose token you're fetching
         # scopes=["repo"],               # optional; overrides the Connection defaults
     )
-    # github.access_token is a downstream GitHub token, refreshed as needed.
-    use_github(github.access_token)
+    use_github(github.access_token)       # a downstream GitHub token, refreshed as needed
 except ConnectionAuthorizationRequired as e:
-    # The user hasn't connected GitHub yet. Send them to e.connect_url to consent,
-    # then retry the exchange.
+    # Not connected yet — send the user to e.connect_url to consent, then retry.
     redirect_user_to(e.connect_url)
 ```
 
-### Three-line tool ergonomic
+### Tool wrapper
 
 ```python
 from descope_agent_auth import with_connection
@@ -117,11 +107,10 @@ repos = list_repos(identifier="user@example.com")
 # ConnectionAuthorizationRequired propagates if the user must connect first.
 ```
 
-### Async (Python)
+### Async
 
-The core is async; `AgentAuthClient` is a synchronous facade over it. In an async
-app (FastAPI, LangGraph, …) use `AsyncAgentAuthClient` directly — same arguments and
-methods, just awaited:
+In an async app (FastAPI, LangGraph, …) use `AsyncAgentAuthClient` — same API,
+awaited. `with_connection_async` is the awaitable wrapper.
 
 ```python
 from descope_agent_auth import AsyncAgentAuthClient, AccessTokenProvider
@@ -131,11 +120,7 @@ async with AsyncAgentAuthClient(
     credential=AccessTokenProvider(access_token=user_jwt),
 ) as client:
     github = await client.connections.get_token(connection="github", identifier=user_id)
-    # await client.connections.get_tenant_token(...), wait_for_connection(...), etc.
 ```
-
-`with_connection_async` is the awaitable counterpart of `with_connection`. The sync
-`AgentAuthClient` keeps working unchanged.
 
 ---
 
@@ -152,13 +137,8 @@ import {
   ConnectionAuthorizationRequired,
 } from '@descope/agent-auth';
 
-// A *user-level* Connection token is fetched with that user's Descope access token
-// (or a management key). A client-credentials / M2M agent token cannot read user
-// tokens -- it can only fetch tenant-level Connection tokens or mint M2M-scoped
-// Resource tokens. See "Choosing how the agent signs in" below.
 const client = new AgentAuthClient({
   projectId: 'P2abc...',
-  baseUrl: 'https://api.descope.com',
   credential: new AccessTokenProvider({ accessToken: userJwt }), // the user's Descope token
 });
 
@@ -178,7 +158,7 @@ try {
 }
 ```
 
-### Three-line tool ergonomic
+### Tool wrapper
 
 ```ts
 import { withConnection } from '@descope/agent-auth';
@@ -205,35 +185,30 @@ const repos = await listRepos('user@example.com');
 | `ClientCredentialsProvider` | autonomous agent, no user in the loop |
 | `DeviceCodeProvider` | headless agent (no browser); shows a verification URL + code |
 | `CibaProvider` | the agent needs a specific user's approval out of band |
-| `AccessTokenProvider` | you already hold a user's Descope access token (user-scoped access) |
-| `JwtBearerProvider` | you hold a signed JWT from a Descope-registered trusted issuer (RFC 7523 — e.g. a cloud workload-identity token) |
+| `AccessTokenProvider` | you already hold a user's Descope access token (user-scoped) |
+| `JwtBearerProvider` | you hold a signed JWT from a trusted issuer (RFC 7523 — e.g. a cloud workload-identity token) |
 | `ManagementKeyProvider` | privileged, **not recommended** — bypasses Policies |
 
-> **What a credential can fetch differs.** How the agent signs in and what it's
-> then allowed to fetch are not the same thing. A **user-level Connection token**
-> (the common case —
-> `connections.get_token(identifier=user_id)`) can only be fetched with **that
-> user's access token** (`AccessTokenProvider` / `act_as_user_token`) or a
-> **management key**. A client-credentials / M2M token **cannot** read user-level
-> tokens; it can fetch **tenant-level** Connection tokens (when the client is
-> associated with that tenant — via `get_tenant_token` / `getTenantToken`) and mint
-> **Resource** tokens, which are scoped to the M2M client itself, not a user.
+> **Signing in ≠ what you can fetch.** A **user-level** Connection token (the common
+> case) can only be fetched with that user's access token (`AccessTokenProvider` /
+> `act_as_user_token`) or a management key. A client-credentials / M2M token **can't**
+> read user tokens — only **tenant-level** Connection tokens (`get_tenant_token`) and
+> **Resource** tokens (scoped to the M2M client itself).
 
 ### User-scoped access
 
-To act as a specific user — and to mint **user-scoped Resource tokens** — present
-that user's Descope access token (from your app's login, device-code, or CIBA).
-Either configure the client with `AccessTokenProvider`, or pass
+To act as a specific user — and to mint user-scoped Resource tokens — present that
+user's Descope access token. Configure the client with `AccessTokenProvider`, or pass
 `act_as_user_token` / `actAsUserToken` per call on a shared client:
 
 ```python
 from descope_agent_auth import AccessTokenProvider
 
-# Option A — a client bound to the user's token:
+# A — client bound to the user's token:
 client = AgentAuthClient(project_id="P2...", credential=AccessTokenProvider(access_token=user_jwt))
 gh = client.connections.get_token(connection="github", identifier=user_id)
 
-# Option B — one shared client, user token per call:
+# B — one shared client, user token per call:
 gh = client.connections.get_token(connection="github", identifier=user_id, act_as_user_token=user_jwt)
 res = client.resources.get_token(resource="urn:my-api", act_as_user_token=user_jwt)
 ```
@@ -250,12 +225,10 @@ await client.connections.getToken({ connection: 'github', identifier: userId, ac
 
 ### Management key (trusted backend, no user token)
 
-A common backend shape: an agent runs server-side with **no user token on hand** and
-needs to read a specific user's already-connected token. A management key fetches
-**any** user's Connection token by `identifier` (and `tenant_id` for a tenant-bound
-one). It **bypasses Policies**, so treat this path as privileged and guard who can
-invoke it — it isn't the recommended default, but it's operationally simple for a
-trusted backend.
+For an agent that runs server-side with no user token but needs a specific user's
+already-connected token. A management key fetches **any** user's token by `identifier`
+(and `tenant_id` for a tenant-bound one). It **bypasses Policies** — guard who can
+invoke it.
 
 ```python
 from descope_agent_auth import AgentAuthClient, ManagementKeyProvider
@@ -264,15 +237,9 @@ client = AgentAuthClient(
     project_id="P2...",
     credential=ManagementKeyProvider(management_key="K...", allow_management_key=True),
 )
-
-# Any user's token by id:
-gh = client.connections.get_token(connection="github", identifier=user_id)
-
-# A user's tenant-bound token (multi-tenant Connections):
-gh = client.connections.get_token(connection="github", identifier=user_id, tenant_id="acme")
-
-# Org-shared, no user:
-slack = client.connections.get_tenant_token(connection="slack", tenant_id="acme")
+gh = client.connections.get_token(connection="github", identifier=user_id)                     # any user
+gh = client.connections.get_token(connection="github", identifier=user_id, tenant_id="acme")   # + tenant
+slack = client.connections.get_tenant_token(connection="slack", tenant_id="acme")              # org-shared
 ```
 
 ```ts
@@ -283,14 +250,12 @@ const client = new AgentAuthClient({
   credential: new ManagementKeyProvider({ managementKey: 'K...', allowManagementKey: true }),
 });
 
-await client.connections.getToken({ connection: 'github', identifier: userId });
 await client.connections.getToken({ connection: 'github', identifier: userId, tenantId: 'acme' });
 await client.connections.getTenantToken({ connection: 'slack', tenantId: 'acme' });
 ```
 
 > A management key **reads** tokens; it can't perform a user's **initial** OAuth
-> consent. The user must connect first through their own session (front-end
-> `/connect`, the Outbound Apps widget, or a flow action) — see
+> consent. The user must connect first through their own session — see
 > [How a user connects when the agent is a backend process](#how-a-user-connects-when-the-agent-is-a-backend-process).
 
 ## Scopes
@@ -298,18 +263,14 @@ await client.connections.getTenantToken({ connection: 'slack', tenantId: 'acme' 
 - **Omit** `scopes` → the Connection's configured default scopes are used.
 - **Pass** `scopes` → they fully override the defaults (not clamped to a subset).
 
-The real guardrail on what an agent can obtain is **Policies** plus
-downstream provider consent — not the default-scope list. The SDK never infers
-scopes from agent intent; a request either omits them or pins an explicit set.
+The real guardrail is **Policies** plus downstream provider consent, not the
+default-scope list.
 
 ### Scopes and the connect URL
 
-You define a tool's scopes in one place — `with_connection(scopes=[...])` /
-`get_token(scopes=[...])` — and the SDK uses that same set for **both** the token
-fetch **and** the connect URL it returns when the user hasn't connected yet. So the
-consent screen requests exactly what that tool needs; a different tool with
-different scopes produces a connect URL for those scopes. Omit `scopes` and the
-connect URL uses the Connection's **default scopes** configured in Descope.
+The scopes you pass to `with_connection` / `get_token` are used for **both** the token
+fetch and the connect URL, so the consent screen requests exactly what the tool needs.
+Omit them and the connect URL uses the Connection's default scopes.
 
 ```python
 @with_connection(client, connection="github", scopes=["repo"])
@@ -317,19 +278,14 @@ def list_repos(token, identifier): ...
 # If the user must connect first, e.connect_url already requests ["repo"].
 ```
 
-Because the connect URL requests only the calling tool's scopes, a user may be
-prompted to connect more than once as different tools need new scopes (incremental
-consent). To get a single up-front consent, set the Connection's **default scopes**
-to the superset (and call tools without `scopes`), or request the superset.
-
-Pass `redirect_url` / `redirectUrl` to control where the user lands after consenting.
-(`connect_options` / `connectOptions` is an advanced escape hatch for extra
-provider-specific OAuth params like `prompt` — most apps never need it.)
+Because each tool's connect URL requests only its scopes, a user may be prompted more
+than once as tools need new scopes (incremental consent). For a single up-front
+consent, set the Connection's default scopes to the superset. Pass `redirect_url` /
+`redirectUrl` to control where the user lands; `connect_options` / `connectOptions` is
+an advanced escape hatch (provider-specific OAuth params like `prompt`) most apps never
+need.
 
 ## Token levels: user, user + tenant, and tenant
-
-A Connection's tokens live at one of three levels. Which one you fetch — and who is
-allowed to fetch it — differ:
 
 | Level | Fetch with | Who can fetch |
 | --- | --- | --- |
@@ -337,24 +293,19 @@ allowed to fetch it — differ:
 | **User + tenant** | `get_token(identifier=user_id, tenant_id=…)` | the user's access token, or a management key |
 | **Tenant** (org-shared, no user) | `get_tenant_token(tenant_id=…)` | an M2M client associated with the tenant, or a management key |
 
-**User vs. user + tenant.** One Connection can hold *several* tokens for the same
-user — one per tenant — and they are **not interchangeable**. Omit `tenant_id` to get
-the user's tenant-less token; pass it to get the tenant-bound one. Asking for a
-tenant-bound token *without* its `tenant_id` reads as "not connected" and raises
+**User vs. user + tenant.** One Connection can hold several tokens for the same user —
+one per tenant — and they're **not interchangeable**. Omit `tenant_id` for the
+tenant-less token; pass it for the tenant-bound one. Asking for a tenant-bound token
+*without* its `tenant_id` reads as "not connected" and raises
 `ConnectionAuthorizationRequired`.
 
-**Tenant-level** is the one Connection fetch an **autonomous agent** (client
-credentials, no user token) can perform — the token belongs to the tenant, not a
-user. It's admin/IaC-provisioned, so there's no connect-URL fallback on a miss.
+**Tenant-level** is the only Connection fetch an autonomous agent (client credentials,
+no user token) can do — the token belongs to the tenant, not a user. It's provisioned
+via the Management API / IaC, so there's no connect-URL fallback on a miss.
 
 ```python
-# User-level (the common case) — needs the user's token or a management key:
 gh = client.connections.get_token(connection="github", identifier=user_id)
-
-# Same user, a specific tenant's token for the same Connection:
 gh_acme = client.connections.get_token(connection="github", identifier=user_id, tenant_id="acme")
-
-# Tenant-level (org-shared, no user) — an M2M agent associated with the tenant can fetch it:
 slack = client.connections.get_tenant_token(connection="slack", tenant_id="acme")
 ```
 
@@ -366,12 +317,9 @@ await client.connections.getTenantToken({ connection: 'slack', tenantId: 'acme' 
 
 ## How a user connects when the agent is a backend process
 
-The front-end path is simple: the user is present in a browser with a live Descope
-session, your app calls `get_token`, catches `ConnectionAuthorizationRequired`, and
-redirects them to `connect_url`. They consent, the token lands in the vault under
-their identity, the retry succeeds.
-
-End to end, authorize (once) then fetch (every call) looks like this:
+Front-end is simple: the user is in a browser with a live Descope session, you catch
+`ConnectionAuthorizationRequired` and redirect to `connect_url`, they consent, the
+retry succeeds.
 
 ```mermaid
 sequenceDiagram
@@ -397,37 +345,23 @@ sequenceDiagram
     Agent->>Provider: call the API with the token
 ```
 
-A **backend job has neither a browser nor (usually) the user's live session token**,
-so that path doesn't translate directly. A connect URL is always tied to a specific
-user, so a **bare management key plus an identifier can't authorize one** — you need
-the user present, or a token you can act as on their behalf. And more fundamentally:
+A backend job has no browser and usually no live user session, so that path doesn't
+translate directly. The core constraint:
 
-> **A first-time third-party consent (GitHub, Slack, …) requires the user in a
-> browser at the connect URL — there's no token-only shortcut.** This *is* the
-> initial token-storage step: the consent is the thing being created, so there's no
-> stored provider token to fall back on. **CIBA does not solve it**: CIBA
-> authenticates the *user to Descope* and yields a Descope token, which is not a
-> GitHub token — the user still has to consent to GitHub interactively.
+> **First-time third-party consent (GitHub, Slack, …) needs the user in a browser at
+> the connect URL — there's no token-only shortcut.** The consent *is* the thing being
+> created. **CIBA doesn't solve it**: CIBA yields a Descope *user* token, not a GitHub
+> token; the user still consents to the provider interactively.
 
-So a backend-initiated connection is about getting the user to the connect URL (or
-folding it into login). Three practical options:
+So the job is getting the user to the connect URL. Three options:
 
-1. **Defer to the user's next interactive moment (the common path).** When
-   `get_token` raises `ConnectionAuthorizationRequired`, flag that this identity needs
-   to connect and surface it the next time the user is in your front-end, where their
-   **live session** builds the connect URL. Two ready-made ways to present it:
-   - **Descope's hosted Outbound Apps widget** — a drop-in UI where users connect and
-     manage their service connections (least code).
-   - **Your own front-end** — a `/connect` route that redirects the user to the
-     connect URL, e.g. on catching `ConnectionAuthorizationRequired`.
-
-2. **Mint the URL from the backend and relay it.** The backend generates a
-   user-bound connect URL, hands it to the user (print, email, in-app, redirect),
-   and polls until they finish. It needs a **user token** — a stored refresh token
-   from a prior login, or one obtained via **CIBA / device-code** — passed as
-   `act_as_user_token`. (CIBA's role is exactly this: it gets you the *user token*;
-   the user still consents to the provider in a browser.) A bare **management key
-   can't** do this — you need a user token.
+1. **Defer to the user's next visit (common).** On `ConnectionAuthorizationRequired`,
+   flag the identity and surface the connect step next time the user is in your
+   front-end — via Descope's **Outbound Apps widget** or a `/connect` route.
+2. **Mint the URL from the backend and relay it.** Generate a user-bound connect URL,
+   send it (email / in-app / redirect), and poll. Needs a **user token**
+   (`act_as_user_token`) — a stored refresh token, or one from CIBA / device-code. A
+   bare management key can't.
 
    ```python
    url = client.connections.get_connect_url(
@@ -439,66 +373,53 @@ folding it into login). Three practical options:
    )                                          # polls until the user consents
    ```
 
-3. **Connect *inside* the login flow (unique to Descope).** Because Descope login is
-   flow-based, you can add a **connection step as a flow action** — so when the user
-   authenticates (including via a CIBA flow), they consent to GitHub / HubSpot in that
-   same flow, with no separate connect URL afterward. Not the common path, but an
-   option a token-vault-only design can't offer.
+3. **Connect inside the login flow (Descope-specific).** Add a connection step as a
+   flow action, so the user consents during authentication (including a CIBA flow) —
+   no separate connect URL afterward.
 
-In every case the provider consent itself is interactive (the user opens the URL or
-completes the flow); the backend's job is to get the right URL in front of them and
-then detect completion by polling with `wait_for_connection`.
+In all cases consent is interactive; the backend's job is to get the URL in front of
+the user and poll `wait_for_connection`.
 
 ### Waiting for the connection to complete
 
-Once you've sent the user to the connect URL, `wait_for_connection` /
-`waitForConnection` polls until they finish consenting (or a timeout), so you don't
-hand-roll the retry loop. It uses whatever credential the client is configured with —
-the same as `get_token` — so on a user-scoped client you pass nothing extra; on a
-shared client, add `act_as_user_token` to act as that user.
+`wait_for_connection` / `waitForConnection` polls until the user consents (or times
+out), using the client's configured credential (add `act_as_user_token` on a shared
+client).
 
 ```python
 token = client.connections.wait_for_connection(
-    connection="github",
-    identifier=user_id,
-    poll_interval=2.0,
-    timeout=300.0,
+    connection="github", identifier=user_id, poll_interval=2.0, timeout=300.0,
 )
-# Returns once the user consents and the vault holds the token; AgentAuthError on timeout.
+# Returns once the vault holds the token; AgentAuthError on timeout.
 ```
 
 ```ts
 const token = await client.connections.waitForConnection({
-  connection: 'github',
-  identifier: userId,
-  pollIntervalSeconds: 2,
-  timeoutSeconds: 300,
+  connection: 'github', identifier: userId, pollIntervalSeconds: 2, timeoutSeconds: 300,
 });
 ```
 
 ## Common deployment patterns
 
-Which calls you use depends on **whose account the agent acts against.**
+Which calls you use depends on **whose account the agent acts against**.
 
-### Per-user connections (each user connects their own account)
+### Per-user (each user connects their own account)
 
-The default. Each user authorizes their own GitHub / Gmail / … once (interactive —
-see [above](#how-a-user-connects-when-the-agent-is-a-backend-process)); thereafter
-the agent fetches that user's token by `identifier`:
+The default. Each user authorizes once (interactive — see
+[above](#how-a-user-connects-when-the-agent-is-a-backend-process)); then fetch by
+`identifier`:
 
 ```python
 gh = client.connections.get_token(connection="github", identifier=user_id)
 ```
 
-### Org-managed (shared) credentials
+### Org-shared credentials
 
-One connection that **every user calls against** — a single org Gmail, Salesforce, or
-GitHub — without each user authenticating separately. Store it as a **tenant-level**
-connection and fetch it with `get_tenant_token`. An autonomous agent (client
-credentials associated with the tenant) or a management key can read it:
+One connection every user calls against (a single org Gmail, Salesforce, or GitHub).
+Store it **tenant-level** and fetch with `get_tenant_token`; an autonomous agent
+(tenant-associated) or a management key can read it:
 
 ```python
-# client credentials (tenant-associated) — or ManagementKeyProvider
 client = AgentAuthClient(
     project_id="P2...",
     credential=ClientCredentialsProvider(client_id="...", client_secret="..."),
@@ -508,8 +429,8 @@ gmail = client.connections.get_tenant_token(connection="gmail", tenant_id="acme"
 
 ### Background agent acting for many users
 
-A single service account that runs work for many `userID`s. Use a **management key**
-(it reads any user's token by `identifier`) and fetch per user:
+A service account running work for many users. Use a **management key** and fetch per
+user:
 
 ```python
 client = AgentAuthClient(
@@ -518,28 +439,24 @@ client = AgentAuthClient(
 )
 for user_id in batch:
     gh = client.connections.get_token(connection="github", identifier=user_id)
-    ...
 ```
 
-The catch: a management key **reads** tokens but can't mint a user's *initial* connect
-URL (that needs the user's own session). So host a connect UI — Descope's **Outbound
-Apps widget** or your own `/connect` page — where each user links their account once;
-after that the background agent just fetches.
+A management key can't mint a user's *initial* connect URL — host a connect UI
+(Outbound Apps widget or `/connect`) so each user links once; after that the agent just
+fetches.
 
-### Pre-authenticating users (custom UI / pre-flight)
+### Pre-authenticating users
 
-To connect users **outside** an agent run — onboarding, a settings page, or a
-pre-flight check before a task — generate the URL with `get_connect_url`, send the
-user through, and wait:
+Connect users outside an agent run (onboarding, a settings page, a pre-flight check):
+generate the URL, send the user, wait.
 
 ```python
 url = client.connections.get_connect_url(connection="gmail", identifier=user_id)
-send_to_user(url)                       # redirect, button, or email
+send_to_user(url)
 client.connections.wait_for_connection(connection="gmail", identifier=user_id)
 ```
 
-To verify several required connections up front, loop and collect the ones still
-needing a link:
+To check several connections up front, loop and collect those still needing a link:
 
 ```python
 needs_connect = []
@@ -553,9 +470,9 @@ for conn in ["gmail", "github"]:
 
 ## Human-in-the-loop approval (CIBA gate)
 
-For a sensitive exchange, require a fresh user sign-off on a trusted device before
-the token is handed back. Configure an `approval` provider on the client, then pass
-`require_approval` / `requireApproval` to the exchange.
+For a sensitive exchange, require a fresh user sign-off on a trusted device before the
+token is returned. Configure an `approval` provider on the client, then pass
+`require_approval` / `requireApproval` to the call.
 
 ```python
 from descope_agent_auth import AgentAuthClient, CibaProvider, ApprovalRequest
@@ -601,48 +518,42 @@ const token = await client.connections.getToken({
 | `ConnectionAuthorizationRequired` | user hasn't connected the account; carries `connect_url` / `connectUrl` |
 | `PolicyDenied` | agent token lacks Policy permission |
 | `ApprovalDenied` / `ApprovalTimeout` | the CIBA gate was rejected or timed out |
-| `CredentialAcquisitionFailed` | the agent couldn't sign in to Descope (bad client creds, device-flow timeout, ...) |
+| `CredentialAcquisitionFailed` | the agent couldn't sign in to Descope (bad creds, device-flow timeout, …) |
 | `TokenExchangeFailed` | other token-fetch transport/validation failure |
 
 ## Token storage & refresh
 
 The `store` holds **both** kinds of token: the agent's own Descope credential
-(including its **refresh token**, kept beyond the access token's expiry) and the
-downstream provider tokens. Everything is refreshed lazily on access — you ask for a
-token and get a currently-valid one.
+(including its refresh token) and the downstream provider tokens. Everything refreshes
+lazily on access.
 
-This matters most for **device code / CIBA**: their tokens are persisted with the
-refresh token, so a restarted or multi-process agent **refreshes instead of
-re-running the interactive flow** (no second device prompt or CIBA push). `ClientCredentials` is simply re-acquired (no user
-interaction); `ManagementKey` and bring-your-own `AccessTokenProvider` tokens are
-not persisted.
+This matters most for **device code / CIBA**: their tokens persist with the refresh
+token, so a restarted or multi-process agent **refreshes instead of re-running the
+interactive flow**. `ClientCredentials` simply re-acquires; `ManagementKey` and
+bring-your-own `AccessTokenProvider` tokens aren't persisted.
 
-By default everything is cached in-process (`MemoryTokenStore`) — fine for a single
-long-running process, but lost on restart. For multi-process, serverless, or
-restart-safe deployments, implement the `TokenStore` interface
-(`get`/`set`/`delete`/`list`) over Redis, a database, or a secrets manager and pass
-it as `store`.
+The default `MemoryTokenStore` caches in-process — fine for one long-running process,
+lost on restart. For multi-process, serverless, or restart-safe deployments, implement
+the `TokenStore` interface (`get`/`set`/`delete`/`list`) over Redis, a database, or a
+secrets manager and pass it as `store`.
 
-> **Security:** with a persistent store, the credentials there now include
-> **refresh tokens**. Treat the store as a secret store (encryption at rest, access
-> controls). The SDK never logs token values.
+> **Security:** a persistent store holds **refresh tokens** — treat it as a secret
+> store (encryption at rest, access controls). The SDK never logs token values.
 
 ### Caching vs. policy enforcement
 
-Descope enforces **Policies at retrieval time** — i.e. when the SDK actually calls
-the vault. A cached Connection/Resource token therefore **skips the policy check**
-until it expires: if a Policy is tightened or access revoked, a cached token keeps
-working until its TTL lapses.
+Descope enforces **Policies at retrieval time** — when the SDK calls the vault. A
+cached token therefore **skips the policy check** until it expires: if a Policy is
+tightened or access revoked, a cached token keeps working until its TTL lapses.
 
-If you need Policies (or revocation) re-evaluated on **every** call, turn off token
-caching with `cache_tokens=False` / `cacheTokens: false` so each `get_token` hits
-Descope:
+To re-evaluate Policies (and revocation) on **every** call, turn off caching with
+`cache_tokens=False` / `cacheTokens: false`:
 
 ```python
 client = AgentAuthClient(
     project_id="P2...",
     credential=ClientCredentialsProvider(client_id="...", client_secret="..."),
-    cache_tokens=False,   # every fetch re-enforces Policies (no token caching)
+    cache_tokens=False,   # every fetch re-enforces Policies
 )
 ```
 
@@ -650,11 +561,10 @@ client = AgentAuthClient(
 const client = new AgentAuthClient({
   projectId: 'P2...',
   credential: new ClientCredentialsProvider({ clientId: '...', clientSecret: '...' }),
-  cacheTokens: false, // every fetch re-enforces Policies (no token caching)
+  cacheTokens: false, // every fetch re-enforces Policies
 });
 ```
 
-This only stops caching the fetched Connection/Resource tokens — your agent's own
-login isn't re-run on each call (device-code / CIBA sessions still persist and
-refresh). For a one-off fresh fetch instead, pass `force_refresh=True` /
-`forceRefresh: true` on the call.
+This only stops caching the fetched tokens — the agent's own login still persists and
+refreshes. For a one-off fresh fetch, pass `force_refresh=True` / `forceRefresh: true`
+on the call.
