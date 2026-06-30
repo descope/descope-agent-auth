@@ -1,13 +1,12 @@
 # Descope Agent Auth SDK
 
-> Client-side SDK (Python `descope-agent-auth` and TypeScript `@descope/agent-auth`)
-> for custom-built AI agents. It does two things: signs your agent in to Descope, then
-> fetches the tokens it needs — Connection tokens (third-party/internal APIs via the
-> Descope vault) or Resource tokens (your own Descope-OAuth-protected APIs). Use those
-> tokens in the tools you implement, or feed them to a remote MCP server connection via
-> the MCP auth adapter. It is the OAuth *client* side; it does not build or protect MCP
-> servers, and the MCP adapter needs a client you can hand an auth provider (not a
-> managed runtime like Bedrock AgentCore).
+> Client-side SDK (Python `descope-agent-auth`, TypeScript `@descope/agent-auth`) for
+> custom AI agents. It signs your agent in to Descope and fetches the tokens it needs —
+> Connection tokens (third-party/internal APIs) or Resource tokens (your own
+> Descope-protected APIs) — for the tools you implement or, via the MCP auth adapter, a
+> remote MCP server connection. It's the OAuth *client* side: it doesn't build or
+> protect MCP servers, and the adapter needs an MCP client you can hand an auth provider
+> (not a managed runtime like Bedrock AgentCore).
 
 If you are an AI agent integrating this SDK, read AGENTS.md first — it is a decision
 procedure plus complete, copy-pasteable recipes. The other docs are reference.
@@ -32,7 +31,7 @@ user's access token or a management key. See AGENTS.md → Rules.
 
 ## Packages
 
-- [python/README.md](python/README.md): Python install + quickstart (async-first core, sync facade).
+- [python/README.md](python/README.md): Python install + quickstart.
 - [typescript/README.md](typescript/README.md): TypeScript install + quickstart (Node, Cloudflare Workers, Deno, Bun, browsers).
 
 ## Examples
