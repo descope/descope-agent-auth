@@ -118,6 +118,56 @@ A Connection token has to exist before the agent can fetch it. Two ways:
 
 Resource tokens need no provisioning — they're minted on demand via token-exchange.
 
+## Letting an agent act for a user
+
+Two ways to have an agent act on a user's behalf. Both are valid; they differ in how
+the user consents.
+
+### Recommended — model consent with a Resource
+
+Define a Descope **Resource** whose scopes are **human-readable** ("Read your
+repositories", "Create HubSpot contacts") and map to the underlying **Connection**
+scopes (GitHub `repo`, HubSpot `crm.objects.contacts.write`, …). The user consents to
+the *agent* at this layer and it receives an **agentic identity token**; that token is
+then exchanged for the downstream **Connection token**, with the consented Resource
+scopes mapped to the provider's scopes.
+
+The Resource sits between the agent and the downstream service, so the user gives
+**informed consent** — approving what the agent may do in your terms, not raw provider
+scopes:
+
+```mermaid
+flowchart LR
+    User(["User"]) -.->|"① consents to the agent"| Resource
+    User -.->|"② connects the account (OAuth)"| Conn
+    Agent(["Your agent"]) -->|"agentic identity token"| Resource["Descope Resource<br/>human-readable scopes →<br/>Connection scopes"]
+    Resource -->|"token exchange"| Conn["Connection token"]
+    Conn -->|"call on the user's behalf"| Svc["Downstream service<br/>GitHub · HubSpot · …"]
+```
+
+The trade-off: **two consents** per user —
+
+1. **Agent consent** — the user authorizes the agent (the Resource / agentic identity
+   token).
+2. **Connect** — the provider's own OAuth consent, so the vault holds a downstream
+   token the agent can act with. Without it there's no Connection token to exchange for.
+
+### Simpler — reuse an existing user login
+
+If you already authenticate your users — say a support app with a **user JWT from the
+browser** — feed that JWT into your backend agent and exchange it for a Connection
+token. One consent (the connect); per-user access is governed by the **Connection's
+policy**.
+
+```python
+# The user JWT you already hold from your app's login:
+client = AgentAuthClient(project_id="P2...", credential=AccessTokenProvider(access_token=user_jwt))
+gh = client.connections.get_token(connection="github", identifier=user_id)
+```
+
+See [Autonomous vs. acting for a user](#autonomous-vs-acting-for-a-user) for the full
+mechanics of both.
+
 ## How your agent signs in
 
 Pick how the agent authenticates to Descope, configured once at init:
