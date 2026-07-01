@@ -72,11 +72,9 @@ consent, not the scope list.
 
 All sign-in providers, Connection and Resource token exchange, a pluggable token store
 (persists and refreshes across restarts), a CIBA approval gate (`requireApproval`), the
-`withConnection` tool wrapper, an MCP auth adapter (`descopeMcpConnectionAuthProvider` /
-`descopeMcpResourceAuthProvider`), and the fetch/execute `mode` seam. See the
+`withConnection` tool wrapper, and an MCP auth adapter
+(`descopeMcpConnectionAuthProvider` / `descopeMcpResourceAuthProvider`). See the
 [quickstart](../docs/quickstart.md) and [framework cookbook](../docs/FRAMEWORKS.md).
-
-`mode: 'execute'` is reserved for Descope's hosted execution endpoint.
 
 ## Scripts
 

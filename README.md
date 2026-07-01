@@ -318,9 +318,6 @@ Both languages, identical surfaces:
   `connection_auth` / `resource_auth` (Python). See the
   [framework cookbook](docs/FRAMEWORKS.md#connecting-to-a-remote-mcp-server).
 
-`mode: "execute"` (routing calls through Descope so the token never enters the agent
-process) is reserved; it turns on when Descope's hosted execution endpoint ships.
-
 [Quickstart](docs/quickstart.md) · [SDK reference](docs/api-reference.md) ·
 [examples](examples/) · [framework cookbook](docs/FRAMEWORKS.md).
 

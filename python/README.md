@@ -63,11 +63,9 @@ consent, not the scope list.
 
 All sign-in providers, Connection and Resource token exchange, a pluggable token store
 (persists and refreshes across restarts), a CIBA approval gate (`require_approval`), the
-`with_connection` tool wrapper, an MCP auth adapter
-(`descope_agent_auth.integrations.mcp`), and the fetch/execute `mode` seam. See the
+`with_connection` tool wrapper, and an MCP auth adapter
+(`descope_agent_auth.integrations.mcp`). See the
 [quickstart](../docs/quickstart.md) and [framework cookbook](../docs/FRAMEWORKS.md).
-
-`mode="execute"` is reserved for Descope's hosted execution endpoint.
 
 > A few endpoint paths (device authorization, CIBA backchannel, resource
 > token-exchange parameters) live in `_endpoints.py`, with comments to confirm against
