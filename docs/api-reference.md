@@ -18,7 +18,6 @@ AgentAuthClient(
     *, project_id, credential,
     base_url="https://api.descope.com",
     store=None,            # TokenStore; defaults to MemoryTokenStore
-    mode="fetch",          # "fetch" | "execute" (execute is reserved)
     approval=None,         # CibaProvider, to gate calls with require_approval
     timeout=30.0, retry=None, logger=None,
     cache_tokens=True,     # False -> every fetch re-enforces Policies
@@ -39,7 +38,6 @@ Tokens stored in the Descope Connections vault (provider OAuth tokens or API key
 | `get_tenant_token(*, connection, tenant_id, scopes=None, with_refresh_token=False, force_refresh=False, require_approval=None, act_as_user_token=None)` | `VaultToken` | Fetch a **tenant-level** (org-shared) token. |
 | `get_connect_url(*, connection, identifier, scopes=None, tenant_id=None, redirect_url=None, connect_options=None, act_as_user_token=None)` | `str \| None` | Generate the URL to send a user through to authorize the connection (the proactive form of catching `ConnectionAuthorizationRequired`). |
 | `wait_for_connection(*, connection, identifier, scopes=None, tenant_id=None, act_as_user_token=None, poll_interval=2.0, timeout=300.0)` | `VaultToken` | Poll `get_token` until the user finishes connecting. |
-| `execute(*, request, connection, identifier, ...)` | result | Execute-mode counterpart of `get_token` (reserved; `mode="execute"`). |
 
 `scopes` overrides the Connection defaults; `act_as_user_token` runs one call as a
 specific user; `tenant_id` selects a user's per-tenant token. TS: `getToken`,
@@ -101,4 +99,4 @@ All extend `AgentAuthError`; match with `isinstance` / `instanceof`.
 - `Credential` — the agent's Descope sign-in credential (`token`, `kind`, `expires_at`, `refresh_token`).
 - `ApprovalRequest` — `login_hint`, `binding_message`, `scopes`, `timeout_seconds`.
 - `PendingAuthorization` — device-code / CIBA "user action required" details.
-- `Mode` — `"fetch"` | `"execute"`. `CredentialKind` — `"agent_token"` | `"management_key"`.
+- `CredentialKind` — `"agent_token"` | `"management_key"`.

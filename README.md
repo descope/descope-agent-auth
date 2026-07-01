@@ -1,14 +1,12 @@
 # Descope Agent Auth SDK
 
-A client-side SDK (Python and TypeScript) for wiring a custom agent to Descope. It
-does two things:
+A client-side SDK (Python and TypeScript) that does two things for a custom agent:
 
 1. **Signs your agent in** to Descope.
-2. **Gets the tokens** it needs — **Connection tokens** or **Resource tokens** from the Descope vault.
+2. **Gets the tokens** it needs — **Connection** or **Resource** tokens from the Descope vault.
 
-Everything else — tool code, API wrappers, a connector catalog — is out of scope by
-design. This is the auth layer your agent's tool calls sit on top of, not a tool
-catalog.
+It's the auth layer under your agent's tool calls, not a tool catalog. Tool code, API
+wrappers, and connector catalogs are out of scope.
 
 ## What it looks like
 
@@ -25,104 +23,71 @@ except ConnectionAuthorizationRequired as e:
     redirect_user_to(e.connect_url)       # the user hasn't linked GitHub yet
 ```
 
-Runnable samples (Python + TypeScript) in **[`examples/`](examples/)**. Full
-walkthrough: **[quickstart](docs/quickstart.md)**.
+Runnable [examples](examples/) (Python + TypeScript) and a full [quickstart](docs/quickstart.md).
 
 ## Who this is for
 
-- ✅ **Homegrown / custom-built agents** — agents you write yourself, in any
-  framework (LangChain, LangGraph, Google ADK, OpenAI, Vercel AI, Mastra,
-  LlamaIndex, Cloudflare Agents, AG2/AutoGen, CrewAI, TanStack AI, the Anthropic
-  SDK, and more). It manages the tokens the **tools you implement** need to call
-  downstream APIs — putting your agent on the **OAuth client** side.
-- ✅ **Agents that connect to remote MCP servers** — the
-  [MCP auth adapter](docs/FRAMEWORKS.md#connecting-to-a-remote-mcp-server) plugs
-  Descope into your MCP client's auth seam, so Descope supplies and refreshes the
-  token for that server connection (GitHub's, Linear's, your own) instead of the
-  client running its own OAuth. Works with any MCP client you can hand an auth
-  provider (the official MCP SDK, the Vercel AI SDK, Mastra, …) — **but not fully
-  managed runtimes that own the connection themselves** (AWS Bedrock AgentCore,
-  Azure AI Foundry, hosted assistant connectors), where you register credentials
-  with the platform's own identity layer instead.
-- ❌ **Not** for building MCP *servers*. Protecting an MCP server (DCR, metadata
-  endpoints, token validation, `tools/list` filtering) is a different job — the
-  *resource-server* side. This SDK is the *client* side: it acquires and uses tokens.
-
-> **Scope in one line:** this SDK manages the **tokens your agent needs** — both for
-> the tools you implement and for the remote MCP servers it connects to. It doesn't
-> build or protect MCP servers.
+- ✅ **Custom agents you write yourself**, in any framework (LangChain, LangGraph,
+  Google ADK, OpenAI, Vercel AI, Mastra, LlamaIndex, Cloudflare Agents, CrewAI, the
+  Anthropic SDK, …). It manages the tokens the **tools you implement** need.
+- ✅ **Agents connecting to remote MCP servers** — the
+  [MCP auth adapter](docs/FRAMEWORKS.md#connecting-to-a-remote-mcp-server) supplies and
+  refreshes the token for that connection through your MCP client's auth seam. Works
+  with any client you can hand an auth provider (the MCP SDK, Vercel AI SDK, Mastra) —
+  **not** managed runtimes that own the connection (AWS Bedrock AgentCore, Azure AI
+  Foundry), where you register credentials with the platform.
+- ❌ **Not for building MCP servers.** Protecting a server (DCR, token validation,
+  `tools/list` filtering) is the *resource-server* side; this SDK is the *client* side.
 
 <details>
 <summary><strong>Building an MCP <em>server</em>?</strong></summary>
 
 Use Descope's MCP server SDKs — [`@descope/mcp-express`](https://docs.descope.com/mcp/mcp-express-sdk)
-(Node/Express) or the [`descope-mcp` Python SDK](https://docs.descope.com/mcp/python-sdk)
-([overview](https://docs.descope.com/mcp)). They're complementary: when one of your
-server's tools needs a downstream API token, its handler can use **this** SDK —
-resolve the user from the validated request, then call `connections.get_token` /
-`resources.get_token`.
+or the [`descope-mcp` Python SDK](https://docs.descope.com/mcp/python-sdk). They're
+complementary: inside a server's tool handler, use **this** SDK to fetch the downstream
+token the tool needs.
 
 </details>
 
-**One core SDK, not one per framework.** Every framework defines a tool as a
-function; the `with_connection` / `withConnection` wrapper drops a fresh, scoped
-token into that function — so there's nothing to install per framework. It runs on
-Node, Cloudflare Workers, Deno, Bun, and browsers. See the
-**[framework cookbook](docs/FRAMEWORKS.md)** for a copy-paste snippet per framework.
+**One SDK, not one per framework.** Every framework defines a tool as a function; the
+`with_connection` / `withConnection` wrapper drops a fresh, scoped token into it. Runs
+on Node, Cloudflare Workers, Deno, Bun, and browsers. See the
+[framework cookbook](docs/FRAMEWORKS.md).
 
 ## What kind of token does your agent need?
 
-To call any service, your agent ultimately needs one of **two kinds of token**.
-The SDK fetches both, through two entry points.
+Two kinds, two entry points.
 
-### 1. A Connection token — `client.connections.get_token(...)`
+### 1. Connection token — `client.connections.get_token(...)`
 
-A **Connection** is a credential stored in the Descope **Connections vault**. It is
-either:
+A credential in the Descope **Connections vault** — either:
 
-- an **API key** — a stored secret for a service. The service can be a
-  **third-party API _or_ one of your own internal APIs** — handy when you'd rather
-  not put an existing API behind Descope OAuth scopes just to let an agent call it.
-  Held at either:
-  - the **tenant level** (one key for your whole organization), or
-  - the **user + tenant level** (a per-user key the agent uses on that user's
-    behalf); or
-- a **third-party OAuth token** — for an OAuth provider set up from Descope's
-  **Connection template library** or a custom Connection (GitHub, Slack, Google,
-  …), scoped to the agent's identity.
+- an **API key** for a third-party or internal API, held at the **tenant** level
+  (org-wide) or **user + tenant** level (per-user); or
+- a **third-party OAuth token** (GitHub, Slack, Google, …), scoped to the agent.
 
-You pass the `identifier` (the user/principal the agent acts for) and optionally a
-`tenant_id`; the vault returns the right stored token, refreshed as needed. If the
-user hasn't connected the account yet, you get `ConnectionAuthorizationRequired`
-carrying a connect URL.
+Pass the `identifier` (the user the agent acts for) and an optional `tenant_id`; the
+vault returns the right token, refreshed. If the user hasn't connected yet, you get
+`ConnectionAuthorizationRequired` carrying a connect URL.
 
-### 2. A Resource token — `client.resources.get_token(...)`
+### 2. Resource token — `client.resources.get_token(...)`
 
-A **Resource** is an API *you* build and protect with **Descope as the OAuth
-authorization server**. The SDK mints a Descope-issued OAuth token scoped to that
-Resource via the **token-exchange grant**. What you sign in with sets the scope:
+An OAuth token for an API *you* build and protect with **Descope as the authorization
+server**, minted on demand via token-exchange (no prior authorization step). What you
+sign in with sets the scope:
 
-- a **user's** Descope token (`act_as_user_token` / `AccessTokenProvider`) → a token
-  **scoped to that user**;
-- the agent's **client-credentials** token → a token **scoped to the client (M2M)
-  identity**, not a user.
+- a **user's** Descope token → scoped to that user;
+- the agent's **client-credentials** token → scoped to the agent (M2M).
 
-Unlike Connection tokens, a Resource token needs **no prior authorization step** —
-it's minted on demand. `resource` is the RFC 8707 resource indicator; pass `scopes`
-and, when the provider needs it, `audience`.
+`resource` is the RFC 8707 indicator; pass `scopes` and, when needed, `audience`.
 
-| Your agent needs to… | Method | Token you get | Source |
-| --- | --- | --- | --- |
-| call a **third-party or internal** API with a stored key | `connections.get_token` | API key | Connections vault (tenant, or user + tenant) |
-| call a third-party OAuth provider | `connections.get_token` | provider OAuth token | Connections vault (template or custom) |
-| call your own API with **Descope-issued OAuth scopes** | `resources.get_token` | Resource token (Descope OAuth) | token-exchange grant |
+| Your agent needs to… | Method | Token |
+| --- | --- | --- |
+| call a third-party or internal API with a stored key | `connections.get_token` | API key |
+| call a third-party OAuth provider | `connections.get_token` | provider OAuth token |
+| call your own API with Descope OAuth scopes | `resources.get_token` | Resource token |
 
-> Two ways to reach **your own** APIs: use a **Resource token** when you want
-> Descope to mint OAuth tokens with scopes for it, or a Connection **API key** when
-> you'd rather keep an existing internal API as-is.
-
-The flow reads left to right — **ask → receive → call**. (The agent in ① and ② is
-the same agent: it asks, gets the token back, then makes the call in ③.)
+The flow is **ask → receive → call**:
 
 ```mermaid
 flowchart LR
@@ -138,140 +103,137 @@ flowchart LR
     A2 -->|"③ call with the token"| Own["Your own / internal APIs<br/>Resource OAuth · or · Connection API key"]
 ```
 
-In the default `fetch` mode, the token is returned to the agent and it makes the
-call itself.
+## How a Connection credential gets into the vault
 
-## How a credential gets into Descope
+A Connection token has to exist before the agent can fetch it. Two ways:
 
-Before the agent can fetch a **Connection** token, that credential has to exist in
-the Connections vault. There are three ways it gets there — the first is runtime
-(driven by the SDK), the other two are design/admin time:
-
-```mermaid
-flowchart TD
-    User["End user"] -->|"completes OAuth consent<br/>via the connect URL the SDK returns"| Vault[("Connections vault")]
-    Admin["Admin"] -->|"adds an API key by hand<br/>in the Descope Console"| Vault
-    Backend["Your backend / IaC"] -->|"adds an API key via the<br/>Descope Management API"| Vault
-    Vault -.->|"later: connections.get_token()"| Agent["Your agent"]
-```
-
-- **User connect (via the SDK).** When you call `connections.get_token` and the
-  user hasn't connected yet, the SDK raises `ConnectionAuthorizationRequired` with
-  a **connect URL**. Send the user there — via your own UI or Descope's hosted
-  **Outbound Apps widget** — and they complete the provider's OAuth consent; Descope
-  stores the resulting token in the vault. The next `get_token` call succeeds. (This
-  is the OAuth path — GitHub, Slack, Google, ….) A pure backend job (no browser, no
-  user present) takes a slightly different route — see [How a user connects when the agent is a backend process](docs/quickstart.md#how-a-user-connects-when-the-agent-is-a-backend-process).
-- **Console.** An admin pastes an API key into a Connection in the Descope Console
-  (typical for a static third-party API key, at the tenant or user level).
-- **Management API.** Your backend or infrastructure-as-code writes the API key
+- **User connect (runtime).** When `connections.get_token` raises
+  `ConnectionAuthorizationRequired`, send the user to the connect URL — your own UI or
+  Descope's **Outbound Apps widget**. They complete OAuth consent, Descope stores the
+  token, and the next call succeeds. Backend jobs with no browser take a different
+  route — see
+  [connecting from a backend](docs/quickstart.md#how-a-user-connects-when-the-agent-is-a-backend-process).
+- **Management API (admin time).** Your backend or IaC writes an API key
   programmatically.
 
-Resource tokens need no provisioning step — they're minted on demand from your
-agent's identity via token-exchange.
+Resource tokens need no provisioning — they're minted on demand via token-exchange.
 
-## How your agent gets the tokens
+## Letting an agent act for a user
 
-First you decide **how your agent signs in to Descope**, configured once at init.
-Three options:
+Two ways to have an agent act on a user's behalf. Both are valid; they differ in how
+the user consents.
 
-- **OAuth Client ID + Client Secret** (the common case) — your agent is a
-  first-class identity in your **Agent Directory**. The SDK gets a Descope OAuth
-  access token using whichever **grant** fits:
-  - `ClientCredentialsProvider` — autonomous agent, no user
-  - `DeviceCodeProvider` — headless agent (device code)
-  - `CibaProvider` — out-of-band user approval (CIBA)
-  - `JwtBearerProvider` — exchange a signed JWT from a trusted issuer (RFC 7523)
-- **A user's access token you already hold** (`AccessTokenProvider`) — if your app
-  already logged the user in with Descope, hand that token to the agent directly
-  (no re-authentication) for **user-scoped** access.
-- **Management Key** (`ManagementKeyProvider`) — use this only if you *don't* want
-  the agent represented as a unique Agent in your Agent Directory. It's a static,
-  high-privilege credential that **bypasses Policies**, so it is not the
-  recommended path (requires explicit opt-in).
+### Recommended — model consent with a Resource
 
-Which one depends on **where the agent runs** — and a backend job/service usually
-can't do an interactive browser login itself (that happens in your front-end app,
-which then hands the resulting user token to the SDK):
+Define a Descope **Resource** whose scopes are **human-readable** ("Read your
+repositories", "Create HubSpot contacts") and map to the underlying **Connection**
+scopes (GitHub `repo`, HubSpot `crm.objects.contacts.write`, …). The user consents to
+the *agent* at this layer and it receives an **agentic identity token**; that token is
+then exchanged for the downstream **Connection token**, with the consented Resource
+scopes mapped to the provider's scopes.
 
-| Where the agent runs | Use |
-| --- | --- |
-| Backend, no user (agent acts **as itself** — Resource tokens, tenant-level Connections) | `ClientCredentialsProvider` |
-| Backend, reading a **user's** Connection token | `AccessTokenProvider` (user's token handed from your app) or `ManagementKeyProvider` — a client-credentials token **cannot** read user tokens; see below |
-| Backend, needs a specific user **out of band** | `CibaProvider` (push approval, yields a user token) |
-| Backend holding a signed JWT from a trusted issuer (cloud workload identity, federated IdP) | `JwtBearerProvider` (RFC 7523; exchanges the assertion — scope follows the JWT's subject) |
-| CLI / headless dev tool | `DeviceCodeProvider` |
-
-Then, at runtime, the agent uses that sign-in to fetch the token it actually needs:
+The Resource sits between the agent and the downstream service, so the user gives
+**informed consent** — approving what the agent may do in your terms, not raw provider
+scopes:
 
 ```mermaid
 flowchart LR
-    CID["OAuth Client ID + Secret<br/>(agent in your Agent Directory)"] --> Tok["Descope<br/>OAuth access token"]
-    MK["Management Key<br/>(no Agent Directory identity)"] -. "not recommended" .-> Tok
-
-    Tok -->|"fetch"| Conn["connections.get_token()"]
-    Tok -->|"fetch"| ResM["resources.get_token()"]
-
-    Conn --> CTok["Connection token<br/>API key / OAuth · governed by Policies"]
-    ResM --> RTok["Resource token<br/>via token-exchange grant"]
+    User(["User"]) -.->|"① consents to the agent"| Resource
+    User -.->|"② connects the account (OAuth)"| Conn
+    Agent(["Your agent"]) -->|"agentic identity token"| Resource["Descope Resource<br/>human-readable scopes →<br/>Connection scopes"]
+    Resource -->|"token exchange"| Conn["Connection token"]
+    Conn -->|"call on the user's behalf"| Svc["Downstream service<br/>GitHub · HubSpot · …"]
 ```
 
-- A **Connection token** is pulled from the vault. When the agent signs in with an
-  OAuth token, **Policies** govern what it may obtain; a Management Key is unrestricted.
-- A **Resource token** is minted via the **token-exchange** grant. (This needs an
-  OAuth agent identity — it does not apply to a Management Key.)
+The trade-off: **two consents** per user —
 
-Set up sign-in once, then fetch tokens repeatedly — you ask for a token and get a
-currently-valid one. Refresh matters most for a **user grant the backend holds across
-runs** (`CIBA`, or a handed-off user token that carries a refresh token): the SDK
-refreshes it without re-prompting the user. `ClientCredentials` simply re-acquires.
-Either way, Descope refreshes the **downstream** provider tokens in the vault for you.
-See [token storage & refresh](docs/quickstart.md#token-storage--refresh).
+1. **Agent consent** — the user authorizes the agent (the Resource / agentic identity
+   token).
+2. **Connect** — the provider's own OAuth consent, so the vault holds a downstream
+   token the agent can act with. Without it there's no Connection token to exchange for.
+
+### Simpler — reuse an existing user login
+
+If you already authenticate your users — say a support app with a **user JWT from the
+browser** — feed that JWT into your backend agent and exchange it for a Connection
+token. One consent (the connect); per-user access is governed by the **Connection's
+policy**.
+
+```python
+# The user JWT you already hold from your app's login:
+client = AgentAuthClient(project_id="P2...", credential=AccessTokenProvider(access_token=user_jwt))
+gh = client.connections.get_token(connection="github", identifier=user_id)
+```
+
+See [Autonomous vs. acting for a user](#autonomous-vs-acting-for-a-user) for the full
+mechanics of both.
+
+## How your agent signs in
+
+Pick how the agent authenticates to Descope, configured once at init:
+
+- **OAuth Client ID + Secret** (common) — the agent is a first-class identity in your
+  **Agent Directory**, via whichever grant fits:
+  - `ClientCredentialsProvider` — autonomous, no user
+  - `DeviceCodeProvider` — headless / CLI
+  - `CibaProvider` — out-of-band user approval
+  - `JwtBearerProvider` — exchange a signed JWT from a trusted issuer (RFC 7523)
+- **A user's access token** (`AccessTokenProvider`) — if your app already logged the
+  user in, hand that token over for **user-scoped** access.
+- **Management Key** (`ManagementKeyProvider`) — static, high-privilege, **bypasses
+  Policies**; not recommended, and requires explicit opt-in.
+
+A backend job usually can't do an interactive browser login itself — that happens in
+your front-end, which hands the resulting user token to the SDK.
+
+| Where the agent runs | Use |
+| --- | --- |
+| Backend, no user (acts **as itself** — Resource tokens, tenant Connections) | `ClientCredentialsProvider` |
+| Backend, reading a **user's** Connection token | `AccessTokenProvider` or `ManagementKeyProvider` (client credentials **can't** read user tokens) |
+| Backend, a specific user **out of band** | `CibaProvider` (push approval) |
+| Backend with a signed JWT from a trusted issuer | `JwtBearerProvider` (RFC 7523) |
+| CLI / headless dev tool | `DeviceCodeProvider` |
+
+Then fetch tokens at runtime: **Policies** govern what an OAuth agent token can obtain
+(a Management Key is unrestricted); Resource tokens are minted via token-exchange and
+need an OAuth identity, not a Management Key. Set up sign-in once and ask for a token
+whenever — you get a currently-valid one. The SDK refreshes a backend-held user grant
+(CIBA, or a handed-off token with a refresh token) without re-prompting; Descope
+refreshes the downstream provider tokens for you. See
+[token storage & refresh](docs/quickstart.md#token-storage--refresh).
 
 ## Autonomous vs. acting for a user
 
-**Autonomous agent (acts as itself).** With client credentials the agent is its own
-identity. It can mint **Resource tokens** (token-exchange, scoped to the agent
-itself) and read **tenant-level** Connection tokens for a tenant it belongs to. It
-**cannot** read a *user's* Connection token — those aren't keyed to the agent:
+**Autonomous (acts as itself).** With client credentials the agent mints **Resource
+tokens** (scoped to itself) and reads **tenant-level** Connection tokens for a tenant
+it belongs to. It **cannot** read a *user's* Connection token:
 
 ```python
 client = AgentAuthClient(
     project_id="P2...",
     credential=ClientCredentialsProvider(client_id="...", client_secret="..."),
 )
-# A Resource token for the agent's own identity (Descope-issued OAuth scopes):
-res = client.resources.get_token(resource="urn:my-api", scopes=["read"])
-# Or a tenant-level Connection token (org-shared, no user) for a tenant it belongs to:
-slack = client.connections.get_tenant_token(connection="slack", tenant_id="acme")
+res = client.resources.get_token(resource="urn:my-api", scopes=["read"])         # agent-scoped
+slack = client.connections.get_tenant_token(connection="slack", tenant_id="acme")  # org-shared
 ```
 
-> **A backend job can't read a *user's* Connection token from client credentials
-> alone.** There is no "agent + user id reads any user" path — `connections.get_token`
-> for a user-level token needs the **user's** Descope access token or a **management
-> key**. So your front-end (or a CIBA/device flow) gets the user's token, and the
-> backend presents it via `AccessTokenProvider` / `act_as_user_token`, as below.
-
-**Acting for a user (the agent wields the user's own Descope token).** To read a
-user's Connection token — and to mint a **user-scoped Resource token** — supply that
-user's access token (from your app's login, device code, or CIBA), or use a
-management key. Two ways with a user token:
+**Acting for a user.** To read a user's Connection token — or mint a user-scoped
+Resource token — supply that user's access token (from your app's login, device code,
+or CIBA), or use a management key:
 
 ```python
-# A) You already hold the user's token (e.g. from your app's login):
 from descope_agent_auth import AccessTokenProvider
 
+# Bind the client to the user's token:
 client = AgentAuthClient(project_id="P2...", credential=AccessTokenProvider(access_token=user_jwt))
-gh  = client.connections.get_token(connection="github", identifier=user_id)   # user-scoped
-res = client.resources.get_token(resource="urn:my-api", scopes=["read"])      # user-scoped (subject = user_jwt)
+gh  = client.connections.get_token(connection="github", identifier=user_id)
+res = client.resources.get_token(resource="urn:my-api", scopes=["read"])
 
-# B) One shared client, many users — pass the user token per call:
+# Or pass the user token per call on a shared client:
 gh  = client.connections.get_token(connection="github", identifier=user_id, act_as_user_token=user_jwt)
-res = client.resources.get_token(resource="urn:my-api", act_as_user_token=user_jwt)
 ```
 
 ```ts
-// TypeScript — same two options
 import { AccessTokenProvider } from '@descope/agent-auth';
 
 const client = new AgentAuthClient({ projectId: 'P2...', credential: new AccessTokenProvider({ accessToken: userJwt }) });
@@ -279,19 +241,11 @@ await client.connections.getToken({ connection: 'github', identifier: userId });
 
 // or per call on a shared client:
 await client.connections.getToken({ connection: 'github', identifier: userId, actAsUserToken: userJwt });
-await client.resources.getToken({ resource: 'urn:my-api', actAsUserToken: userJwt });
 ```
 
-> Where does `user_jwt` come from? Your app authenticates the user with Descope (its
-> own login, device code, or CIBA) and gets their access token; you hand that token
-> to the SDK. The `DeviceCodeProvider` / `CibaProvider` can also acquire it for you —
-> their resulting credential is the user's token and flows into the token fetch the same way.
-
-**Management key (trusted backend, no user token).** A common server-side shape: the
-agent has no user token but needs a specific user's already-connected token. A
-management key fetches **any** user's token by `identifier` (and `tenant_id` for a
-tenant-bound one). It **bypasses Policies** — guard this path — and it can only
-*read* tokens, not perform a user's initial OAuth consent (that's still interactive).
+**Management key (trusted backend, no user token).** Reads **any** user's token by
+`identifier` (and `tenant_id` for a tenant-bound one). It **bypasses Policies** — guard
+this path — and can only *read* tokens, not perform a user's initial OAuth consent:
 
 ```python
 from descope_agent_auth import ManagementKeyProvider
@@ -300,8 +254,7 @@ client = AgentAuthClient(
     project_id="P2...",
     credential=ManagementKeyProvider(management_key="K...", allow_management_key=True),
 )
-gh = client.connections.get_token(connection="github", identifier=user_id)              # any user
-gh = client.connections.get_token(connection="github", identifier=user_id, tenant_id="acme")  # + tenant
+gh = client.connections.get_token(connection="github", identifier=user_id, tenant_id="acme")
 ```
 
 ## End-to-end at runtime
@@ -332,8 +285,8 @@ sequenceDiagram
     Service-->>Agent: result
 ```
 
-For a sensitive step you can also require a fresh CIBA **approval** before the token
-is handed back — see the [quickstart](docs/quickstart.md).
+A sensitive step can require a fresh CIBA **approval** before the token is returned —
+see the [quickstart](docs/quickstart.md).
 
 ## Packages
 
@@ -342,46 +295,35 @@ is handed back — see the [quickstart](docs/quickstart.md).
 | Python | [`python/`](python/) | `pip install descope-agent-auth` |
 | TypeScript | [`typescript/`](typescript/) | `npm install @descope/agent-auth` |
 
-The surfaces are kept identical across both languages so the docs and mental model
-transfer. See each package's README for a copy-pasteable quickstart.
+The two surfaces are kept identical, so the mental model transfers. See each package's
+README for a copy-pasteable quickstart.
 
 ## What's included
 
 Both languages, identical surfaces:
 
-- **Python is async-first** — use `AsyncAgentAuthClient` (and `with_connection_async`)
-  in async apps; `AgentAuthClient` is a synchronous facade with the same API. TypeScript
-  is async-native.
-- All credential providers: client credentials, device code, CIBA, JWT bearer
-  (RFC 7523), management key, and bring-your-own access token.
-- Connection and Resource token exchange, with the
-  `ConnectionAuthorizationRequired` re-auth signal and the agent-token-vs-management-key
-  distinction. User-level, user+tenant, and tenant-level (`get_tenant_token`)
-  Connection tokens.
-- `get_connect_url` / `getConnectUrl` — generate the "Connect <provider>" URL to
-  send a user through, and `wait_for_connection` / `waitForConnection` to poll until
-  they finish.
-- A pluggable token store that persists and refreshes credentials (including
-  refresh tokens) across restarts.
+- All sign-in providers: client credentials, device code, CIBA, JWT bearer, management
+  key, and bring-your-own access token.
+- Connection and Resource token exchange, with the `ConnectionAuthorizationRequired`
+  re-auth signal. User, user+tenant, and tenant-level (`get_tenant_token`) Connection
+  tokens.
+- `get_connect_url` / `getConnectUrl` to build the connect URL, and
+  `wait_for_connection` / `waitForConnection` to poll until the user finishes.
+- A pluggable token store that persists and refreshes credentials across restarts.
 - A human-in-the-loop CIBA **approval gate** on sensitive calls.
 - The `with_connection` / `withConnection` tool wrapper, plus a LangGraph
   `interrupt()` helper.
-- An **MCP auth adapter** that feeds a vaulted token into a remote MCP server
-  connection — `descopeMcpConnectionAuthProvider` / `descopeMcpResourceAuthProvider`
-  (TS, an MCP `OAuthClientProvider`) and `connection_auth` / `resource_auth` (Python,
-  an `httpx.Auth`). See the [framework cookbook](docs/FRAMEWORKS.md#connecting-to-a-remote-mcp-server).
+- An **MCP auth adapter** for remote MCP server connections —
+  `descopeMcpConnectionAuthProvider` / `descopeMcpResourceAuthProvider` (TS) and
+  `connection_auth` / `resource_auth` (Python). See the
+  [framework cookbook](docs/FRAMEWORKS.md#connecting-to-a-remote-mcp-server).
 
-`mode: "execute"` (routing calls through Descope so the token never enters the
-agent process) is reserved — the client accepts it today and turns it on when
-Descope's hosted execution endpoint becomes available.
-
-[Quickstart](docs/quickstart.md). Full [SDK reference](docs/api-reference.md)
-(every public function). Runnable [examples](examples/) (Python + TypeScript).
-Per-framework snippets: [framework cookbook](docs/FRAMEWORKS.md).
+[Quickstart](docs/quickstart.md) · [SDK reference](docs/api-reference.md) ·
+[examples](examples/) · [framework cookbook](docs/FRAMEWORKS.md).
 
 ## Development
 
-This is a release-please monorepo using Conventional Commits.
+A release-please monorepo using Conventional Commits.
 
 ```bash
 # Python
