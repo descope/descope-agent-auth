@@ -50,14 +50,14 @@ try {
 
 Pass one as `credential`.
 
-| Provider | When |
-| --- | --- |
-| `ClientCredentialsProvider` | autonomous agent, no user |
-| `DeviceCodeProvider` | headless agent (no browser) |
-| `CibaProvider` | out-of-band user approval (also backs the approval gate) |
-| `JwtBearerProvider` | exchange a signed JWT from a trusted issuer (RFC 7523) |
-| `AccessTokenProvider` | bring your own user access token (user-scoped access) |
-| `ManagementKeyProvider` | privileged, **not recommended** (bypasses Policies; needs `allowManagementKey: true`) |
+| Provider                    | When                                                                                  |
+| --------------------------- | ------------------------------------------------------------------------------------- |
+| `ClientCredentialsProvider` | autonomous agent, no user                                                             |
+| `DeviceCodeProvider`        | headless agent (no browser)                                                           |
+| `CibaProvider`              | out-of-band user approval (also backs the approval gate)                              |
+| `JwtBearerProvider`         | exchange a signed JWT from a trusted issuer (RFC 7523)                                |
+| `AccessTokenProvider`       | bring your own user access token (user-scoped access)                                 |
+| `ManagementKeyProvider`     | privileged, **not recommended** (bypasses Policies; needs `allowManagementKey: true`) |
 
 For a user-scoped call on a shared client, pass `actAsUserToken: <user jwt>` to
 `connections.getToken` / `resources.getToken`.
@@ -78,12 +78,12 @@ All sign-in providers, Connection and Resource token exchange, a pluggable token
 
 ## Scripts
 
-| Script | Purpose |
-| --- | --- |
-| `npm run build` | dual CJS + ESM bundle with type declarations |
-| `npm test` | Jest + nock with coverage |
-| `npm run lint` | ESLint (airbnb-typescript) |
-| `npm run format-check` | Prettier check |
+| Script                 | Purpose                                      |
+| ---------------------- | -------------------------------------------- |
+| `npm run build`        | dual CJS + ESM bundle with type declarations |
+| `npm test`             | Jest + nock with coverage                    |
+| `npm run lint`         | ESLint (airbnb-typescript)                   |
+| `npm run format-check` | Prettier check                               |
 
 > A few endpoint paths (device authorization, CIBA backchannel, resource
 > token-exchange parameters) live in `src/endpoints.ts`, with comments to confirm
