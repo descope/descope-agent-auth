@@ -2,10 +2,10 @@
 
 A client-side SDK (Python and TypeScript) that does two things for a custom agent:
 
-1. **Signs your agent in** to Descope.
-2. **Gets the tokens** it needs — **Connection** or **Resource** tokens from the Descope vault.
+1. **Signs your agent in** to Descope and gets a Descope token.
+2. **Gets the tokens** it needs — **Connection** or **Resource** tokens from the Descope vault when agent needs to access and API or MCP Server.
 
-It's the auth layer under your agent's tool calls, not a tool catalog. Tool code, API
+It's the identity layer under your agent's tool calls, not a tool catalog. Tool code, API
 wrappers, and connector catalogs are out of scope.
 
 ## What it looks like
@@ -29,13 +29,14 @@ Runnable [examples](examples/) (Python + TypeScript) and a full [quickstart](doc
 
 - ✅ **Custom agents you write yourself**, in any framework (LangChain, LangGraph,
   Google ADK, OpenAI, Vercel AI, Mastra, LlamaIndex, Cloudflare Agents, CrewAI, the
-  Anthropic SDK, …). It manages the tokens the **tools you implement** need.
-- ✅ **Agents connecting to remote MCP servers** — the
-  [MCP auth adapter](docs/FRAMEWORKS.md#connecting-to-a-remote-mcp-server) supplies and
-  refreshes the token for that connection through your MCP client's auth seam. Works
-  with any client you can hand an auth provider (the MCP SDK, Vercel AI SDK, Mastra) —
-  **not** managed runtimes that own the connection (AWS Bedrock AgentCore, Azure AI
-  Foundry), where you register credentials with the platform.
+  Anthropic SDK, …). It manages the tokens, the **tools you implement** need. These Agents can be the agents connecting to remote MCP Servers or SaaS Services.
+  - ✅ **Agents connecting to remote MCP servers** — the
+    [MCP auth adapter](docs/FRAMEWORKS.md#connecting-to-a-remote-mcp-server) supplies and
+    refreshes the token for that connection through your MCP client's auth seam. Works
+    with any client you can hand an auth provider (the MCP SDK, Vercel AI SDK, Mastra) —
+    **not** managed runtimes that own the connection (AWS Bedrock AgentCore, Azure AI
+    Foundry), where you register credentials with the platform.
+
 - ❌ **Not for building MCP servers.** Protecting a server (DCR, token validation,
   `tools/list` filtering) is the *resource-server* side; this SDK is the *client* side.
 
@@ -49,14 +50,10 @@ token the tool needs.
 
 </details>
 
-**One SDK, not one per framework.** Every framework defines a tool as a function; the
-`with_connection` / `withConnection` wrapper drops a fresh, scoped token into it. Runs
-on Node, Cloudflare Workers, Deno, Bun, and browsers. See the
-[framework cookbook](docs/FRAMEWORKS.md).
 
 ## What kind of token does your agent need?
 
-Two kinds, two entry points.
+Two kinds, two entry points. Descope has two different concepts: Resources and Connections. You can read more about them here: <insert link>
 
 ### 1. Connection token — `client.connections.get_token(...)`
 
