@@ -53,9 +53,11 @@ token the tool needs.
 
 ## What kind of token does your agent need?
 
-Two kinds of token, two entry points — matching two Descope concepts:
-[Connections](https://docs.descope.com/agentic-identity-hub/core-components/connections)
-and [Resources](https://docs.descope.com/identity-federation/resources).
+There are two kinds of token you can fetch from Descope:
+**[Connection tokens](https://docs.descope.com/agentic-identity-hub/core-components/connections)**,
+which are stored in the Connections Vault, and
+**[Resource tokens](https://docs.descope.com/identity-federation/resources)**, which are
+Descope tokens minted for your agent.
 
 ### 1. Connection token — `client.connections.get_token(...)`
 
