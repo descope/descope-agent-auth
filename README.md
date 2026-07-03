@@ -3,7 +3,7 @@
 A client-side SDK (Python and TypeScript) that does two things for a custom agent:
 
 1. **Signs your agent in** to Descope and gets a Descope token.
-2. **Gets the tokens** it needs — **Connection** or **Resource** tokens from the Descope vault when agent needs to access and API or MCP Server.
+2. **Gets the tokens** it needs — **Connection** or **Resource** tokens from the Descope vault — when the agent needs to access an API or MCP server.
 
 It's the identity layer under your agent's tool calls, not a tool catalog. Tool code, API
 wrappers, and connector catalogs are out of scope.
