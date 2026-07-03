@@ -31,12 +31,12 @@ Runnable [examples](examples/) (Python + TypeScript) and a full [quickstart](doc
   Google ADK, OpenAI, Vercel AI, Mastra, LlamaIndex, Cloudflare Agents, CrewAI, the
   Anthropic SDK, …). It fetches the tokens the **tools you implement** need — most often
   for the **SaaS APIs those tools call** — from Descope, which stores and refreshes them
-  securely so your code doesn't have to. It also covers tools that connect to a **remote
-  MCP server**: the [MCP auth adapter](docs/FRAMEWORKS.md#connecting-to-a-remote-mcp-server)
-  lets Descope hold and refresh the server's tokens instead of your MCP client managing
-  them. It works with any client you can plug your own auth into (the MCP SDK, Vercel AI
-  SDK, Mastra) — but not managed runtimes that own the connection (AWS Bedrock AgentCore,
-  Azure AI Foundry), where you configure credentials in the platform instead.
+  securely so your code doesn't have to. Descope can also manage the agent's connections
+  to **remote MCP servers** via the
+  [MCP auth adapter](docs/FRAMEWORKS.md#connecting-to-a-remote-mcp-server), storing the
+  server's access and refresh tokens for you — but only when you wire the agent yourself,
+  not when you connect through a managed MCP client service (AWS Bedrock AgentCore, Azure
+  AI Foundry).
 - ❌ **Not for building MCP servers.** Protecting a server (DCR, token validation,
   `tools/list` filtering) is the *resource-server* side; this SDK is the *client* side.
 
