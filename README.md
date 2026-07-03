@@ -29,14 +29,13 @@ Runnable [examples](examples/) (Python + TypeScript) and a full [quickstart](doc
 
 - ✅ **Custom agents you write yourself**, in any framework (LangChain, LangGraph,
   Google ADK, OpenAI, Vercel AI, Mastra, LlamaIndex, Cloudflare Agents, CrewAI, the
-  Anthropic SDK, …). It manages the tokens, the **tools you implement** need. These Agents can be the agents connecting to remote MCP Servers or SaaS Services.
-  - ✅ **Agents connecting to remote MCP servers** — the
-    [MCP auth adapter](docs/FRAMEWORKS.md#connecting-to-a-remote-mcp-server) supplies and
-    refreshes the token for that connection through your MCP client's auth seam. Works
-    with any client you can hand an auth provider (the MCP SDK, Vercel AI SDK, Mastra) —
-    **not** managed runtimes that own the connection (AWS Bedrock AgentCore, Azure AI
-    Foundry), where you register credentials with the platform.
-
+  Anthropic SDK, …). It manages the tokens the **tools you implement** need — whether
+  those tools call SaaS APIs directly or connect to a **remote MCP server**. For the MCP
+  case, the [MCP auth adapter](docs/FRAMEWORKS.md#connecting-to-a-remote-mcp-server)
+  supplies and refreshes the token through your MCP client's auth seam; it works with any
+  client you can hand an auth provider (the MCP SDK, Vercel AI SDK, Mastra) — but not
+  managed runtimes that own the connection (AWS Bedrock AgentCore, Azure AI Foundry),
+  where you register credentials with the platform.
 - ❌ **Not for building MCP servers.** Protecting a server (DCR, token validation,
   `tools/list` filtering) is the *resource-server* side; this SDK is the *client* side.
 
@@ -53,7 +52,9 @@ token the tool needs.
 
 ## What kind of token does your agent need?
 
-Two kinds, two entry points. Descope has two different concepts: Resources and Connections. You can read more about them here: <insert link>
+Two kinds of token, two entry points — matching two Descope concepts:
+[Connections](https://docs.descope.com/identity-federation/outbound-apps) and
+[Resources](https://docs.descope.com/identity-federation/resources).
 
 ### 1. Connection token — `client.connections.get_token(...)`
 
