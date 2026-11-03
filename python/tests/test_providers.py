@@ -124,6 +124,10 @@ class TestCibaProvider(common.AgentAuthTest):
     def _initiated():
         return make_response({"auth_req_id": "areq", "interval": 1, "expires_in": 60})
 
+    def _assert_paths(self, mock_request, polls):
+        paths = [c.args[1] for c in mock_request.call_args_list]
+        self.assertEqual(["/oauth2/v1/apps/bc-authorize"] + ["/oauth2/v1/apps/token"] * polls, paths)
+
     @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_pending_then_approved(self, mock_request):
         mock_request.side_effect = [
@@ -134,6 +138,7 @@ class TestCibaProvider(common.AgentAuthTest):
         provider = CibaProvider(client_id="cid", login_hint="user@example.com")
 
         self.assertEqual(self.make_client(provider).get_credential().token, "ciba_at")
+        self._assert_paths(mock_request, polls=2)
 
     @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_denied(self, mock_request):
@@ -145,6 +150,7 @@ class TestCibaProvider(common.AgentAuthTest):
 
         with self.assertRaises(ApprovalDenied):
             self.make_client(provider).get_credential()
+        self._assert_paths(mock_request, polls=1)
 
     @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_timeout(self, mock_request):
@@ -156,6 +162,7 @@ class TestCibaProvider(common.AgentAuthTest):
 
         with self.assertRaises(ApprovalTimeout):
             self.make_client(provider).get_credential()
+        self._assert_paths(mock_request, polls=1)
 
 
 class TestManagementKeyProvider(common.AgentAuthTest):

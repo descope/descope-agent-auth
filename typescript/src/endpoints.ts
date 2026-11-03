@@ -11,27 +11,31 @@
  *     - outbound connect (connect-URL) endpoint
  *     - oauth2 token + authorize endpoints
  *     - device_code grant-type string
+ *   VERIFIED against the Descope backend routes (2026-11):
+ *     - CIBA backchannel path + grant-type string (inbound-apps server only)
  *   UNVERIFIED -- confirm against the project's OIDC discovery document
  *   (`/<projectId>/.well-known/openid-configuration`) before relying on them:
  *     - DEVICE_AUTHORIZATION path
- *     - CIBA backchannel path
- *     - CIBA grant-type string
  *     - RESOURCE token endpoint shape
  */
 
 // --- Phase 1: OAuth2 / OIDC (acquisition) -----------------------------------
 
-/** VERIFIED. client_credentials, refresh_token, device_code, CIBA polling. */
+/** VERIFIED. client_credentials, refresh_token, device_code. */
 export const OAUTH2_TOKEN = '/oauth2/v1/token';
 
-/** VERIFIED (inbound-apps authorization server). Alternative token endpoint. */
+/**
+ * VERIFIED (inbound-apps authorization server). Alternative token endpoint. Serves the
+ * CIBA grant (as does its /apps/{projectId}/token variant); the project OIDC
+ * /oauth2/v1/token does not.
+ */
 export const OAUTH2_APPS_TOKEN = '/oauth2/v1/apps/token';
 
 /** UNVERIFIED -- confirm via discovery (device_authorization_endpoint). */
 export const DEVICE_AUTHORIZATION = '/oauth2/v1/device';
 
-/** UNVERIFIED -- confirm via discovery (backchannel_authentication_endpoint). */
-export const CIBA_AUTHENTICATE = '/oauth2/v1/ciba/auth';
+/** VERIFIED (inbound-apps authorization server). The project OIDC server has no CIBA route. */
+export const CIBA_AUTHENTICATE = '/oauth2/v1/apps/bc-authorize';
 
 /** OIDC discovery document (project-scoped). VERIFIED shape. */
 export const discovery = (projectId: string): string =>
@@ -61,7 +65,7 @@ export const OUTBOUND_CONNECT = '/v1/mgmt/outbound/app/connect';
 export const GRANT_CLIENT_CREDENTIALS = 'client_credentials';
 export const GRANT_REFRESH_TOKEN = 'refresh_token';
 export const GRANT_DEVICE_CODE = 'urn:ietf:params:oauth:grant-type:device_code'; // VERIFIED
-export const GRANT_CIBA = 'urn:openid:params:grant-type:ciba'; // UNVERIFIED -- confirm via discovery
+export const GRANT_CIBA = 'urn:openid:params:grant-type:ciba'; // VERIFIED
 // VERIFIED. Exchange a signed external JWT (from a Descope-registered trusted issuer)
 // for a Descope token; the client must enable JWT Bearer + register the issuer.
 export const GRANT_JWT_BEARER = 'urn:ietf:params:oauth:grant-type:jwt-bearer';

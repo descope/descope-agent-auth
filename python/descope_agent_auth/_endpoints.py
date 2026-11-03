@@ -10,11 +10,11 @@ Verification status as of build (2026-06):
     - outbound connect (connect-URL) endpoint
     - oauth2 token + authorize endpoints
     - device_code grant-type string
+  VERIFIED against the Descope backend routes (2026-11):
+    - CIBA backchannel path + grant-type string (inbound-apps server only)
   UNVERIFIED -- confirm against the project's OIDC discovery document
   (``/<project_id>/.well-known/openid-configuration``) before relying on them:
     - DEVICE_AUTHORIZATION path
-    - CIBA backchannel path
-    - CIBA grant-type string
     - RESOURCE token endpoint shape
 These are isolated as named constants precisely so confirming/overriding them is a
 one-line change, not a refactor.
@@ -24,19 +24,20 @@ from __future__ import annotations
 
 # --- Phase 1: OAuth2 / OIDC (acquisition) -----------------------------------
 
-# VERIFIED. Used for client_credentials, refresh_token, device_code, and CIBA
-# token-polling grants.
+# VERIFIED. Used for client_credentials, refresh_token and device_code grants.
 OAUTH2_TOKEN = "/oauth2/v1/token"
 
 # VERIFIED (inbound-apps authorization server). Alternative token endpoint when the
 # agent authenticates as an inbound app client rather than the project OIDC server.
+# Serves the CIBA grant (as does its /apps/{projectId}/token variant); the project
+# OIDC /oauth2/v1/token does not.
 OAUTH2_APPS_TOKEN = "/oauth2/v1/apps/token"
 
 # UNVERIFIED -- confirm via discovery (device_authorization_endpoint).
 DEVICE_AUTHORIZATION = "/oauth2/v1/device"
 
-# UNVERIFIED -- confirm via discovery (backchannel_authentication_endpoint).
-CIBA_AUTHENTICATE = "/oauth2/v1/ciba/auth"
+# VERIFIED (inbound-apps authorization server). The project OIDC server has no CIBA route.
+CIBA_AUTHENTICATE = "/oauth2/v1/apps/bc-authorize"
 
 # OIDC discovery document (project-scoped). VERIFIED shape.
 def discovery(project_id: str) -> str:
@@ -69,7 +70,7 @@ GRANT_DEVICE_CODE = "urn:ietf:params:oauth:grant-type:device_code"  # VERIFIED
 # VERIFIED. Exchange a signed external JWT (from a Descope-registered trusted issuer)
 # for a Descope token. The client must enable the JWT Bearer grant + register the issuer.
 GRANT_JWT_BEARER = "urn:ietf:params:oauth:grant-type:jwt-bearer"
-GRANT_CIBA = "urn:openid:params:grant-type:ciba"  # UNVERIFIED -- confirm via discovery
+GRANT_CIBA = "urn:openid:params:grant-type:ciba"  # VERIFIED
 
 # Resource tokens are minted by exchanging the agent's Descope access token for a
 # Resource-scoped token via the RFC 8693 token-exchange grant against OAUTH2_TOKEN.

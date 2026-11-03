@@ -17,7 +17,8 @@ jest.mock('./httpClient', () => {
 
 const TOKEN_PATH = '/oauth2/v1/token';
 const DEVICE_PATH = '/oauth2/v1/device';
-const CIBA_PATH = '/oauth2/v1/ciba/auth';
+const CIBA_PATH = '/oauth2/v1/apps/bc-authorize';
+const CIBA_TOKEN_PATH = '/oauth2/v1/apps/token';
 
 beforeAll(() => {
   nock.disableNetConnect();
@@ -166,9 +167,9 @@ describe('CibaProvider', () => {
 
   it('polls pending then approved', async () => {
     initiate()
-      .post(TOKEN_PATH)
+      .post(CIBA_TOKEN_PATH)
       .reply(400, { error: 'authorization_pending' })
-      .post(TOKEN_PATH)
+      .post(CIBA_TOKEN_PATH)
       .reply(200, { access_token: 'ciba_at', expires_in: 3600 });
     const provider = new CibaProvider({ clientId: 'cid', loginHint: 'user@example.com' });
     expect((await makeClient(provider).getCredential()).token).toBe('ciba_at');
@@ -182,9 +183,9 @@ describe('CibaProvider', () => {
         return true;
       })
       .reply(200, { auth_req_id: 'areq', interval: 1, expires_in: 60 })
-      .post(TOKEN_PATH)
+      .post(CIBA_TOKEN_PATH)
       .reply(400, { error: 'slow_down' })
-      .post(TOKEN_PATH)
+      .post(CIBA_TOKEN_PATH)
       .reply(200, { access_token: 'ciba_at', expires_in: 3600 });
     const provider = new CibaProvider({
       clientId: 'cid',
@@ -198,13 +199,13 @@ describe('CibaProvider', () => {
   });
 
   it('raises ApprovalDenied when rejected', async () => {
-    initiate().post(TOKEN_PATH).reply(400, { error: 'access_denied' });
+    initiate().post(CIBA_TOKEN_PATH).reply(400, { error: 'access_denied' });
     const provider = new CibaProvider({ clientId: 'cid', loginHint: 'user@example.com' });
     await expect(makeClient(provider).getCredential()).rejects.toBeInstanceOf(ApprovalDenied);
   });
 
   it('raises ApprovalTimeout when expired', async () => {
-    initiate().post(TOKEN_PATH).reply(400, { error: 'expired_token' });
+    initiate().post(CIBA_TOKEN_PATH).reply(400, { error: 'expired_token' });
     const provider = new CibaProvider({ clientId: 'cid', loginHint: 'user@example.com' });
     await expect(makeClient(provider).getCredential()).rejects.toBeInstanceOf(ApprovalTimeout);
   });

@@ -9,8 +9,9 @@ CIBA does double duty (see spec):
     sensitive exchange/action. ``authenticate()`` is exposed for that reuse (the
     gate wiring itself lands in the exchange layer).
 
-Endpoint paths and the CIBA grant-type string are UNVERIFIED -- see
-``_endpoints.CIBA_AUTHENTICATE`` / ``GRANT_CIBA`` and confirm via discovery.
+Descope serves CIBA only on the inbound-apps authorization server, so initiation
+and polling go to ``/oauth2/v1/apps/*``. ``client_id`` must be the Descope-issued inbound
+app client ID: that route recovers the project from it.
 """
 
 from __future__ import annotations
@@ -19,7 +20,7 @@ import asyncio
 import time
 from typing import List, Optional
 
-from .._endpoints import CIBA_AUTHENTICATE, GRANT_CIBA, OAUTH2_TOKEN
+from .._endpoints import CIBA_AUTHENTICATE, GRANT_CIBA, OAUTH2_APPS_TOKEN
 from ..errors import ApprovalDenied, ApprovalTimeout, CredentialAcquisitionFailed
 from ..types import Credential, CredentialKind
 from .base import CredentialProvider, _err, token_response_to_credential
@@ -72,7 +73,7 @@ class CibaProvider(CredentialProvider):
 
         while time.time() < deadline:
             await asyncio.sleep(interval)
-            resp = await self.http.post_form(OAUTH2_TOKEN, data=self._poll_body(auth_req_id))
+            resp = await self.http.post_form(OAUTH2_APPS_TOKEN, data=self._poll_body(auth_req_id))
             if resp.ok:
                 return token_response_to_credential(resp.json, kind=self.kind)
             error = (resp.json or {}).get("error")
