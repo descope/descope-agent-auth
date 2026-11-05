@@ -85,6 +85,6 @@ All sign-in providers, Connection and Resource token exchange, a pluggable token
 | `npm run lint`         | ESLint (airbnb-typescript)                   |
 | `npm run format-check` | Prettier check                               |
 
-> A few endpoint paths (device authorization, CIBA backchannel, resource
+> A few endpoint paths (device authorization, resource
 > token-exchange parameters) live in `src/endpoints.ts`, with comments to confirm
 > against your project's OIDC discovery document.

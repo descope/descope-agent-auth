@@ -21,7 +21,7 @@ dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "mypy>=1.0",
-    "ruff>=0.1",
+    "ruff>=0.1,<0.16",  # ruff 0.16 flags 282 existing issues repo-wide
 ]
 
 [project.urls]

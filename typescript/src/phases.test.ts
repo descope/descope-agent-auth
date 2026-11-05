@@ -13,8 +13,8 @@ jest.mock('./httpClient', () => {
 
 const USER_LATEST = '/v1/mgmt/outbound/app/user/token/latest';
 const CONNECT_PATH = '/v1/mgmt/outbound/app/connect';
-const CIBA_PATH = '/oauth2/v1/ciba/auth';
-const TOKEN_PATH = '/oauth2/v1/token';
+const CIBA_PATH = '/oauth2/v1/apps/bc-authorize';
+const CIBA_TOKEN_PATH = '/oauth2/v1/apps/token';
 const silentLogger = { debug: () => {}, warn: () => {} };
 
 const mgmt = () =>
@@ -37,7 +37,7 @@ describe('CIBA approval gate', () => {
     nock(BASE_URL)
       .post(CIBA_PATH)
       .reply(200, { auth_req_id: 'areq', interval: 1, expires_in: 60 })
-      .post(TOKEN_PATH)
+      .post(CIBA_TOKEN_PATH)
       .reply(200, { access_token: 'approval_at', expires_in: 3600 });
     nock(BASE_URL).post(USER_LATEST).reply(200, { token: tokenObj() });
 
@@ -53,7 +53,7 @@ describe('CIBA approval gate', () => {
     nock(BASE_URL)
       .post(CIBA_PATH)
       .reply(200, { auth_req_id: 'areq', interval: 1, expires_in: 60 })
-      .post(TOKEN_PATH)
+      .post(CIBA_TOKEN_PATH)
       .reply(400, { error: 'access_denied' });
     // No USER_LATEST interceptor: the exchange must never run.
 

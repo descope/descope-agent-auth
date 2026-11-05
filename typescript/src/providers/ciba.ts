@@ -7,11 +7,12 @@
  *   - As a phase-2 gate, `authenticate()` requires a fresh approval before a
  *     single sensitive exchange/action (the gate wiring itself lands later).
  *
- * Endpoint paths and the CIBA grant-type string are UNVERIFIED -- see
- * `endpoints.CIBA_AUTHENTICATE` / `GRANT_CIBA` and confirm via discovery.
+ * Descope serves CIBA only on the inbound-apps authorization server, so initiation,
+ * polling and refresh go to `/oauth2/v1/apps/*`. `clientId` must be the Descope-issued inbound
+ * app client ID: that route recovers the project from it.
  */
 
-import { CIBA_AUTHENTICATE, GRANT_CIBA, OAUTH2_TOKEN } from '../endpoints';
+import { CIBA_AUTHENTICATE, GRANT_CIBA, OAUTH2_APPS_TOKEN } from '../endpoints';
 import { ApprovalDenied, ApprovalTimeout, CredentialAcquisitionFailed } from '../errors';
 import { sleep } from '../httpClient';
 import { Credential } from '../types';
@@ -35,6 +36,8 @@ export interface CibaAuthenticateArgs {
 
 export class CibaProvider extends CredentialProvider {
   readonly kind = 'agent_token';
+
+  protected readonly refreshEndpoint = OAUTH2_APPS_TOKEN;
 
   private readonly clientId: string;
 
@@ -82,7 +85,7 @@ export class CibaProvider extends CredentialProvider {
       // eslint-disable-next-line no-await-in-loop
       await sleep(interval * 1000);
       // eslint-disable-next-line no-await-in-loop
-      const resp = await this.requireHttp().postForm(OAUTH2_TOKEN, this.pollBody(authReqId));
+      const resp = await this.requireHttp().postForm(OAUTH2_APPS_TOKEN, this.pollBody(authReqId));
       if (resp.ok) {
         return tokenResponseToCredential(resp.json, this.kind);
       }
