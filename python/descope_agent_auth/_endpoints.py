@@ -21,8 +21,8 @@ from __future__ import annotations
 OAUTH2_TOKEN = "/oauth2/v1/token"
 
 # Token endpoint for an agent that authenticates as an inbound app client rather
-# than through the project OIDC server. CIBA polls here (or the
-# /apps/{projectId}/token variant) because OAUTH2_TOKEN does not serve that grant.
+# than through the project OIDC server. CIBA polls and refreshes
+# here (or the /apps/{projectId}/token variant) because OAUTH2_TOKEN does not serve it.
 OAUTH2_APPS_TOKEN = "/oauth2/v1/apps/token"
 
 # UNVERIFIED -- confirm via discovery (device_authorization_endpoint).

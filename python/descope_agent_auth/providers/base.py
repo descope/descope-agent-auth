@@ -39,6 +39,9 @@ class CredentialProvider(ABC):
     #: code and logging can treat that path with caution.
     kind: CredentialKind = CredentialKind.AGENT_TOKEN
 
+    #: Token endpoint for the ``refresh_token`` grant: the one that issued the token.
+    refresh_endpoint: str = OAUTH2_TOKEN
+
     def __init__(self) -> None:
         self._cached: Optional[Credential] = None
         # Bound by AgentAuthClient at init so providers can talk to Descope + persist.
@@ -127,7 +130,7 @@ class CredentialProvider(ABC):
             "refresh_token": current.refresh_token,
         }
         data.update(self._refresh_client_auth())
-        resp = await self.http.post_form(OAUTH2_TOKEN, data=data)
+        resp = await self.http.post_form(self.refresh_endpoint, data=data)
         if not resp.ok:
             raise CredentialAcquisitionFailed(
                 f"refresh failed ({resp.status_code}): {_err(resp.json) or resp.text}"

@@ -43,6 +43,9 @@ export abstract class CredentialProvider {
   /** Privileged providers (management key) bypass Policies. */
   readonly kind: CredentialKind = 'agent_token';
 
+  /** Token endpoint for the `refresh_token` grant: the one that issued the token. */
+  protected readonly refreshEndpoint: string = OAUTH2_TOKEN;
+
   protected http?: HttpClient;
 
   protected projectId?: string;
@@ -127,7 +130,7 @@ export abstract class CredentialProvider {
       refresh_token: current.refreshToken,
       ...this.refreshClientAuth(),
     };
-    const resp = await this.requireHttp().postForm(OAUTH2_TOKEN, data);
+    const resp = await this.requireHttp().postForm(this.refreshEndpoint, data);
     if (!resp.ok) {
       throw new CredentialAcquisitionFailed(
         `refresh failed (${resp.statusCode}): ${errMessage(resp.json) ?? resp.text}`,

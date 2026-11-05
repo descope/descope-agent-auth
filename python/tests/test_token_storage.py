@@ -106,7 +106,8 @@ class TestRefreshFromStore(common.AgentAuthTest):
         cred = _client(provider, store).get_credential()
 
         self.assertEqual(cred.token, "new")
-        _, kwargs = mock_request.call_args
+        args, kwargs = mock_request.call_args
+        self.assertEqual(args[1], "/oauth2/v1/apps/token")
         self.assertEqual(kwargs["data"]["grant_type"], "refresh_token")
         self.assertEqual(kwargs["data"]["client_id"], "cid")
         self.assertEqual(kwargs["data"]["client_secret"], "sec")

@@ -209,6 +209,22 @@ describe('CibaProvider', () => {
     const provider = new CibaProvider({ clientId: 'cid', loginHint: 'user@example.com' });
     await expect(makeClient(provider).getCredential()).rejects.toBeInstanceOf(ApprovalTimeout);
   });
+
+  it('refreshes on the inbound-apps token endpoint without a new approval', async () => {
+    let refreshBody: any;
+    initiate()
+      .post(CIBA_TOKEN_PATH)
+      .reply(200, { access_token: 'first', expires_in: -10, refresh_token: 'r1' })
+      .post(CIBA_TOKEN_PATH, (body) => {
+        refreshBody = body;
+        return true;
+      })
+      .reply(200, { access_token: 'refreshed', expires_in: 3600 });
+    const client = makeClient(new CibaProvider({ clientId: 'cid', loginHint: 'user@example.com' }));
+    expect((await client.getCredential()).token).toBe('first');
+    expect((await client.getCredential()).token).toBe('refreshed');
+    expect(refreshBody.grant_type).toBe('refresh_token');
+  });
 });
 
 describe('ManagementKeyProvider', () => {

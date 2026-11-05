@@ -67,6 +67,6 @@ All sign-in providers, Connection and Resource token exchange, a pluggable token
 (`descope_agent_auth.integrations.mcp`). See the
 [quickstart](../docs/quickstart.md) and [framework cookbook](../docs/FRAMEWORKS.md).
 
-> A few endpoint paths (device authorization, CIBA backchannel, resource
+> A few endpoint paths (device authorization, resource
 > token-exchange parameters) live in `_endpoints.py`, with comments to confirm against
 > your project's OIDC discovery document.

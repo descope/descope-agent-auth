@@ -7,8 +7,8 @@
  *   - As a phase-2 gate, `authenticate()` requires a fresh approval before a
  *     single sensitive exchange/action (the gate wiring itself lands later).
  *
- * Descope serves CIBA only on the inbound-apps authorization server, so initiation
- * and polling go to `/oauth2/v1/apps/*`. `clientId` must be the Descope-issued inbound
+ * Descope serves CIBA only on the inbound-apps authorization server, so initiation,
+ * polling and refresh go to `/oauth2/v1/apps/*`. `clientId` must be the Descope-issued inbound
  * app client ID: that route recovers the project from it.
  */
 
@@ -36,6 +36,8 @@ export interface CibaAuthenticateArgs {
 
 export class CibaProvider extends CredentialProvider {
   readonly kind = 'agent_token';
+
+  protected readonly refreshEndpoint = OAUTH2_APPS_TOKEN;
 
   private readonly clientId: string;
 

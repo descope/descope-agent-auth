@@ -16,6 +16,7 @@ jest.mock('./httpClient', () => {
 });
 
 const TOKEN_PATH = '/oauth2/v1/token';
+const CIBA_TOKEN_PATH = '/oauth2/v1/apps/token';
 const silentLogger = { debug: () => {}, warn: () => {} };
 
 const client = (credential: any, store: MemoryTokenStore) =>
@@ -101,7 +102,7 @@ describe('refresh from a stored token (no re-auth)', () => {
     );
     let body: any;
     nock(BASE_URL)
-      .post(TOKEN_PATH, (b) => {
+      .post(CIBA_TOKEN_PATH, (b) => {
         body = b;
         return true;
       })

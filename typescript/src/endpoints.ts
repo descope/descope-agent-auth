@@ -19,8 +19,8 @@ export const OAUTH2_TOKEN = '/oauth2/v1/token';
 
 /**
  * Token endpoint for an agent that authenticates as an inbound app client. CIBA polls
- * here (or the /apps/{projectId}/token variant) because OAUTH2_TOKEN does not serve
- * that grant.
+ * and refreshes here (or the /apps/{projectId}/token variant) because OAUTH2_TOKEN
+ * does not serve it.
  */
 export const OAUTH2_APPS_TOKEN = '/oauth2/v1/apps/token';
 

@@ -9,8 +9,8 @@ CIBA does double duty (see spec):
     sensitive exchange/action. ``authenticate()`` is exposed for that reuse (the
     gate wiring itself lands in the exchange layer).
 
-Descope serves CIBA only on the inbound-apps authorization server, so initiation
-and polling go to ``/oauth2/v1/apps/*``. ``client_id`` must be the Descope-issued inbound
+Descope serves CIBA only on the inbound-apps authorization server, so initiation,
+polling and refresh go to ``/oauth2/v1/apps/*``. ``client_id`` must be the Descope-issued inbound
 app client ID: that route recovers the project from it.
 """
 
@@ -28,6 +28,7 @@ from .base import CredentialProvider, _err, token_response_to_credential
 
 class CibaProvider(CredentialProvider):
     kind = CredentialKind.AGENT_TOKEN
+    refresh_endpoint = OAUTH2_APPS_TOKEN
 
     def __init__(
         self,
