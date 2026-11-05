@@ -1,6 +1,6 @@
 {
   "name": "@descope/agent-auth",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Client-side SDK for wiring a custom agent to Descope: acquire a credential and exchange it for Connection/Resource tokens from the vault.",
   "typings": "./dist/index.d.ts",
   "main": "dist/cjs/index.cjs.js",
