@@ -153,6 +153,7 @@ class CredentialProvider(ABC):
                 "kind": cred.kind.value,
                 "expires_at": cred.expires_at,
                 "refresh_token": cred.refresh_token,
+                "scope": cred.scope,
             }
         )
         # No TTL: the refresh token must outlive the access token's expiry, so the
@@ -179,6 +180,7 @@ class CredentialProvider(ABC):
             kind=kind,
             expires_at=obj.get("expires_at"),
             refresh_token=obj.get("refresh_token"),
+            scope=obj.get("scope"),
         )
 
 
@@ -197,11 +199,17 @@ def token_response_to_credential(
     refresh = body.get("refresh_token")
     if refresh is None and fallback is not None:
         refresh = fallback.refresh_token  # refresh responses often omit a new one
+    scope = body.get("scope")
+    authorization_details = body.get("authorization_details")
     return Credential(
         token=str(body["access_token"]),
         kind=kind,
         expires_at=expires_at,
         refresh_token=refresh,
+        scope=scope if isinstance(scope, str) else None,
+        authorization_details=(
+            authorization_details if isinstance(authorization_details, list) else None
+        ),
     )
 
 

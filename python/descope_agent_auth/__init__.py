@@ -10,6 +10,7 @@ from .errors import (
     ApprovalTimeout,
     ConnectionAuthorizationRequired,
     CredentialAcquisitionFailed,
+    InvalidAuthorizationDetails,
     PolicyDenied,
     TokenExchangeFailed,
 )
@@ -67,6 +68,7 @@ __all__ = [
     "ConnectionAuthorizationRequired",
     "PolicyDenied",
     "CredentialAcquisitionFailed",
+    "InvalidAuthorizationDetails",
     "TokenExchangeFailed",
     "ApprovalDenied",
     "ApprovalTimeout",

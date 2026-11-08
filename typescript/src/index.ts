@@ -78,6 +78,7 @@ export {
   ConnectionAuthorizationRequired,
   PolicyDenied,
   CredentialAcquisitionFailed,
+  InvalidAuthorizationDetails,
   TokenExchangeFailed,
   ApprovalDenied,
   ApprovalTimeout,

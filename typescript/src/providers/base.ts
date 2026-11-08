@@ -36,7 +36,18 @@ export const tokenResponseToCredential = (
     expiresAt = Date.now() / 1000 + body.expires_in;
   }
   const refreshToken = body.refresh_token ?? fallback?.refreshToken;
-  return { token: String(body.access_token), kind, expiresAt, refreshToken };
+  const scope = typeof body.scope === 'string' ? body.scope : undefined;
+  const authorizationDetails = Array.isArray(body.authorization_details)
+    ? body.authorization_details
+    : undefined;
+  return {
+    token: String(body.access_token),
+    kind,
+    expiresAt,
+    refreshToken,
+    scope,
+    authorizationDetails,
+  };
 };
 
 export abstract class CredentialProvider {

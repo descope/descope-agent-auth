@@ -53,6 +53,21 @@ export class PolicyDenied extends AgentAuthError {
 /** Phase 1 failed: bad client credentials, device-flow timeout, etc. */
 export class CredentialAcquisitionFailed extends AgentAuthError {}
 
+/**
+ * Descope rejected or did not apply a CIBA request's `authorizationDetails`.
+ * Rejections come before any approval is sent: the type is not registered on the
+ * requested resource, more than one element, over 4096 bytes, or nested deeper than 5.
+ * Not retryable as is; fix the request. `errorDescription` is the server's reason.
+ */
+export class InvalidAuthorizationDetails extends CredentialAcquisitionFailed {
+  readonly errorDescription: string;
+
+  constructor(errorDescription: string) {
+    super(errorDescription);
+    this.errorDescription = errorDescription;
+  }
+}
+
 /** Phase 2 transport or validation failure not covered by a more specific error. */
 export class TokenExchangeFailed extends AgentAuthError {
   statusCode?: number;

@@ -7,7 +7,13 @@ import {
   JwtBearerProvider,
   ManagementKeyProvider,
 } from './providers';
-import { ApprovalDenied, ApprovalTimeout, CredentialAcquisitionFailed } from './errors';
+import {
+  ApprovalDenied,
+  ApprovalTimeout,
+  CredentialAcquisitionFailed,
+  InvalidAuthorizationDetails,
+} from './errors';
+import { MemoryTokenStore } from './store';
 
 // Make polling instant: stub the exported sleep used by the providers.
 jest.mock('./httpClient', () => {
@@ -224,6 +230,132 @@ describe('CibaProvider', () => {
     expect((await client.getCredential()).token).toBe('first');
     expect((await client.getCredential()).token).toBe('refreshed');
     expect(refreshBody.grant_type).toBe('refresh_token');
+  });
+
+  it('parses the granted scope and keeps plain CIBA cached', async () => {
+    initiate()
+      .post(CIBA_TOKEN_PATH)
+      .reply(200, { access_token: 'ciba_at', expires_in: 3600, scope: 'openid' });
+    const client = makeClient(new CibaProvider({ clientId: 'cid', loginHint: 'user@example.com' }));
+    const cred = await client.getCredential();
+    await client.getCredential();
+    expect(cred.scope).toBe('openid');
+    expect(cred.authorizationDetails).toBeUndefined();
+    expect(nock.isDone()).toBe(true);
+  });
+});
+
+describe('CibaProvider with authorization_details (RAR)', () => {
+  const PAYMENT = [{ type: 'payment_initiation', amount: '15.00', currency: 'EUR' }];
+  const BANK = 'https://bank.example.com';
+  const approved = (overrides: Record<string, unknown> = {}) => ({
+    access_token: 'rar_at',
+    expires_in: 3600,
+    refresh_token: 'r1',
+    scope: 'payments:write',
+    authorization_details: PAYMENT,
+    ...overrides,
+  });
+  const approvePayment = (provider: CibaProvider) =>
+    provider.authenticate({
+      loginHint: 'user@example.com',
+      resource: BANK,
+      authorizationDetails: PAYMENT,
+    });
+
+  it('sends resource and details and returns the approved grant', async () => {
+    let initBody: any;
+    nock(BASE_URL)
+      .post(CIBA_PATH, (b) => {
+        initBody = b;
+        return true;
+      })
+      .reply(200, { auth_req_id: 'areq', interval: 1, expires_in: 60 })
+      .post(CIBA_TOKEN_PATH)
+      .reply(200, approved());
+    const provider = new CibaProvider({ clientId: 'cid', loginHint: 'user@example.com' });
+    makeClient(provider);
+
+    const cred = await approvePayment(provider);
+
+    expect(initBody.resource).toBe(BANK);
+    expect(JSON.parse(initBody.authorization_details)).toEqual(PAYMENT);
+    expect(cred.authorizationDetails).toEqual(PAYMENT);
+    expect(cred.scope).toBe('payments:write');
+    expect(cred.refreshToken).toBe('r1'); // a handle to the same grant (RFC 9396 s6)
+  });
+
+  it('asks again on every call and stores nothing', async () => {
+    nock(BASE_URL)
+      .post(CIBA_PATH)
+      .times(3)
+      .reply(200, { auth_req_id: 'areq', interval: 1, expires_in: 60 })
+      .post(CIBA_TOKEN_PATH)
+      .times(2)
+      .reply(200, approved())
+      .post(CIBA_TOKEN_PATH)
+      .reply(200, { access_token: 'plain_at', expires_in: 3600 });
+    const store = new MemoryTokenStore();
+    const provider = new CibaProvider({ clientId: 'cid', loginHint: 'user@example.com' });
+    const client = makeClient(provider, { store });
+
+    await approvePayment(provider);
+    await approvePayment(provider);
+    expect(store.list()).toEqual([]);
+    // The provider's own credential is a fresh plain CIBA run, not the RAR grant.
+    expect((await client.getCredential()).token).toBe('plain_at');
+    expect(nock.isDone()).toBe(true);
+  });
+
+  it('treats empty details as plain CIBA', async () => {
+    let initBody: any;
+    nock(BASE_URL)
+      .post(CIBA_PATH, (b) => {
+        initBody = b;
+        return true;
+      })
+      .reply(200, { auth_req_id: 'areq', interval: 1, expires_in: 60 })
+      .post(CIBA_TOKEN_PATH)
+      .reply(200, approved());
+    const provider = new CibaProvider({ clientId: 'cid', loginHint: 'user@example.com' });
+    makeClient(provider);
+
+    const cred = await provider.authenticate({
+      loginHint: 'user@example.com',
+      authorizationDetails: [],
+    });
+
+    expect(initBody.authorization_details).toBeUndefined();
+    expect(cred.refreshToken).toBe('r1');
+  });
+
+  it('throws InvalidAuthorizationDetails before any approval is sent', async () => {
+    const reason =
+      'Invalid authorization_details: authorization_details type is not registered on the requested resources';
+    nock(BASE_URL)
+      .post(CIBA_PATH)
+      .reply(400, { error: 'invalid_authorization_details', error_description: reason });
+    const provider = new CibaProvider({ clientId: 'cid', loginHint: 'user@example.com' });
+    makeClient(provider);
+
+    const err = await approvePayment(provider).catch((e) => e);
+
+    expect(err).toBeInstanceOf(InvalidAuthorizationDetails);
+    expect(err).toBeInstanceOf(CredentialAcquisitionFailed);
+    expect(err.errorDescription).toBe(reason);
+    expect(err.message).toBe(reason);
+  });
+
+  it('throws when the server did not apply the details', async () => {
+    nock(BASE_URL)
+      .post(CIBA_PATH)
+      .reply(200, { auth_req_id: 'areq', interval: 1, expires_in: 60 })
+      .post(CIBA_TOKEN_PATH)
+      .reply(200, approved({ authorization_details: undefined }));
+    const provider = new CibaProvider({ clientId: 'cid', loginHint: 'user@example.com' });
+    makeClient(provider);
+
+    await expect(approvePayment(provider)).rejects.toBeInstanceOf(InvalidAuthorizationDetails);
   });
 });
 

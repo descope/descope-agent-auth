@@ -511,6 +511,38 @@ const token = await client.connections.getToken({
 });
 ```
 
+### Approve one exact action (RFC 9396)
+
+Add `resource` and `authorization_details` to have the user approve a specific action,
+such as a payment amount, instead of a free-text message. The type must be registered
+on that Resource in the Console, and the CIBA approval flow shows the fields (e.g.
+`{{authorizationDetails.payment_initiation.amount}}`). The SDK never caches such an
+approval, so the next payment asks again.
+
+```python
+require_approval=ApprovalRequest(
+    login_hint="user@example.com",
+    binding_message="Pay EUR 15.00 to Acme",
+    resource="https://api.bank.example.com",
+    authorization_details=[{"type": "payment_initiation", "amount": "15.00", "currency": "EUR"}],
+)
+# A type that isn't registered on the Resource raises InvalidAuthorizationDetails before
+# any approval is sent.
+```
+
+```ts
+requireApproval: {
+  loginHint: 'user@example.com',
+  bindingMessage: 'Pay EUR 15.00 to Acme',
+  resource: 'https://api.bank.example.com',
+  authorizationDetails: [{ type: 'payment_initiation', amount: '15.00', currency: 'EUR' }],
+},
+```
+
+To get the approved grant back, call the provider directly:
+`await ciba.authenticate(login_hint=..., resource=..., authorization_details=[...])`
+returns a `Credential` whose `authorization_details` is what the user approved.
+
 ## Errors worth catching
 
 | Error | Meaning |

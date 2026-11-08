@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock, patch
 
 from descope_agent_auth import (
@@ -57,6 +58,30 @@ class TestApprovalGate(common.AgentAuthTest):
 
         self.assertEqual(tok.access_token, "gho_downstream_token")
         self.assertEqual(mock_request.call_count, 3)
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_gate_asks_approval_for_authorization_details(self, mock_request):
+        payment = [{"type": "payment_initiation", "amount": "15.00", "currency": "EUR"}]
+        mock_request.side_effect = [
+            make_response({"auth_req_id": "areq", "interval": 1, "expires_in": 60}),
+            make_response({"access_token": "approval_at", "authorization_details": payment}),
+            make_response({"token": token_obj()}),
+        ]
+        client = self._client_with_approval()
+
+        client.connections.get_token(
+            connection="github",
+            identifier="user@example.com",
+            require_approval=ApprovalRequest(
+                login_hint="user@example.com",
+                resource="https://bank.example.com",
+                authorization_details=payment,
+            ),
+        )
+
+        initiate = mock_request.call_args_list[0].kwargs["data"]
+        self.assertEqual("https://bank.example.com", initiate["resource"])
+        self.assertEqual(payment, json.loads(initiate["authorization_details"]))
 
     @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_denied_blocks_exchange(self, mock_request):

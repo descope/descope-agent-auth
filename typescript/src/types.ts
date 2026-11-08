@@ -29,6 +29,10 @@ export interface Credential {
   /** Unix seconds; `undefined` means it does not expire on its own (e.g. a key). */
   expiresAt?: number;
   refreshToken?: string;
+  /** The scope the server granted. */
+  scope?: string;
+  /** RFC 9396 grant the user approved, on a CIBA request that carried `authorizationDetails`. */
+  authorizationDetails?: Record<string, unknown>[];
 }
 
 export const credentialExpired = (cred: Credential, skewSeconds = 60): boolean => {
@@ -74,10 +78,14 @@ export interface PendingAuthorization {
  * A just-in-time CIBA approval gate for a single sensitive exchange/action.
  * Distinct from acquisition: the agent already holds a working credential, but a
  * real person must sign off on a trusted device before this one step proceeds.
+ * Set `authorizationDetails` (RFC 9396, types registered on `resource`) to have the
+ * user approve this specific action, e.g. a payment amount.
  */
 export interface ApprovalRequest {
   loginHint: string;
   bindingMessage?: string;
   scopes?: string[];
   timeoutSeconds?: number;
+  resource?: string;
+  authorizationDetails?: Record<string, unknown>[];
 }

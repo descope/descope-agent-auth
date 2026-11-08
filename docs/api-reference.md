@@ -64,6 +64,42 @@ How the agent authenticates to Descope. Pass one as `credential=`.
 | `JwtBearerProvider` | `(*, client_id, assertion, scopes=None)` | exchange a signed JWT from a trusted issuer (RFC 7523); `assertion` may be a string or a callable |
 | `ManagementKeyProvider` | `(*, management_key, allow_management_key=False)` | privileged, **not recommended** (bypasses Policies) |
 
+### Ask the user to approve a specific action (RFC 9396)
+
+`CibaProvider.authenticate(*, login_hint, binding_message=None, scopes=None, timeout_seconds=None, resource=None, authorization_details=None)`
+(`timeout_seconds=None` waits up to the provider's `max_wait_seconds`)
+(TS: `authenticate({ loginHint, bindingMessage?, scopes?, timeoutSeconds?, resource?, authorizationDetails? })`)
+runs one CIBA cycle. With `authorization_details` the user approves that exact action,
+and the returned `Credential` carries what they approved:
+
+```python
+cred = await ciba.authenticate(
+    login_hint="alice@example.com",
+    binding_message="Pay EUR 15.00 to Acme",
+    resource="https://api.bank.example.com",
+    authorization_details=[{"type": "payment_initiation", "amount": "15.00", "currency": "EUR"}],
+)
+cred.authorization_details  # the approved grant, from the /token response
+```
+
+The same two fields on `ApprovalRequest` gate a single call with `require_approval=`.
+
+- **One approval per call.** A credential obtained with `authorization_details` is never
+  cached or stored: every call asks the user again. Plain CIBA (`get_credential()`)
+  keeps its caching. Its `refresh_token`, if returned, stays a handle to the same grant
+  (RFC 9396 section 6), so refreshing keeps the approved details; enforcing single use
+  (e.g. a payment executed once) is the resource server's job.
+- **One resource, one element.** `resource` is a single string. Descope accepts one
+  `authorization_details` element, up to 4096 bytes and 5 levels deep, whose `type` is
+  registered on `resource`; anything else raises `InvalidAuthorizationDetails` before
+  any approval is sent. Details without a `resource` are rejected the same way.
+- **Console prerequisites.** A Resource with the RAR type registered; an inbound app
+  with CIBA enabled and a CIBA approval flow that shows the details (e.g.
+  `{{authorizationDetails.payment_initiation.amount}}`); a user-access rule on the
+  Resource. To put the grant on the access token, add a Custom Claims action
+  (`authorization_details` <- `{{authorizationDetails}}`) before CIBA Approval; the
+  id_token never carries it.
+
 ## Tool wrapper
 
 | Python | TypeScript | Purpose |
@@ -89,6 +125,7 @@ All extend `AgentAuthError`; match with `isinstance` / `instanceof`.
 | `PolicyDenied` | the credential lacks Policy permission |
 | `ApprovalDenied` / `ApprovalTimeout` | a CIBA approval gate was rejected / timed out |
 | `CredentialAcquisitionFailed` | the agent couldn't sign in to Descope |
+| `InvalidAuthorizationDetails` | Descope rejected (or didn't apply) a CIBA request's `authorization_details`; carries the server's `error_description` / `errorDescription`. Subclass of `CredentialAcquisitionFailed`; fix the request, don't retry |
 | `TokenExchangeFailed` | other token-fetch failure |
 
 ## Types
@@ -96,7 +133,9 @@ All extend `AgentAuthError`; match with `isinstance` / `instanceof`.
 - `VaultToken` — `access_token`, `token_type`, `expires_at`, `scopes`, `refresh_token`,
   `has_refresh_token`, `app_id`, `user_id`, `raw` (TS: camelCase). `str()` never leaks
   the token.
-- `Credential` — the agent's Descope sign-in credential (`token`, `kind`, `expires_at`, `refresh_token`).
-- `ApprovalRequest` — `login_hint`, `binding_message`, `scopes`, `timeout_seconds`.
+- `Credential` — the agent's Descope sign-in credential (`token`, `kind`, `expires_at`,
+  `refresh_token`, `scope`, `authorization_details`).
+- `ApprovalRequest` — `login_hint`, `binding_message`, `scopes`, `timeout_seconds`,
+  `resource`, `authorization_details`.
 - `PendingAuthorization` — device-code / CIBA "user action required" details.
 - `CredentialKind` — `"agent_token"` | `"management_key"`.

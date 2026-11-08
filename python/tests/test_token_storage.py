@@ -30,14 +30,18 @@ class TestCredentialPersistence(common.AgentAuthTest):
     def test_credential_persisted_and_reused_across_instances(self, mock_request):
         # Simulates a restart: a fresh provider/client backed by the same store
         # should load the credential instead of re-acquiring it.
-        mock_request.return_value = make_response({"access_token": "agent_at", "expires_in": 3600})
+        mock_request.return_value = make_response(
+            {"access_token": "agent_at", "expires_in": 3600, "scope": "read"}
+        )
         store = MemoryTokenStore()
 
         first = _client(ClientCredentialsProvider(client_id="cid", client_secret="s"), store)
         self.assertEqual(first.get_credential().token, "agent_at")
 
         second = _client(ClientCredentialsProvider(client_id="cid", client_secret="s"), store)
-        self.assertEqual(second.get_credential().token, "agent_at")
+        reloaded = second.get_credential()
+        self.assertEqual(reloaded.token, "agent_at")
+        self.assertEqual(reloaded.scope, "read")
 
         # Only the first client hit the token endpoint; the second loaded from store.
         self.assertEqual(mock_request.call_count, 1)

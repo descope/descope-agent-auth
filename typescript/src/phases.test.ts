@@ -49,6 +49,33 @@ describe('CIBA approval gate', () => {
     expect(tok.accessToken).toBe('gho_downstream_token');
   });
 
+  it('asks the user to approve the authorization details before the exchange', async () => {
+    const payment = [{ type: 'payment_initiation', amount: '15.00', currency: 'EUR' }];
+    let initBody: any;
+    nock(BASE_URL)
+      .post(CIBA_PATH, (b) => {
+        initBody = b;
+        return true;
+      })
+      .reply(200, { auth_req_id: 'areq', interval: 1, expires_in: 60 })
+      .post(CIBA_TOKEN_PATH)
+      .reply(200, { access_token: 'approval_at', authorization_details: payment });
+    nock(BASE_URL).post(USER_LATEST).reply(200, { token: tokenObj() });
+
+    await clientWithApproval().connections.getToken({
+      connection: 'github',
+      identifier: 'user@example.com',
+      requireApproval: {
+        loginHint: 'user@example.com',
+        resource: 'https://bank.example.com',
+        authorizationDetails: payment,
+      },
+    });
+
+    expect(initBody.resource).toBe('https://bank.example.com');
+    expect(JSON.parse(initBody.authorization_details)).toEqual(payment);
+  });
+
   it('blocks the exchange when denied', async () => {
     nock(BASE_URL)
       .post(CIBA_PATH)

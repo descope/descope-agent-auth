@@ -116,6 +116,8 @@ class AsyncAgentAuthClient:
             binding_message=request.binding_message,
             scopes=request.scopes,
             timeout_seconds=request.timeout_seconds,
+            resource=request.resource,
+            authorization_details=request.authorization_details,
         )
 
     # -- phase 1 passthroughs ----------------------------------------------

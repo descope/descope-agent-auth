@@ -128,6 +128,8 @@ export class AgentAuthClient {
       bindingMessage: request.bindingMessage,
       scopes: request.scopes,
       timeoutSeconds: request.timeoutSeconds,
+      resource: request.resource,
+      authorizationDetails: request.authorizationDetails,
     });
   }
 

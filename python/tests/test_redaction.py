@@ -17,6 +17,12 @@ class TestRedaction(unittest.TestCase):
         self.assertEqual(masked["client_id"], "cid")  # not sensitive
         self.assertEqual(masked["scope"], "read")
 
+    def test_masks_authorization_details(self):
+        masked = _redact(
+            {"authorization_details": '[{"type":"payment_initiation","amount":"15.00"}]'}
+        )
+        self.assertEqual(masked["authorization_details"], _REDACTED)
+
     def test_masks_nested(self):
         masked = _redact({"options": {"assertion": "x", "prompt": "consent"}})
         self.assertEqual(masked["options"]["assertion"], _REDACTED)
