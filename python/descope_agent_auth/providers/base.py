@@ -200,13 +200,16 @@ def token_response_to_credential(
     if refresh is None and fallback is not None:
         refresh = fallback.refresh_token  # refresh responses often omit a new one
     scope = body.get("scope")
+    if not (isinstance(scope, str) and scope):
+        # RFC 6749 5.1: a response may omit scope when it is unchanged.
+        scope = fallback.scope if fallback is not None else None
     authorization_details = body.get("authorization_details")
     return Credential(
         token=str(body["access_token"]),
         kind=kind,
         expires_at=expires_at,
         refresh_token=refresh,
-        scope=scope if isinstance(scope, str) else None,
+        scope=scope,
         authorization_details=(
             authorization_details if isinstance(authorization_details, list) else None
         ),

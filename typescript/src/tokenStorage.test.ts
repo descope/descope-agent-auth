@@ -98,6 +98,7 @@ describe('refresh from a stored token (no re-auth)', () => {
         kind: 'agent_token',
         expiresAt: Date.now() / 1000 - 100,
         refreshToken: 'r1',
+        scope: 'openid',
       }),
     );
     let body: any;
@@ -113,8 +114,9 @@ describe('refresh from a stored token (no re-auth)', () => {
       clientSecret: 'sec',
       loginHint: 'user@example.com',
     });
-    await client(provider, store).getCredential();
+    const cred = await client(provider, store).getCredential();
 
+    expect(cred.scope).toBe('openid'); // kept: the refresh response omits scope
     expect(body.grant_type).toBe('refresh_token');
     expect(body.client_id).toBe('cid');
     expect(body.client_secret).toBe('sec');

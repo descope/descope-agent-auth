@@ -99,6 +99,7 @@ class TestRefreshFromStore(common.AgentAuthTest):
                     "kind": "agent_token",
                     "expires_at": time.time() - 100,
                     "refresh_token": "r1",
+                    "scope": "openid",
                 }
             ),
         )
@@ -110,6 +111,7 @@ class TestRefreshFromStore(common.AgentAuthTest):
         cred = _client(provider, store).get_credential()
 
         self.assertEqual(cred.token, "new")
+        self.assertEqual(cred.scope, "openid")  # kept: the refresh response omits scope
         args, kwargs = mock_request.call_args
         self.assertEqual(args[1], "/oauth2/v1/apps/token")
         self.assertEqual(kwargs["data"]["grant_type"], "refresh_token")
