@@ -17,11 +17,17 @@ app client ID: that route recovers the project from it.
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from typing import List, Optional
 
 from .._endpoints import CIBA_AUTHENTICATE, GRANT_CIBA, OAUTH2_APPS_TOKEN
-from ..errors import ApprovalDenied, ApprovalTimeout, CredentialAcquisitionFailed
+from ..errors import (
+    ApprovalDenied,
+    ApprovalTimeout,
+    CredentialAcquisitionFailed,
+    InvalidAuthorizationDetails,
+)
 from ..types import Credential, CredentialKind
 from .base import CredentialProvider, _err, token_response_to_credential
 
@@ -62,21 +68,38 @@ class CibaProvider(CredentialProvider):
         login_hint: str,
         binding_message: Optional[str] = None,
         scopes: Optional[List[str]] = None,
-        timeout_seconds: float = 120.0,
+        timeout_seconds: Optional[float] = None,
+        resource: Optional[str] = None,
+        authorization_details: Optional[List[dict]] = None,
     ) -> Credential:
         """Run one full CIBA cycle (initiate + poll) and return the user-bound token.
 
         Reused as both the acquisition flow and the phase-2 approval gate. Raises
         ``ApprovalDenied`` / ``ApprovalTimeout`` on rejection or expiry.
+
+        ``authorization_details`` (RFC 9396) asks the user to approve one specific
+        action, e.g. a payment; its types must be registered on ``resource``. The
+        returned credential carries the approved details and is never cached or
+        stored, so every call asks the user again. Its refresh token, if any, stays a
+        handle to that same grant (RFC 9396 section 6); single use is the resource
+        server's to enforce. Raises ``InvalidAuthorizationDetails`` when Descope
+        rejects the details or does not apply them.
         """
-        auth_req_id, interval, deadline = await self._initiate(login_hint, binding_message, scopes)
+        auth_req_id, interval, deadline = await self._initiate(
+            login_hint, binding_message, scopes, resource, authorization_details
+        )
+        if timeout_seconds is None:
+            timeout_seconds = self._max_wait_seconds
         deadline = min(deadline, time.time() + timeout_seconds)
 
         while time.time() < deadline:
             await asyncio.sleep(interval)
             resp = await self.http.post_form(OAUTH2_APPS_TOKEN, data=self._poll_body(auth_req_id))
             if resp.ok:
-                return token_response_to_credential(resp.json, kind=self.kind)
+                credential = token_response_to_credential(resp.json, kind=self.kind)
+                if authorization_details:
+                    _require_applied_details(credential)
+                return credential
             error = (resp.json or {}).get("error")
             if error == "authorization_pending":
                 continue
@@ -97,6 +120,8 @@ class CibaProvider(CredentialProvider):
         login_hint: str,
         binding_message: Optional[str],
         scopes: Optional[List[str]],
+        resource: Optional[str],
+        authorization_details: Optional[List[dict]],
     ) -> tuple:
         data = {
             "client_id": self._client_id,
@@ -107,7 +132,13 @@ class CibaProvider(CredentialProvider):
             data["client_secret"] = self._client_secret
         if binding_message:
             data["binding_message"] = binding_message
+        if resource:
+            data["resource"] = resource
+        if authorization_details:
+            data["authorization_details"] = json.dumps(authorization_details)
         resp = await self.http.post_form(CIBA_AUTHENTICATE, data=data)
+        if not resp.ok and (resp.json or {}).get("error") == "invalid_authorization_details":
+            raise InvalidAuthorizationDetails(_err(resp.json) or resp.text)
         if not resp.ok or not resp.json:
             raise CredentialAcquisitionFailed(
                 f"CIBA initiation failed ({resp.status_code}): {_err(resp.json) or resp.text}"
@@ -135,3 +166,13 @@ class CibaProvider(CredentialProvider):
         if self._client_secret:
             out["client_secret"] = self._client_secret
         return out
+
+
+def _require_applied_details(credential: Credential) -> None:
+    # A project with OAUTH_RAR off accepts the request but drops the details, so the
+    # user approved only the binding message; never hand that back as a RAR approval.
+    if not credential.authorization_details:
+        raise InvalidAuthorizationDetails(
+            "Descope did not apply authorization_details to the approval; "
+            "check that RAR is enabled for the project"
+        )

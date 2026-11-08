@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import AsyncMock, patch
 
 from descope_agent_auth import (
@@ -10,11 +11,13 @@ from descope_agent_auth import (
     DeviceCodeProvider,
     JwtBearerProvider,
     ManagementKeyProvider,
+    MemoryTokenStore,
 )
 from descope_agent_auth.errors import (
     ApprovalDenied,
     ApprovalTimeout,
     CredentialAcquisitionFailed,
+    InvalidAuthorizationDetails,
 )
 
 from . import common
@@ -179,6 +182,131 @@ class TestCibaProvider(common.AgentAuthTest):
         self._assert_paths(mock_request, polls=2)
         _, kwargs = mock_request.call_args
         self.assertEqual(kwargs["data"]["grant_type"], "refresh_token")
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_plain_ciba_parses_scope_and_stays_cached(self, mock_request):
+        mock_request.side_effect = [
+            self._initiated(),
+            make_response({"access_token": "ciba_at", "expires_in": 3600, "scope": "openid"}),
+        ]
+        client = self.make_client(CibaProvider(client_id="cid", login_hint="user@example.com"))
+
+        cred = client.get_credential()
+        client.get_credential()
+
+        self.assertEqual("openid", cred.scope)
+        self.assertIsNone(cred.authorization_details)
+        self._assert_paths(mock_request, polls=1)
+
+
+PAYMENT = [{"type": "payment_initiation", "amount": "15.00", "currency": "EUR"}]
+BANK = "https://bank.example.com"
+
+
+@patch("asyncio.sleep", AsyncMock())
+class TestCibaRichAuthorization(common.AgentAuthTest):
+    @staticmethod
+    def _approved(**overrides):
+        body = {
+            "access_token": "rar_at",
+            "expires_in": 3600,
+            "refresh_token": "r1",
+            "scope": "payments:write",
+            "authorization_details": PAYMENT,
+        }
+        body.update(overrides)
+        return make_response(body)
+
+    @staticmethod
+    def _approve_payment(client, provider):
+        return client._bridge.run(
+            provider.authenticate(
+                login_hint="user@example.com", resource=BANK, authorization_details=PAYMENT
+            )
+        )
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_sends_details_and_returns_approved_grant(self, mock_request):
+        mock_request.side_effect = [TestCibaProvider._initiated(), self._approved()]
+        provider = CibaProvider(client_id="cid", login_hint="user@example.com")
+        client = self.make_client(provider)
+
+        cred = self._approve_payment(client, provider)
+
+        initiate = mock_request.call_args_list[0]
+        self.assertEqual("/oauth2/v1/apps/bc-authorize", initiate.args[1])
+        self.assertEqual(BANK, initiate.kwargs["data"]["resource"])
+        self.assertEqual(PAYMENT, json.loads(initiate.kwargs["data"]["authorization_details"]))
+        self.assertEqual(PAYMENT, cred.authorization_details)
+        self.assertEqual("payments:write", cred.scope)
+        self.assertEqual("r1", cred.refresh_token)  # a handle to the same grant (RFC 9396 s6)
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_each_call_asks_again_and_nothing_is_stored(self, mock_request):
+        mock_request.side_effect = [
+            TestCibaProvider._initiated(),
+            self._approved(),
+            TestCibaProvider._initiated(),
+            self._approved(),
+            TestCibaProvider._initiated(),
+            make_response({"access_token": "plain_at", "expires_in": 3600}),
+        ]
+        store = MemoryTokenStore()
+        provider = CibaProvider(client_id="cid", login_hint="user@example.com")
+        client = self.make_client(provider, store=store)
+
+        self._approve_payment(client, provider)
+        self._approve_payment(client, provider)
+        self.assertEqual([], store.list())
+        # The provider's own credential is a fresh plain CIBA run, not the RAR grant.
+        self.assertEqual("plain_at", client.get_credential().token)
+
+        paths = [c.args[1] for c in mock_request.call_args_list]
+        self.assertEqual(3, paths.count("/oauth2/v1/apps/bc-authorize"))
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_empty_details_run_plain_ciba(self, mock_request):
+        mock_request.side_effect = [TestCibaProvider._initiated(), self._approved()]
+        provider = CibaProvider(client_id="cid", login_hint="user@example.com")
+        client = self.make_client(provider)
+
+        cred = client._bridge.run(
+            provider.authenticate(login_hint="user@example.com", authorization_details=[])
+        )
+
+        self.assertNotIn("authorization_details", mock_request.call_args_list[0].kwargs["data"])
+        self.assertEqual("r1", cred.refresh_token)
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_rejected_details_raise_before_any_approval(self, mock_request):
+        reason = "Invalid authorization_details: authorization_details type is not registered on the requested resources"
+        mock_request.side_effect = [
+            make_response(
+                {"error": "invalid_authorization_details", "error_description": reason},
+                status=400,
+            )
+        ]
+        provider = CibaProvider(client_id="cid", login_hint="user@example.com")
+        client = self.make_client(provider)
+
+        with self.assertRaises(InvalidAuthorizationDetails) as caught:
+            self._approve_payment(client, provider)
+
+        self.assertEqual(reason, caught.exception.error_description)
+        self.assertEqual(reason, str(caught.exception))
+        self.assertEqual(1, mock_request.call_count)  # no polling, no approval sent
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_details_not_applied_by_server_raise(self, mock_request):
+        mock_request.side_effect = [
+            TestCibaProvider._initiated(),
+            self._approved(authorization_details=None),
+        ]
+        provider = CibaProvider(client_id="cid", login_hint="user@example.com")
+        client = self.make_client(provider)
+
+        with self.assertRaises(InvalidAuthorizationDetails):
+            self._approve_payment(client, provider)
 
 
 class TestManagementKeyProvider(common.AgentAuthTest):

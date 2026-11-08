@@ -47,13 +47,16 @@ class Credential:
     ``token`` is the bearer value used to authenticate to Descope: either an
     acquired access token or a static management key. ``expires_at`` is a unix
     timestamp; ``None`` means the credential does not expire on its own (e.g. a
-    management key).
+    management key). ``scope`` is what the server granted; ``authorization_details``
+    is the RFC 9396 grant the user approved on a CIBA request that carried them.
     """
 
     token: str
     kind: CredentialKind
     expires_at: Optional[float] = None
     refresh_token: Optional[str] = None
+    scope: Optional[str] = None
+    authorization_details: Optional[List[dict]] = field(default=None, hash=False)
 
     @property
     def is_privileged(self) -> bool:
@@ -121,9 +124,13 @@ class ApprovalRequest:
 
     Distinct from acquisition: the agent already holds a working credential, but a
     real person must sign off on a trusted device before this one step proceeds.
+    Set ``authorization_details`` (RFC 9396, types registered on ``resource``) to
+    have the user approve this specific action, e.g. a payment amount.
     """
 
     login_hint: str
     binding_message: Optional[str] = None
     scopes: Optional[List[str]] = None
-    timeout_seconds: float = 120.0
+    timeout_seconds: Optional[float] = None  # None: the approval provider's max_wait_seconds
+    resource: Optional[str] = None
+    authorization_details: Optional[List[dict]] = field(default=None, hash=False)
