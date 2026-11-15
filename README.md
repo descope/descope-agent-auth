@@ -287,7 +287,9 @@ sequenceDiagram
 ```
 
 A sensitive step can require a fresh CIBA **approval** before the token is returned —
-see the [quickstart](docs/quickstart.md).
+see the [quickstart](docs/quickstart.md). Add RFC 9396 `authorization_details` to have
+the user approve one exact action, e.g. "pay EUR 15.00"; the SDK never caches that
+approval (see the [API reference](docs/api-reference.md#ask-the-user-to-approve-a-specific-action-rfc-9396)).
 
 ## Packages
 
@@ -311,7 +313,8 @@ Both languages, identical surfaces:
 - `get_connect_url` / `getConnectUrl` to build the connect URL, and
   `wait_for_connection` / `waitForConnection` to poll until the user finishes.
 - A pluggable token store that persists and refreshes credentials across restarts.
-- A human-in-the-loop CIBA **approval gate** on sensitive calls.
+- A human-in-the-loop CIBA **approval gate** on sensitive calls, optionally for one
+  exact action with RFC 9396 `authorization_details` (never cached; every call asks).
 - The `with_connection` / `withConnection` tool wrapper, plus a LangGraph
   `interrupt()` helper.
 - An **MCP auth adapter** for remote MCP server connections —

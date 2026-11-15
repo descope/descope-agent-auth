@@ -36,7 +36,19 @@ export const tokenResponseToCredential = (
     expiresAt = Date.now() / 1000 + body.expires_in;
   }
   const refreshToken = body.refresh_token ?? fallback?.refreshToken;
-  return { token: String(body.access_token), kind, expiresAt, refreshToken };
+  // RFC 6749 5.1: a response may omit scope when it is unchanged.
+  const scope = typeof body.scope === 'string' && body.scope ? body.scope : fallback?.scope;
+  const authorizationDetails = Array.isArray(body.authorization_details)
+    ? body.authorization_details
+    : undefined;
+  return {
+    token: String(body.access_token),
+    kind,
+    expiresAt,
+    refreshToken,
+    scope,
+    authorizationDetails,
+  };
 };
 
 export abstract class CredentialProvider {

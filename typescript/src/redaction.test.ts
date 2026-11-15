@@ -16,6 +16,11 @@ describe('redact (log masking)', () => {
     expect(masked.scope).toBe('read');
   });
 
+  it('masks authorization_details (transaction data)', () => {
+    const masked = redact({ authorization_details: '[{"type":"payment_initiation"}]' });
+    expect(masked.authorization_details).toBe(REDACTED);
+  });
+
   it('masks nested values', () => {
     const masked = redact({ options: { assertion: 'x', prompt: 'consent' } }) as {
       options: Record<string, unknown>;

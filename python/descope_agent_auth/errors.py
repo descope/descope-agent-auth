@@ -55,6 +55,20 @@ class CredentialAcquisitionFailed(AgentAuthError):
     """Phase 1 failed: bad client credentials, device-flow timeout, etc."""
 
 
+class InvalidAuthorizationDetails(CredentialAcquisitionFailed):
+    """Descope rejected or did not apply a CIBA request's ``authorization_details``.
+
+    Rejections come before any approval is sent: the type is not registered on the
+    requested resource, more than one element, over 4096 bytes, or nested deeper
+    than 5. Not retryable as is; fix the request. ``error_description`` is the
+    server's reason.
+    """
+
+    def __init__(self, error_description: str) -> None:
+        super().__init__(error_description)
+        self.error_description = error_description
+
+
 class TokenExchangeFailed(AgentAuthError):
     """Phase 2 transport or validation failure not covered by a more specific error."""
 
