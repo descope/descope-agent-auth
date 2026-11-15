@@ -519,6 +519,11 @@ on that Resource in the Console, and the CIBA approval flow shows the fields (e.
 `{{authorizationDetails.payment_initiation.amount}}`). The SDK never caches such an
 approval, so the next payment asks again.
 
+The gate is a yes/no check: the call proceeds only after the user approves, but the
+token it returns does not carry the approved details, so the downstream API cannot
+verify them (e.g. the amount). When it must, use `ciba.authenticate(...)` below and send
+that token instead.
+
 ```python
 require_approval=ApprovalRequest(
     login_hint="user@example.com",
@@ -541,7 +546,9 @@ requireApproval: {
 
 To get the approved grant back, call the provider directly:
 `await ciba.authenticate(login_hint=..., resource=..., authorization_details=[...])`
-returns a `Credential` whose `authorization_details` is what the user approved.
+returns a `Credential` whose `authorization_details` is what the user approved, and
+whose access token the resource server can check once a Custom Claims action adds
+`authorization_details` to it.
 
 ## Errors worth catching
 

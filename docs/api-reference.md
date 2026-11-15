@@ -66,8 +66,7 @@ How the agent authenticates to Descope. Pass one as `credential=`.
 
 ### Ask the user to approve a specific action (RFC 9396)
 
-`CibaProvider.authenticate(*, login_hint, binding_message=None, scopes=None, timeout_seconds=None, resource=None, authorization_details=None)`
-(`timeout_seconds=None` waits up to the provider's `max_wait_seconds`)
+`CibaProvider.authenticate(*, login_hint, binding_message=None, scopes=None, timeout_seconds=120.0, resource=None, authorization_details=None)`
 (TS: `authenticate({ loginHint, bindingMessage?, scopes?, timeoutSeconds?, resource?, authorizationDetails? })`)
 runs one CIBA cycle. With `authorization_details` the user approves that exact action,
 and the returned `Credential` carries what they approved:
@@ -85,10 +84,11 @@ cred.authorization_details  # the approved grant, from the /token response
 The same two fields on `ApprovalRequest` gate a single call with `require_approval=`.
 
 - **One approval per call.** A credential obtained with `authorization_details` is never
-  cached or stored: every call asks the user again. Plain CIBA (`get_credential()`)
-  keeps its caching. Its `refresh_token`, if returned, stays a handle to the same grant
-  (RFC 9396 section 6), so refreshing keeps the approved details; enforcing single use
-  (e.g. a payment executed once) is the resource server's job.
+  cached or stored: every `authenticate()` call asks the user again; the SDK never
+  reuses an approval. Plain CIBA (`get_credential()`) keeps its caching. Its
+  `refresh_token`, if returned, stays a handle to the same grant (RFC 9396 section 6),
+  so refreshing keeps the approved details; enforcing single use (e.g. a payment
+  executed once) is the resource server's job.
 - **One resource, one element.** `resource` is a single string. Descope accepts one
   `authorization_details` element, up to 4096 bytes and 5 levels deep, whose `type` is
   registered on `resource`; anything else raises `InvalidAuthorizationDetails` before

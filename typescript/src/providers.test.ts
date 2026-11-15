@@ -346,6 +346,44 @@ describe('CibaProvider with authorization_details (RAR)', () => {
     expect(err.message).toBe(reason);
   });
 
+  it('maps the legacy error envelope (strict OAuth errors off)', async () => {
+    const reason =
+      'Invalid authorization_details: only one authorization_details object is supported';
+    nock(BASE_URL).post(CIBA_PATH).reply(400, {
+      errorCode: 'E066208',
+      errorDescription: 'invalid_authorization_details',
+      errorMessage: reason,
+    });
+    const provider = new CibaProvider({ clientId: 'cid', loginHint: 'user@example.com' });
+    makeClient(provider);
+
+    const err = await approvePayment(provider).catch((e) => e);
+
+    expect(err).toBeInstanceOf(InvalidAuthorizationDetails);
+    expect(err.errorDescription).toBe(reason);
+  });
+
+  it.each([
+    ['oauth', { error: 'invalid_request', error_description: 'login_hint is required' }],
+    [
+      'legacy',
+      {
+        errorCode: 'E011003',
+        errorDescription: 'Request is invalid',
+        errorMessage: 'login_hint is required',
+      },
+    ],
+  ])('keeps other %s initiation errors as plain CredentialAcquisitionFailed', async (_, body) => {
+    nock(BASE_URL).post(CIBA_PATH).reply(400, body);
+    const provider = new CibaProvider({ clientId: 'cid', loginHint: 'user@example.com' });
+    makeClient(provider);
+
+    const err = await approvePayment(provider).catch((e) => e);
+
+    expect(err).toBeInstanceOf(CredentialAcquisitionFailed);
+    expect(err).not.toBeInstanceOf(InvalidAuthorizationDetails);
+  });
+
   it('throws when the server did not apply the details', async () => {
     nock(BASE_URL)
       .post(CIBA_PATH)

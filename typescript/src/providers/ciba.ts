@@ -43,6 +43,19 @@ export interface CibaAuthenticateArgs {
   authorizationDetails?: Record<string, unknown>[];
 }
 
+const INVALID_AUTHORIZATION_DETAILS = 'invalid_authorization_details';
+
+const rejectedDetailsReason = (body: any): string | undefined => {
+  // With strict OAuth errors off, Descope sends only its legacy envelope:
+  // errorDescription carries the code and errorMessage the reason.
+  if (![body?.error, body?.errorDescription].includes(INVALID_AUTHORIZATION_DETAILS)) {
+    return undefined;
+  }
+  return (
+    body.error_description || body.errorMessage || body.message || INVALID_AUTHORIZATION_DETAILS
+  );
+};
+
 const requireAppliedDetails = (credential: Credential): void => {
   // A project with OAUTH_RAR off accepts the request but drops the details, so the
   // user approved only the binding message; never hand that back as a RAR approval.
@@ -151,9 +164,8 @@ export class CibaProvider extends CredentialProvider {
       data.authorization_details = JSON.stringify(args.authorizationDetails);
     }
     const resp = await this.requireHttp().postForm(CIBA_AUTHENTICATE, data);
-    if (!resp.ok && resp.json?.error === 'invalid_authorization_details') {
-      throw new InvalidAuthorizationDetails(errMessage(resp.json) ?? resp.text);
-    }
+    const rejectedReason = resp.ok ? undefined : rejectedDetailsReason(resp.json);
+    if (rejectedReason) throw new InvalidAuthorizationDetails(rejectedReason);
     if (!resp.ok || !resp.json) {
       throw new CredentialAcquisitionFailed(
         `CIBA initiation failed (${resp.statusCode}): ${errMessage(resp.json) ?? resp.text}`,

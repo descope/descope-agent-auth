@@ -31,6 +31,8 @@ from ..errors import (
 from ..types import Credential, CredentialKind
 from .base import CredentialProvider, _err, token_response_to_credential
 
+INVALID_AUTHORIZATION_DETAILS = "invalid_authorization_details"
+
 
 class CibaProvider(CredentialProvider):
     kind = CredentialKind.AGENT_TOKEN
@@ -68,7 +70,7 @@ class CibaProvider(CredentialProvider):
         login_hint: str,
         binding_message: Optional[str] = None,
         scopes: Optional[List[str]] = None,
-        timeout_seconds: Optional[float] = None,
+        timeout_seconds: float = 120.0,
         resource: Optional[str] = None,
         authorization_details: Optional[List[dict]] = None,
     ) -> Credential:
@@ -88,8 +90,6 @@ class CibaProvider(CredentialProvider):
         auth_req_id, interval, deadline = await self._initiate(
             login_hint, binding_message, scopes, resource, authorization_details
         )
-        if timeout_seconds is None:
-            timeout_seconds = self._max_wait_seconds
         deadline = min(deadline, time.time() + timeout_seconds)
 
         while time.time() < deadline:
@@ -137,8 +137,9 @@ class CibaProvider(CredentialProvider):
         if authorization_details:
             data["authorization_details"] = json.dumps(authorization_details)
         resp = await self.http.post_form(CIBA_AUTHENTICATE, data=data)
-        if not resp.ok and (resp.json or {}).get("error") == "invalid_authorization_details":
-            raise InvalidAuthorizationDetails(_err(resp.json) or resp.text)
+        rejected_details_reason = None if resp.ok else _rejected_details_reason(resp.json)
+        if rejected_details_reason:
+            raise InvalidAuthorizationDetails(rejected_details_reason)
         if not resp.ok or not resp.json:
             raise CredentialAcquisitionFailed(
                 f"CIBA initiation failed ({resp.status_code}): {_err(resp.json) or resp.text}"
@@ -166,6 +167,21 @@ class CibaProvider(CredentialProvider):
         if self._client_secret:
             out["client_secret"] = self._client_secret
         return out
+
+
+def _rejected_details_reason(body: Optional[dict]) -> Optional[str]:
+    # With strict OAuth errors off, Descope sends only its legacy envelope:
+    # errorDescription carries the code and errorMessage the reason.
+    if not isinstance(body, dict):
+        return None
+    if INVALID_AUTHORIZATION_DETAILS not in (body.get("error"), body.get("errorDescription")):
+        return None
+    return (
+        body.get("error_description")
+        or body.get("errorMessage")
+        or body.get("message")
+        or INVALID_AUTHORIZATION_DETAILS
+    )
 
 
 def _require_applied_details(credential: Credential) -> None:

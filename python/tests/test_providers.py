@@ -297,6 +297,49 @@ class TestCibaRichAuthorization(common.AgentAuthTest):
         self.assertEqual(1, mock_request.call_count)  # no polling, no approval sent
 
     @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_legacy_envelope_rejection_raises_invalid_details(self, mock_request):
+        # Strict OAuth errors off: only Descope's legacy fields, no `error`.
+        reason = "Invalid authorization_details: only one authorization_details object is supported"
+        mock_request.side_effect = [
+            make_response(
+                {
+                    "errorCode": "E066208",
+                    "errorDescription": "invalid_authorization_details",
+                    "errorMessage": reason,
+                },
+                status=400,
+            )
+        ]
+        provider = CibaProvider(client_id="cid", login_hint="user@example.com")
+        client = self.make_client(provider)
+
+        with self.assertRaises(InvalidAuthorizationDetails) as caught:
+            self._approve_payment(client, provider)
+
+        self.assertEqual(reason, caught.exception.error_description)
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_other_initiation_errors_stay_plain(self, mock_request):
+        bodies = {
+            "oauth": {"error": "invalid_request", "error_description": "login_hint is required"},
+            "legacy": {
+                "errorCode": "E011003",
+                "errorDescription": "Request is invalid",
+                "errorMessage": "login_hint is required",
+            },
+        }
+        for name, body in bodies.items():
+            with self.subTest(name):
+                mock_request.side_effect = [make_response(body, status=400)]
+                provider = CibaProvider(client_id="cid", login_hint="user@example.com")
+                client = self.make_client(provider)
+
+                with self.assertRaises(CredentialAcquisitionFailed) as caught:
+                    self._approve_payment(client, provider)
+
+                self.assertNotIsInstance(caught.exception, InvalidAuthorizationDetails)
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_details_not_applied_by_server_raise(self, mock_request):
         mock_request.side_effect = [
             TestCibaProvider._initiated(),
