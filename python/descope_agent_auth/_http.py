@@ -10,12 +10,23 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import platform
 from dataclasses import dataclass
 from typing import Any, Dict, Mapping, Optional
 
 import httpx
 
+from ._version import __version__
 from .errors import AgentAuthError
+
+# Identify the SDK on every Descope request, like Descope's python-sdk does, so usage
+# can be told apart from the core SDK ("python") in Descope's analytics.
+SDK_HEADERS = {
+    "User-Agent": f"descope-agent-auth-python/{__version__}",
+    "x-descope-sdk-name": "agent-auth-python",
+    "x-descope-sdk-version": __version__,
+    "x-descope-sdk-python-version": platform.python_version(),
+}
 
 _REDACTED = "***redacted***"
 _SENSITIVE_KEYS = {
@@ -87,7 +98,7 @@ class HttpClient:
             base_url=self._base_url,
             timeout=timeout,
             transport=_transport,
-            headers={"User-Agent": "descope-agent-auth-python/0.1.0"},
+            headers=SDK_HEADERS,
         )
 
     async def aclose(self) -> None:
