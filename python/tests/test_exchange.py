@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 from descope_agent_auth import (
+    AccessTokenProvider,
     ClientCredentialsProvider,
     ManagementKeyProvider,
 )
@@ -323,12 +324,74 @@ class TestResourcesExchange(common.AgentAuthTest):
         self.assertEqual(tok.access_token, "resource_at")
         self.assertEqual(tok.scopes, ["read"])
         args, kwargs = mock_request.call_args  # the token-exchange call
-        self.assertEqual(args[1], "/oauth2/v1/token")
+        # Token-exchange is served only by the inbound-apps authorization server.
+        self.assertEqual(args[1], "/oauth2/v1/apps/token")
         self.assertEqual(
             kwargs["data"]["grant_type"], "urn:ietf:params:oauth:grant-type:token-exchange"
         )
         self.assertEqual(kwargs["data"]["resource"], "urn:my-api")
         self.assertEqual(kwargs["data"]["subject_token"], "agent_at")
+        # Descope requires the exchanging client to authenticate; it becomes act.sub.
+        self.assertEqual(kwargs["data"]["client_id"], "cid")
+        self.assertEqual(kwargs["data"]["client_secret"], "s")
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_user_scoped_exchange_authenticates_the_agent_client(self, mock_request):
+        mock_request.return_value = make_response({"access_token": "resource_at"})
+        client = self._agent_client()
+
+        client.resources.get_token(resource="urn:my-api", act_as_user_token="user_jwt")
+
+        args, kwargs = mock_request.call_args
+        self.assertEqual(args[1], "/oauth2/v1/apps/token")
+        self.assertEqual(kwargs["data"]["subject_token"], "user_jwt")
+        self.assertEqual(kwargs["data"]["client_id"], "cid")
+        self.assertEqual(kwargs["data"]["client_secret"], "s")
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_user_scoped_tokens_are_not_shared_across_users(self, mock_request):
+        # One shared agent client serving two users must never hand user A's
+        # Resource token to user B from the cache.
+        mock_request.side_effect = [
+            make_response({"access_token": "alice_resource_at", "expires_in": 3600}),
+            make_response({"access_token": "bob_resource_at", "expires_in": 3600}),
+        ]
+        client = self._agent_client()
+
+        alice = client.resources.get_token(resource="urn:my-api", act_as_user_token="alice_jwt")
+        bob = client.resources.get_token(resource="urn:my-api", act_as_user_token="bob_jwt")
+        alice_again = client.resources.get_token(
+            resource="urn:my-api", act_as_user_token="alice_jwt"
+        )
+
+        self.assertEqual(alice.access_token, "alice_resource_at")
+        self.assertEqual(bob.access_token, "bob_resource_at")
+        self.assertEqual(alice_again.access_token, "alice_resource_at")  # cached per user
+        self.assertEqual(mock_request.call_count, 2)
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_user_scoped_token_is_not_served_to_the_agent_itself(self, mock_request):
+        mock_request.side_effect = [
+            make_response({"access_token": "alice_resource_at", "expires_in": 3600}),
+            make_response({"access_token": "agent_at", "expires_in": 3600}),  # phase 1
+            make_response({"access_token": "agent_resource_at", "expires_in": 3600}),
+        ]
+        client = self._agent_client()
+
+        client.resources.get_token(resource="urn:my-api", act_as_user_token="alice_jwt")
+        own = client.resources.get_token(resource="urn:my-api")
+
+        self.assertEqual(own.access_token, "agent_resource_at")
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_exchange_without_confidential_client_is_rejected(self, mock_request):
+        # A bare user token has no client to authenticate the exchange, and
+        # Descope rejects unauthenticated token-exchange requests.
+        client = self.make_client(AccessTokenProvider(access_token="user_jwt"))
+        with self.assertRaises(AgentAuthError) as ctx:
+            client.resources.get_token(resource="urn:my-api")
+        self.assertIn("ClientCredentialsProvider", str(ctx.exception))
+        mock_request.assert_not_called()
 
     @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_resource_token_sends_audience(self, mock_request):

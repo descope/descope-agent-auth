@@ -8,6 +8,7 @@ from descope_agent_auth import (
     AccessTokenProvider,
     ClientCredentialsProvider,
 )
+from descope_agent_auth.errors import AgentAuthError
 
 from . import common
 from .common import PROJECT_ID, make_response, token_obj
@@ -41,17 +42,15 @@ class TestAccessTokenProvider(common.AgentAuthTest):
         self.assertEqual(kwargs["headers"]["Authorization"], f"Bearer {PROJECT_ID}:user_jwt")
 
     @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
-    def test_resource_token_exchange_uses_user_subject(self, mock_request):
-        mock_request.return_value = make_response(
-            {"access_token": "resource_at", "expires_in": 3600, "scope": "read"}
-        )
+    def test_resource_token_exchange_needs_an_agent_client(self, mock_request):
+        # Descope only exchanges for an authenticated (confidential) client, so a
+        # bare user token can't mint Resource tokens on its own. Use a shared
+        # ClientCredentialsProvider client with act_as_user_token instead.
         client = self.make_client(AccessTokenProvider(access_token="user_jwt"))
 
-        tok = client.resources.get_token(resource="urn:my-api", scopes=["read"])
-
-        self.assertEqual(tok.access_token, "resource_at")
-        _, kwargs = mock_request.call_args
-        self.assertEqual(kwargs["data"]["subject_token"], "user_jwt")
+        with self.assertRaises(AgentAuthError):
+            client.resources.get_token(resource="urn:my-api", scopes=["read"])
+        mock_request.assert_not_called()
 
 
 class TestActAsUserTokenOverride(common.AgentAuthTest):

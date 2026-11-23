@@ -47,9 +47,14 @@ export async function randomUrlToken(byteLength = 32): Promise<string> {
   return toBase64Url(bytes);
 }
 
+/** Base64url SHA-256 digest of a UTF-8 string. */
+export async function sha256Base64Url(input: string): Promise<string> {
+  const c = await webCrypto();
+  const digest = await c.subtle.digest('SHA-256', textEncoder.encode(input));
+  return toBase64Url(new Uint8Array(digest));
+}
+
 /** The SHA-256 PKCE code_challenge for a given verifier. */
 export async function sha256UrlChallenge(verifier: string): Promise<string> {
-  const c = await webCrypto();
-  const digest = await c.subtle.digest('SHA-256', textEncoder.encode(verifier));
-  return toBase64Url(new Uint8Array(digest));
+  return sha256Base64Url(verifier);
 }

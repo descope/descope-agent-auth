@@ -10,19 +10,22 @@ Because token-exchange needs an OAuth subject token, this path requires an OAuth
 agent identity (Client ID/Secret via any phase-1 provider). It does not apply to a
 Management Key.
 
-NOTE: the exact token-exchange parameters (``resource`` vs ``audience``, whether
-client auth is also required) should be confirmed against the Descope API
-reference; the grant + endpoint are pinned in ``_endpoints``.
+The exchange goes to the inbound-apps token endpoint (``/oauth2/v1/apps/token``,
+per the ``/v1/apps/<projectId>`` discovery document) and must be authenticated by
+a confidential client (``client_id`` + ``client_secret``). That client is recorded
+as ``act.sub`` on the minted token, so the downstream API can see which agent is
+acting for the user.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import time
-from typing import Any, Awaitable, Callable, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from .._async import maybe_await
-from .._endpoints import GRANT_TOKEN_EXCHANGE, OAUTH2_TOKEN, TOKEN_TYPE_ACCESS_TOKEN
+from .._endpoints import GRANT_TOKEN_EXCHANGE, OAUTH2_APPS_TOKEN, TOKEN_TYPE_ACCESS_TOKEN
 from .._http import HttpClient
 from ..errors import AgentAuthError, PolicyDenied, TokenExchangeFailed
 from ..store.base import TokenStore
@@ -30,11 +33,21 @@ from ..types import ApprovalRequest, Credential, Mode, VaultToken
 
 
 def _cache_key(
-    resource: str, scopes: Optional[List[str]], audience: Optional[List[str]]
+    resource: str,
+    scopes: Optional[List[str]],
+    audience: Optional[List[str]],
+    act_as_user_token: Optional[str] = None,
 ) -> str:
     scope_part = ",".join(sorted(scopes)) if scopes else "<defaults>"
     aud_part = ",".join(sorted(audience)) if audience else "<none>"
-    return f"vault:resource:{resource}:{aud_part}:{scope_part}"
+    # A user-scoped token belongs to that user only: key it by a digest of the
+    # subject token so one shared client never serves user A's token to user B
+    # (or to the agent itself). The raw token never lands in a store key.
+    if act_as_user_token:
+        subject_part = "user:" + hashlib.sha256(act_as_user_token.encode("utf-8")).hexdigest()
+    else:
+        subject_part = "agent"
+    return f"vault:resource:{subject_part}:{resource}:{aud_part}:{scope_part}"
 
 
 def _err(body: Optional[dict]) -> Optional[str]:
@@ -49,6 +62,7 @@ class ResourcesClient:
         *,
         http: HttpClient,
         get_credential: Callable[[], Awaitable[Credential]],
+        get_client_auth: Callable[[], Optional[Dict[str, str]]],
         store: TokenStore,
         mode: Mode,
         approval_gate: Optional[Callable[[ApprovalRequest], Awaitable[None]]] = None,
@@ -57,6 +71,7 @@ class ResourcesClient:
     ) -> None:
         self._http = http
         self._get_credential = get_credential
+        self._get_client_auth = get_client_auth
         self._store = store
         self._mode = mode
         self._approval_gate = approval_gate
@@ -93,6 +108,18 @@ class ResourcesClient:
                 "raw token fetch is disabled in execute mode; the token stays vaulted."
             )
 
+        # Descope rejects unauthenticated token-exchange requests, and the
+        # authenticating client is what lands in act.sub. Fail before any network
+        # call (or approval prompt) when the provider has no client secret to offer.
+        client_auth = self._get_client_auth()
+        if not client_auth:
+            raise AgentAuthError(
+                "Resource tokens use the token-exchange grant, which Descope only serves "
+                "to an authenticated agent client. Configure the client with "
+                "ClientCredentialsProvider(client_id=..., client_secret=...) and pass "
+                "act_as_user_token=... to act for a user."
+            )
+
         if require_approval is not None:
             if self._approval_gate is None:
                 raise AgentAuthError(
@@ -101,7 +128,7 @@ class ResourcesClient:
                 )
             await self._approval_gate(require_approval)
 
-        cache_key = _cache_key(resource, scopes, audience)
+        cache_key = _cache_key(resource, scopes, audience, act_as_user_token)
         if self._cache_tokens and not force_refresh:
             cached = await self._cache_get(cache_key)
             if cached is not None:
@@ -127,6 +154,7 @@ class ResourcesClient:
             "subject_token": subject_token,
             "subject_token_type": TOKEN_TYPE_ACCESS_TOKEN,
             "resource": resource,
+            **client_auth,
         }
         if scopes:
             data["scope"] = " ".join(scopes)
@@ -134,7 +162,7 @@ class ResourcesClient:
             # RFC 8693 audience; sent as repeated form params when multi-valued.
             data["audience"] = audience
 
-        resp = await self._http.post_form(OAUTH2_TOKEN, data=data)
+        resp = await self._http.post_form(OAUTH2_APPS_TOKEN, data=data)
         if resp.status_code in (401, 403):
             raise PolicyDenied(
                 f"policy denied for resource '{resource}' "

@@ -98,6 +98,7 @@ class AsyncAgentAuthClient:
         self.resources = ResourcesClient(
             http=self._http,
             get_credential=self.get_credential,
+            get_client_auth=self.credential.token_exchange_client_auth,
             store=self.store,
             mode=self.mode,
             approval_gate=self._run_approval,

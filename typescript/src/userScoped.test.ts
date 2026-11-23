@@ -3,7 +3,8 @@ import { BASE_URL, PROJECT_ID, makeClient, tokenObj } from './testutils';
 import { AccessTokenProvider, ClientCredentialsProvider } from './providers';
 
 const USER_LATEST = '/v1/mgmt/outbound/app/user/token/latest';
-const TOKEN_PATH = '/oauth2/v1/token';
+// Agent client_credentials and token-exchange are both served by the inbound-apps server.
+const TOKEN_PATH = '/oauth2/v1/apps/token';
 
 beforeAll(() => nock.disableNetConnect());
 afterEach(() => nock.cleanAll());
@@ -34,21 +35,14 @@ describe('AccessTokenProvider (bring-your-own user token)', () => {
     expect(auth).toBe(`Bearer ${PROJECT_ID}:user_jwt`);
   });
 
-  it('uses the user token as the token-exchange subject for resources', async () => {
-    let body: any;
-    nock(BASE_URL)
-      .post(TOKEN_PATH, (b) => {
-        body = b;
-        return true;
-      })
-      .reply(200, { access_token: 'resource_at', expires_in: 3600, scope: 'read' });
+  it('cannot mint Resource tokens without an agent client to authenticate the exchange', async () => {
+    // Descope only exchanges for an authenticated (confidential) client. Use a
+    // shared ClientCredentialsProvider client with actAsUserToken instead.
+    const client = makeClient(new AccessTokenProvider({ accessToken: 'user_jwt' }));
 
-    const tok = await makeClient(
-      new AccessTokenProvider({ accessToken: 'user_jwt' }),
-    ).resources.getToken({ resource: 'urn:my-api', scopes: ['read'] });
-
-    expect(tok.accessToken).toBe('resource_at');
-    expect(body.subject_token).toBe('user_jwt');
+    await expect(
+      client.resources.getToken({ resource: 'urn:my-api', scopes: ['read'] }),
+    ).rejects.toThrow(/ClientCredentialsProvider/);
   });
 });
 

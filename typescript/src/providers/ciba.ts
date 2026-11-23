@@ -200,4 +200,10 @@ export class CibaProvider extends CredentialProvider {
     if (this.clientSecret) out.client_secret = this.clientSecret;
     return out;
   }
+
+  tokenExchangeClientAuth(): Record<string, string> | undefined {
+    // Only a confidential CIBA client can authenticate a token exchange.
+    if (!this.clientSecret) return undefined;
+    return { client_id: this.clientId, client_secret: this.clientSecret };
+  }
 }

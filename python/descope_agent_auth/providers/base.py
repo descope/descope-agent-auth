@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import time
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Dict, Optional
 
 from .._async import maybe_await
 from .._endpoints import GRANT_REFRESH_TOKEN, OAUTH2_TOKEN
@@ -140,6 +140,16 @@ class CredentialProvider(ABC):
     def _refresh_client_auth(self) -> dict:
         """Extra form fields / client auth needed for refresh. Override as needed."""
         return {}
+
+    def token_exchange_client_auth(self) -> Optional[Dict[str, str]]:
+        """Form fields that authenticate this agent as a confidential client.
+
+        Descope's token-exchange grant requires the exchanging client to
+        authenticate (it becomes ``act.sub`` on the minted token). Providers that
+        hold a client secret return ``client_id`` + ``client_secret``; the rest
+        return ``None`` and cannot mint Resource tokens.
+        """
+        return None
 
     # -- persistence --------------------------------------------------------
 

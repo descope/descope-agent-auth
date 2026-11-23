@@ -4,7 +4,8 @@ import { BASE_URL, PROJECT_ID, makeClient, tokenObj } from './testutils';
 import { ClientCredentialsProvider, ManagementKeyProvider } from './providers';
 import { AgentAuthError, PolicyDenied, TokenExchangeFailed } from './errors';
 
-const TOKEN_PATH = '/oauth2/v1/token';
+// Agent client_credentials is served by the inbound-apps server.
+const TOKEN_PATH = '/oauth2/v1/apps/token';
 const USER_LATEST = '/v1/mgmt/outbound/app/user/token/latest';
 const USER_SCOPED = '/v1/mgmt/outbound/app/user/token';
 const TENANT_LATEST = '/v1/mgmt/outbound/app/tenant/token/latest';

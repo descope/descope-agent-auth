@@ -11,12 +11,15 @@
  * identity (Client ID/Secret via any phase-1 provider). It does not apply to a
  * Management Key.
  *
- * NOTE: the exact token-exchange parameters (`resource` vs `audience`, whether
- * client auth is also required) should be confirmed against the Descope API
- * reference; the grant + endpoint are pinned in `endpoints`.
+ * The exchange goes to the inbound-apps token endpoint (`/oauth2/v1/apps/token`,
+ * per the `/v1/apps/<projectId>` discovery document) and must be authenticated by a
+ * confidential client (`client_id` + `client_secret`). That client is recorded as
+ * `act.sub` on the minted token, so the downstream API can see which agent is
+ * acting for the user.
  */
 
-import { GRANT_TOKEN_EXCHANGE, OAUTH2_TOKEN, TOKEN_TYPE_ACCESS_TOKEN } from '../endpoints';
+import { GRANT_TOKEN_EXCHANGE, OAUTH2_APPS_TOKEN, TOKEN_TYPE_ACCESS_TOKEN } from '../endpoints';
+import { sha256Base64Url } from '../runtime';
 import { AgentAuthError, PolicyDenied, TokenExchangeFailed } from '../errors';
 import { HttpClient } from '../httpClient';
 import { TokenStore } from '../store/base';
@@ -37,6 +40,8 @@ export interface GetResourceTokenArgs {
 export interface ResourcesClientDeps {
   http: HttpClient;
   getCredential: () => Promise<Credential>;
+  /** Confidential-client auth for the exchange (`client_id` + `client_secret`), if any. */
+  getClientAuth: () => Record<string, string> | undefined;
   store: TokenStore;
   mode: Mode;
   approvalGate?: ApprovalGate;
@@ -45,10 +50,19 @@ export interface ResourcesClientDeps {
   cacheTokens?: boolean;
 }
 
-const cacheKey = (resource: string, scopes?: string[], audience?: string[]): string => {
+const cacheKey = async (
+  resource: string,
+  scopes?: string[],
+  audience?: string[],
+  actAsUserToken?: string,
+): Promise<string> => {
   const scopePart = scopes && scopes.length ? [...scopes].sort().join(',') : '<defaults>';
   const audPart = audience && audience.length ? [...audience].sort().join(',') : '<none>';
-  return `vault:resource:${resource}:${audPart}:${scopePart}`;
+  // A user-scoped token belongs to that user only: key it by a digest of the
+  // subject token so one shared client never serves user A's token to user B (or
+  // to the agent itself). The raw token never lands in a store key.
+  const subjectPart = actAsUserToken ? `user:${await sha256Base64Url(actAsUserToken)}` : 'agent';
+  return `vault:resource:${subjectPart}:${resource}:${audPart}:${scopePart}`;
 };
 
 const errMsg = (body: any): string | undefined =>
@@ -71,6 +85,18 @@ export class ResourcesClient {
       );
     }
 
+    // Descope rejects unauthenticated token-exchange requests, and the
+    // authenticating client is what lands in act.sub. Fail before any network call
+    // (or approval prompt) when the provider has no client secret to offer.
+    const clientAuth = this.deps.getClientAuth();
+    if (!clientAuth) {
+      throw new AgentAuthError(
+        'Resource tokens use the token-exchange grant, which Descope only serves to an ' +
+          'authenticated agent client. Configure the client with new ClientCredentialsProvider(' +
+          '{ clientId, clientSecret }) and pass actAsUserToken to act for a user.',
+      );
+    }
+
     if (args.requireApproval) {
       if (!this.deps.approvalGate) {
         throw new AgentAuthError(
@@ -81,7 +107,7 @@ export class ResourcesClient {
       await this.deps.approvalGate(args.requireApproval);
     }
 
-    const key = cacheKey(args.resource, args.scopes, args.audience);
+    const key = await cacheKey(args.resource, args.scopes, args.audience, args.actAsUserToken);
     if (this.cacheTokens && !args.forceRefresh) {
       const cached = await this.cacheGet(key);
       if (cached) return cached;
@@ -109,11 +135,12 @@ export class ResourcesClient {
       subject_token: subjectToken,
       subject_token_type: TOKEN_TYPE_ACCESS_TOKEN,
       resource: args.resource,
+      ...clientAuth,
     };
     if (args.scopes && args.scopes.length) data.scope = args.scopes.join(' ');
     if (args.audience && args.audience.length) data.audience = args.audience;
 
-    const resp = await this.deps.http.postForm(OAUTH2_TOKEN, data);
+    const resp = await this.deps.http.postForm(OAUTH2_APPS_TOKEN, data);
     if (resp.statusCode === 401 || resp.statusCode === 403) {
       throw new PolicyDenied(
         `policy denied for resource '${args.resource}' ` +

@@ -156,6 +156,18 @@ export abstract class CredentialProvider {
     return {};
   }
 
+  /**
+   * Form fields that authenticate this agent as a confidential client.
+   *
+   * Descope's token-exchange grant requires the exchanging client to authenticate
+   * (it becomes `act.sub` on the minted token). Providers that hold a client secret
+   * return `client_id` + `client_secret`; the rest return `undefined` and cannot
+   * mint Resource tokens.
+   */
+  tokenExchangeClientAuth(): Record<string, string> | undefined {
+    return undefined;
+  }
+
   // -- persistence --------------------------------------------------------
 
   private async save(cred: Credential): Promise<void> {

@@ -3,7 +3,8 @@ import { BASE_URL, makeClient } from './testutils';
 import { ClientCredentialsProvider, ManagementKeyProvider } from './providers';
 import { AgentAuthError, PolicyDenied } from './errors';
 
-const TOKEN_PATH = '/oauth2/v1/token';
+// Agent client_credentials and token-exchange are both served by the inbound-apps server.
+const TOKEN_PATH = '/oauth2/v1/apps/token';
 const silentLogger = { debug: () => {}, warn: () => {} };
 
 beforeAll(() => nock.disableNetConnect());
@@ -41,6 +42,58 @@ describe('ResourcesClient.getToken (token-exchange)', () => {
     expect(body.grant_type).toBe('urn:ietf:params:oauth:grant-type:token-exchange');
     expect(body.resource).toBe('urn:my-api');
     expect(body.subject_token).toBe('agent_at');
+    // Descope requires the exchanging client to authenticate; it becomes act.sub.
+    expect(body.client_id).toBe('cid');
+    expect(body.client_secret).toBe('s');
+  });
+
+  it('authenticates the agent client on a user-scoped exchange', async () => {
+    let body: any;
+    nock(BASE_URL)
+      .post(TOKEN_PATH, (b) => {
+        body = b;
+        return true;
+      })
+      .reply(200, { access_token: 'resource_at', expires_in: 3600 });
+
+    await makeClient(
+      new ClientCredentialsProvider({ clientId: 'cid', clientSecret: 's' }),
+    ).resources.getToken({ resource: 'urn:my-api', actAsUserToken: 'user_jwt' });
+
+    expect(body.subject_token).toBe('user_jwt');
+    expect(body.client_id).toBe('cid');
+    expect(body.client_secret).toBe('s');
+  });
+
+  it('never serves one user’s token to another user (or the agent) from cache', async () => {
+    const minted: string[] = ['alice_resource_at', 'bob_resource_at', 'agent_at', 'agent_res_at'];
+    const scope = nock(BASE_URL)
+      .post(TOKEN_PATH)
+      .times(minted.length)
+      .reply(() => [200, { access_token: minted.shift(), expires_in: 3600 }]);
+    const client = makeClient(
+      new ClientCredentialsProvider({ clientId: 'cid', clientSecret: 's' }),
+    );
+
+    const alice = await client.resources.getToken({
+      resource: 'urn:my-api',
+      actAsUserToken: 'alice_jwt',
+    });
+    const bob = await client.resources.getToken({
+      resource: 'urn:my-api',
+      actAsUserToken: 'bob_jwt',
+    });
+    const aliceAgain = await client.resources.getToken({
+      resource: 'urn:my-api',
+      actAsUserToken: 'alice_jwt',
+    });
+    const own = await client.resources.getToken({ resource: 'urn:my-api' });
+
+    expect(alice.accessToken).toBe('alice_resource_at');
+    expect(bob.accessToken).toBe('bob_resource_at');
+    expect(aliceAgain.accessToken).toBe('alice_resource_at'); // cached per user
+    expect(own.accessToken).toBe('agent_res_at');
+    expect(scope.isDone()).toBe(true);
   });
 
   it('sends the audience claim (repeated params) on the token exchange', async () => {
