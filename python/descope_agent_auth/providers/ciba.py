@@ -62,14 +62,17 @@ class CibaProvider(CredentialProvider):
         login_hint: str,
         binding_message: Optional[str] = None,
         scopes: Optional[List[str]] = None,
-        timeout_seconds: float = 120.0,
+        timeout_seconds: Optional[float] = None,
     ) -> Credential:
         """Run one full CIBA cycle (initiate + poll) and return the user-bound token.
 
         Reused as both the acquisition flow and the phase-2 approval gate. Raises
         ``ApprovalDenied`` / ``ApprovalTimeout`` on rejection or expiry.
+        ``timeout_seconds=None`` waits up to the provider's ``max_wait_seconds``.
         """
         auth_req_id, interval, deadline = await self._initiate(login_hint, binding_message, scopes)
+        if timeout_seconds is None:
+            timeout_seconds = self._max_wait_seconds
         deadline = min(deadline, time.time() + timeout_seconds)
 
         while time.time() < deadline:

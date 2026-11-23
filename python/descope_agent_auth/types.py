@@ -126,4 +126,4 @@ class ApprovalRequest:
     login_hint: str
     binding_message: Optional[str] = None
     scopes: Optional[List[str]] = None
-    timeout_seconds: float = 120.0
+    timeout_seconds: Optional[float] = None  # None: the approval provider's max_wait_seconds
