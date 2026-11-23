@@ -32,6 +32,8 @@ _SENSITIVE_KEYS = {
     "device_code",
     "auth_req_id",
     "assertion",
+    # Not a credential, but carries the transaction (amounts, account numbers).
+    "authorization_details",
 }
 
 

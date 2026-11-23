@@ -24,6 +24,8 @@ const SENSITIVE_KEYS = new Set([
   'device_code',
   'auth_req_id',
   'assertion',
+  // Not a credential, but carries the transaction (amounts, account numbers).
+  'authorization_details',
 ]);
 
 const sleep = (ms: number): Promise<void> =>
