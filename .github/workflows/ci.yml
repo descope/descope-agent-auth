@@ -12,7 +12,8 @@ on:
 jobs:
   python:
     name: 🐍 Python
-    runs-on: ubuntu-latest
+    # ubuntu-latest (26.04) has no Python 3.9 build, and the package still supports 3.9.
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: python

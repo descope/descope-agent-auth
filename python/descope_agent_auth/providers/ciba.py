@@ -70,7 +70,7 @@ class CibaProvider(CredentialProvider):
         login_hint: str,
         binding_message: Optional[str] = None,
         scopes: Optional[List[str]] = None,
-        timeout_seconds: float = 120.0,
+        timeout_seconds: Optional[float] = None,
         resource: Optional[str] = None,
         authorization_details: Optional[List[dict]] = None,
     ) -> Credential:
@@ -78,6 +78,7 @@ class CibaProvider(CredentialProvider):
 
         Reused as both the acquisition flow and the phase-2 approval gate. Raises
         ``ApprovalDenied`` / ``ApprovalTimeout`` on rejection or expiry.
+        ``timeout_seconds=None`` waits up to the provider's ``max_wait_seconds``.
 
         ``authorization_details`` (RFC 9396) asks the user to approve one specific
         action, e.g. a payment; its types must be registered on ``resource``. The
@@ -90,6 +91,8 @@ class CibaProvider(CredentialProvider):
         auth_req_id, interval, deadline = await self._initiate(
             login_hint, binding_message, scopes, resource, authorization_details
         )
+        if timeout_seconds is None:
+            timeout_seconds = self._max_wait_seconds
         deadline = min(deadline, time.time() + timeout_seconds)
 
         while time.time() < deadline:

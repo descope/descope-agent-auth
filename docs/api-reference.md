@@ -66,7 +66,8 @@ How the agent authenticates to Descope. Pass one as `credential=`.
 
 ### Ask the user to approve a specific action (RFC 9396)
 
-`CibaProvider.authenticate(*, login_hint, binding_message=None, scopes=None, timeout_seconds=120.0, resource=None, authorization_details=None)`
+`CibaProvider.authenticate(*, login_hint, binding_message=None, scopes=None, timeout_seconds=None, resource=None, authorization_details=None)`
+(`timeout_seconds=None` waits up to the provider's `max_wait_seconds`)
 (TS: `authenticate({ loginHint, bindingMessage?, scopes?, timeoutSeconds?, resource?, authorizationDetails? })`)
 runs one CIBA cycle. With `authorization_details` the user approves that exact action,
 and the returned `Credential` carries what they approved:

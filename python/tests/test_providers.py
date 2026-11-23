@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import json
 from unittest.mock import AsyncMock, patch
 
@@ -166,6 +167,36 @@ class TestCibaProvider(common.AgentAuthTest):
         with self.assertRaises(ApprovalTimeout):
             self.make_client(provider).get_credential()
         self._assert_paths(mock_request, polls=1)
+
+    def _count_polls_until_timeout(self, mock_request, provider, **authenticate_args):
+        # The request expires in 60 s; every clock read advances one second, so the
+        # number of polls shows which deadline the cycle used.
+        mock_request.side_effect = lambda method, path, **_: (
+            self._initiated()
+            if path.endswith("bc-authorize")
+            else make_response({"error": "authorization_pending"}, status=400)
+        )
+        client = self.make_client(provider)
+        with patch("descope_agent_auth.providers.ciba.time.time", side_effect=itertools.count(1000)):
+            with self.assertRaises(ApprovalTimeout):
+                client._bridge.run(
+                    provider.authenticate(login_hint="user@example.com", **authenticate_args)
+                )
+        return sum(1 for c in mock_request.call_args_list if c.args[1].endswith("/token"))
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_approval_waits_up_to_max_wait_seconds_by_default(self, mock_request):
+        provider = CibaProvider(client_id="cid", login_hint="user@example.com", max_wait_seconds=5)
+
+        self.assertLessEqual(self._count_polls_until_timeout(mock_request, provider), 5)
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_explicit_timeout_seconds_wins(self, mock_request):
+        provider = CibaProvider(client_id="cid", login_hint="user@example.com", max_wait_seconds=5)
+
+        polls = self._count_polls_until_timeout(mock_request, provider, timeout_seconds=30)
+
+        self.assertGreater(polls, 20)
 
     @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_refreshes_on_inbound_apps_token_endpoint(self, mock_request):
