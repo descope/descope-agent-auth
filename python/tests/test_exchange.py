@@ -16,6 +16,8 @@ from descope_agent_auth.errors import (
     TokenExchangeFailed,
 )
 
+from descope_agent_auth.store.memory import MemoryTokenStore
+
 from . import common
 from .common import PROJECT_ID, make_response, token_obj
 
@@ -382,6 +384,49 @@ class TestResourcesExchange(common.AgentAuthTest):
         own = client.resources.get_token(resource="urn:my-api")
 
         self.assertEqual(own.access_token, "agent_resource_at")
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_shared_store_does_not_mix_agent_clients_for_one_user(self, mock_request):
+        # Two agentic clients on one shared store, acting for the same user, must
+        # each get a token minted with themselves as act.sub.
+        mock_request.side_effect = [
+            make_response({"access_token": "a_resource_at", "expires_in": 3600}),
+            make_response({"access_token": "b_resource_at", "expires_in": 3600}),
+        ]
+        store = MemoryTokenStore()
+        a = self.make_client(ClientCredentialsProvider(client_id="a", client_secret="s"), store=store)
+        b = self.make_client(ClientCredentialsProvider(client_id="b", client_secret="s"), store=store)
+
+        tok_a = a.resources.get_token(resource="urn:my-api", act_as_user_token="alice_jwt")
+        tok_b = b.resources.get_token(resource="urn:my-api", act_as_user_token="alice_jwt")
+
+        self.assertEqual(tok_a.access_token, "a_resource_at")
+        self.assertEqual(tok_b.access_token, "b_resource_at")
+        self.assertEqual(mock_request.call_args.kwargs["data"]["client_id"], "b")
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_shared_store_does_not_mix_agent_own_tokens(self, mock_request):
+        # Without act_as_user_token the subject is each client's own phase-1
+        # credential; a shared store must not serve one client's Resource token
+        # to another client.
+        mock_request.side_effect = [
+            make_response({"access_token": "a_agent_at", "expires_in": 3600}),  # a phase 1
+            make_response({"access_token": "a_resource_at", "expires_in": 3600}),
+            make_response({"access_token": "b_agent_at", "expires_in": 3600}),  # b phase 1
+            make_response({"access_token": "b_resource_at", "expires_in": 3600}),
+        ]
+        store = MemoryTokenStore()
+        a = self.make_client(ClientCredentialsProvider(client_id="a", client_secret="s"), store=store)
+        b = self.make_client(ClientCredentialsProvider(client_id="b", client_secret="s"), store=store)
+
+        tok_a = a.resources.get_token(resource="urn:my-api")
+        tok_b = b.resources.get_token(resource="urn:my-api")
+        tok_a_again = a.resources.get_token(resource="urn:my-api")
+
+        self.assertEqual(tok_a.access_token, "a_resource_at")
+        self.assertEqual(tok_b.access_token, "b_resource_at")
+        self.assertEqual(tok_a_again.access_token, "a_resource_at")  # still cached
+        self.assertEqual(mock_request.call_count, 4)
 
     @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_exchange_without_confidential_client_is_rejected(self, mock_request):

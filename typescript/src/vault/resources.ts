@@ -52,17 +52,20 @@ export interface ResourcesClientDeps {
 
 const cacheKey = async (
   resource: string,
-  scopes?: string[],
-  audience?: string[],
-  actAsUserToken?: string,
+  scopes: string[] | undefined,
+  audience: string[] | undefined,
+  clientId: string,
+  subjectToken: string,
 ): Promise<string> => {
   const scopePart = scopes && scopes.length ? [...scopes].sort().join(',') : '<defaults>';
   const audPart = audience && audience.length ? [...audience].sort().join(',') : '<none>';
-  // A user-scoped token belongs to that user only: key it by a digest of the
-  // subject token so one shared client never serves user A's token to user B (or
-  // to the agent itself). The raw token never lands in a store key.
-  const subjectPart = actAsUserToken ? `user:${await sha256Base64Url(actAsUserToken)}` : 'agent';
-  return `vault:resource:${subjectPart}:${resource}:${audPart}:${scopePart}`;
+  // A Resource token belongs to one (actor, subject) pair: the client that
+  // authenticates the exchange (act.sub) and the token being exchanged (a user's
+  // token, or the phase-1 credential, which can itself be user-bound, e.g. CIBA).
+  // Key by both so a shared TokenStore never serves one client's or one user's
+  // token to another. Only a digest of the subject lands in the key.
+  const subjectPart = await sha256Base64Url(subjectToken);
+  return `vault:resource:${clientId}:${subjectPart}:${resource}:${audPart}:${scopePart}`;
 };
 
 const errMsg = (body: any): string | undefined =>
@@ -107,15 +110,10 @@ export class ResourcesClient {
       await this.deps.approvalGate(args.requireApproval);
     }
 
-    const key = await cacheKey(args.resource, args.scopes, args.audience, args.actAsUserToken);
-    if (this.cacheTokens && !args.forceRefresh) {
-      const cached = await this.cacheGet(key);
-      if (cached) return cached;
-    }
-
     // The subject is either an explicit user token (user-scoped) or the client's
     // own credential. A Management Key is not an OAuth token, so it cannot be the
-    // subject of a token-exchange.
+    // subject of a token-exchange. Resolve it before the cache lookup: the cache
+    // key is bound to the subject actually exchanged.
     let subjectToken: string;
     if (args.actAsUserToken) {
       subjectToken = args.actAsUserToken;
@@ -128,6 +126,18 @@ export class ResourcesClient {
         );
       }
       subjectToken = cred.token;
+    }
+
+    const key = await cacheKey(
+      args.resource,
+      args.scopes,
+      args.audience,
+      clientAuth.client_id ?? '',
+      subjectToken,
+    );
+    if (this.cacheTokens && !args.forceRefresh) {
+      const cached = await this.cacheGet(key);
+      if (cached) return cached;
     }
 
     const data: Record<string, string | string[]> = {

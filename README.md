@@ -225,13 +225,19 @@ or CIBA), or use a management key:
 ```python
 from descope_agent_auth import AccessTokenProvider
 
-# Bind the client to the user's token:
+# Bind the client to the user's token (Connection tokens):
 client = AgentAuthClient(project_id="P2...", credential=AccessTokenProvider(access_token=user_jwt))
 gh  = client.connections.get_token(connection="github", identifier=user_id)
-res = client.resources.get_token(resource="urn:my-api", scopes=["read"])
 
-# Or pass the user token per call on a shared client:
-gh  = client.connections.get_token(connection="github", identifier=user_id, act_as_user_token=user_jwt)
+# Or pass the user token per call on a shared agent client. Resource tokens need
+# this form: the token exchange must be authenticated by a confidential client,
+# which Descope records as the actor (act.sub).
+agent = AgentAuthClient(
+    project_id="P2...",
+    credential=ClientCredentialsProvider(client_id="...", client_secret="..."),
+)
+gh  = agent.connections.get_token(connection="github", identifier=user_id, act_as_user_token=user_jwt)
+res = agent.resources.get_token(resource="urn:my-api", scopes=["read"], act_as_user_token=user_jwt)
 ```
 
 ```ts
@@ -240,8 +246,13 @@ import { AccessTokenProvider } from '@descope/agent-auth';
 const client = new AgentAuthClient({ projectId: 'P2...', credential: new AccessTokenProvider({ accessToken: userJwt }) });
 await client.connections.getToken({ connection: 'github', identifier: userId });
 
-// or per call on a shared client:
-await client.connections.getToken({ connection: 'github', identifier: userId, actAsUserToken: userJwt });
+// or per call on a shared agent client (required for Resource tokens):
+const agent = new AgentAuthClient({
+  projectId: 'P2...',
+  credential: new ClientCredentialsProvider({ clientId: '...', clientSecret: '...' }),
+});
+await agent.connections.getToken({ connection: 'github', identifier: userId, actAsUserToken: userJwt });
+await agent.resources.getToken({ resource: 'urn:my-api', scopes: ['read'], actAsUserToken: userJwt });
 ```
 
 **Management key (trusted backend, no user token).** Reads **any** user's token by

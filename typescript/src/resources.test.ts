@@ -2,6 +2,7 @@ import nock from 'nock';
 import { BASE_URL, makeClient } from './testutils';
 import { ClientCredentialsProvider, ManagementKeyProvider } from './providers';
 import { AgentAuthError, PolicyDenied } from './errors';
+import { MemoryTokenStore } from './store';
 
 // Agent client_credentials and token-exchange are both served by the inbound-apps server.
 const TOKEN_PATH = '/oauth2/v1/apps/token';
@@ -93,6 +94,62 @@ describe('ResourcesClient.getToken (token-exchange)', () => {
     expect(bob.accessToken).toBe('bob_resource_at');
     expect(aliceAgain.accessToken).toBe('alice_resource_at'); // cached per user
     expect(own.accessToken).toBe('agent_res_at');
+    expect(scope.isDone()).toBe(true);
+  });
+
+  it('never mixes two agent clients on a shared store (same user)', async () => {
+    const bodies: any[] = [];
+    const minted = ['a_resource_at', 'b_resource_at'];
+    nock(BASE_URL)
+      .post(TOKEN_PATH, (b) => {
+        bodies.push(b);
+        return true;
+      })
+      .times(2)
+      .reply(() => [200, { access_token: minted.shift(), expires_in: 3600 }]);
+    const store = new MemoryTokenStore();
+    const a = makeClient(new ClientCredentialsProvider({ clientId: 'a', clientSecret: 's' }), {
+      store,
+    });
+    const b = makeClient(new ClientCredentialsProvider({ clientId: 'b', clientSecret: 's' }), {
+      store,
+    });
+
+    const tokA = await a.resources.getToken({
+      resource: 'urn:my-api',
+      actAsUserToken: 'alice_jwt',
+    });
+    const tokB = await b.resources.getToken({
+      resource: 'urn:my-api',
+      actAsUserToken: 'alice_jwt',
+    });
+
+    expect(tokA.accessToken).toBe('a_resource_at');
+    expect(tokB.accessToken).toBe('b_resource_at');
+    expect(bodies[1].client_id).toBe('b');
+  });
+
+  it('never mixes two agent clients’ own tokens on a shared store', async () => {
+    const minted = ['a_agent_at', 'a_resource_at', 'b_agent_at', 'b_resource_at'];
+    const scope = nock(BASE_URL)
+      .post(TOKEN_PATH)
+      .times(minted.length)
+      .reply(() => [200, { access_token: minted.shift(), expires_in: 3600 }]);
+    const store = new MemoryTokenStore();
+    const a = makeClient(new ClientCredentialsProvider({ clientId: 'a', clientSecret: 's' }), {
+      store,
+    });
+    const b = makeClient(new ClientCredentialsProvider({ clientId: 'b', clientSecret: 's' }), {
+      store,
+    });
+
+    const tokA = await a.resources.getToken({ resource: 'urn:my-api' });
+    const tokB = await b.resources.getToken({ resource: 'urn:my-api' });
+    const tokAAgain = await a.resources.getToken({ resource: 'urn:my-api' });
+
+    expect(tokA.accessToken).toBe('a_resource_at');
+    expect(tokB.accessToken).toBe('b_resource_at');
+    expect(tokAAgain.accessToken).toBe('a_resource_at'); // still cached
     expect(scope.isDone()).toBe(true);
   });
 

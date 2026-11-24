@@ -36,18 +36,19 @@ def _cache_key(
     resource: str,
     scopes: Optional[List[str]],
     audience: Optional[List[str]],
-    act_as_user_token: Optional[str] = None,
+    *,
+    client_id: str,
+    subject_token: str,
 ) -> str:
     scope_part = ",".join(sorted(scopes)) if scopes else "<defaults>"
     aud_part = ",".join(sorted(audience)) if audience else "<none>"
-    # A user-scoped token belongs to that user only: key it by a digest of the
-    # subject token so one shared client never serves user A's token to user B
-    # (or to the agent itself). The raw token never lands in a store key.
-    if act_as_user_token:
-        subject_part = "user:" + hashlib.sha256(act_as_user_token.encode("utf-8")).hexdigest()
-    else:
-        subject_part = "agent"
-    return f"vault:resource:{subject_part}:{resource}:{aud_part}:{scope_part}"
+    # A Resource token belongs to one (actor, subject) pair: the client that
+    # authenticates the exchange (act.sub) and the token being exchanged (a
+    # user's token, or the phase-1 credential, which can itself be user-bound,
+    # e.g. CIBA). Key by both so a shared TokenStore never serves one client's or
+    # one user's token to another. Only a digest of the subject lands in the key.
+    subject_part = hashlib.sha256(subject_token.encode("utf-8")).hexdigest()
+    return f"vault:resource:{client_id}:{subject_part}:{resource}:{aud_part}:{scope_part}"
 
 
 def _err(body: Optional[dict]) -> Optional[str]:
@@ -128,15 +129,10 @@ class ResourcesClient:
                 )
             await self._approval_gate(require_approval)
 
-        cache_key = _cache_key(resource, scopes, audience, act_as_user_token)
-        if self._cache_tokens and not force_refresh:
-            cached = await self._cache_get(cache_key)
-            if cached is not None:
-                return cached
-
         # The subject is either an explicit user token (user-scoped) or the
         # client's own credential. A Management Key is not an OAuth token, so it
-        # cannot be the subject of a token-exchange.
+        # cannot be the subject of a token-exchange. Resolve it before the cache
+        # lookup: the cache key is bound to the subject actually exchanged.
         if act_as_user_token:
             subject_token = act_as_user_token
         else:
@@ -148,6 +144,18 @@ class ResourcesClient:
                     "act_as_user_token, not a Management Key."
                 )
             subject_token = cred.token
+
+        cache_key = _cache_key(
+            resource,
+            scopes,
+            audience,
+            client_id=client_auth.get("client_id", ""),
+            subject_token=subject_token,
+        )
+        if self._cache_tokens and not force_refresh:
+            cached = await self._cache_get(cache_key)
+            if cached is not None:
+                return cached
 
         data: dict = {
             "grant_type": GRANT_TOKEN_EXCHANGE,

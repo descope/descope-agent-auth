@@ -110,9 +110,12 @@ One shared client, many users? Don't bind the client to one user — pass the us
 token per call instead: `get_token(..., act_as_user_token=user_jwt)` /
 `getToken({ ..., actAsUserToken: userJwt })`.
 
-A user-scoped Resource token is the same idea:
-`client.resources.get_token(resource="urn:my-api", scopes=["read"])` (the user is the
-subject) or `resources.getToken({ resource: 'urn:my-api', actAsUserToken: userJwt })`.
+A user-scoped Resource token always takes the per-call form, on a client built with
+`ClientCredentialsProvider` (Descope only serves token exchange to an authenticated
+confidential client, which becomes `act.sub`; an `AccessTokenProvider` client raises
+`AgentAuthError`):
+`agent.resources.get_token(resource="urn:my-api", scopes=["read"], act_as_user_token=user_jwt)` /
+`agent.resources.getToken({ resource: 'urn:my-api', scopes: ['read'], actAsUserToken: userJwt })`.
 
 ---
 
