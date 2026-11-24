@@ -8,6 +8,20 @@
  */
 
 import { AgentAuthError } from './errors';
+import { SDK_VERSION } from './version';
+
+/**
+ * Identify the SDK on every Descope request, like Descope's node-sdk and core-js-sdk
+ * do, so usage can be told apart from the core SDK (`nodejs`) in Descope's analytics.
+ * The runtime-version header is only sent on Node (not on Workers, Deno or browsers).
+ */
+const nodeVersion = (globalThis as { process?: { versions?: { node?: string } } }).process?.versions
+  ?.node;
+export const SDK_HEADERS: Record<string, string> = {
+  'x-descope-sdk-name': 'agent-auth-js',
+  'x-descope-sdk-version': SDK_VERSION,
+  ...(nodeVersion ? { 'x-descope-sdk-node-version': nodeVersion } : {}),
+};
 
 const REDACTED = '***redacted***';
 const SENSITIVE_KEYS = new Set([
@@ -156,7 +170,7 @@ export class HttpClient {
         resp = await this.fetchImpl(url, {
           method,
           body: opts.body,
-          headers: opts.headers,
+          headers: { ...SDK_HEADERS, ...opts.headers },
           signal: controller.signal,
         });
       } catch (err) {
