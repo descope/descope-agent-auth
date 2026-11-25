@@ -5,6 +5,7 @@
       "release-type": "python",
       "package-name": "descope-agent-auth",
       "changelog-path": "CHANGELOG.md",
+      "release-as": "0.1.0",
       "extra-files": [
         {
           "type": "toml",
@@ -18,6 +19,7 @@
       "release-type": "node",
       "package-name": "@descope/agent-auth",
       "changelog-path": "CHANGELOG.md",
+      "release-as": "0.1.0",
       "extra-files": ["src/version.ts"]
     }
   },
