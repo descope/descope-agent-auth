@@ -68,25 +68,20 @@ jobs:
   gitleaks:
     name: 🔒 Gitleaks
     runs-on: ubuntu-latest
-    env:
-      GITLEAKS_VERSION: 8.30.1
-      GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      # The CLI, not gitleaks-action: the action needs a paid license on org repos.
-      - name: Install gitleaks
-        run: |
-          curl -sSfL -o gitleaks.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          echo "${GITLEAKS_SHA256}  gitleaks.tgz" | sha256sum -c -
-          tar -xzf gitleaks.tgz gitleaks && rm gitleaks.tgz
-      - name: Scan git history
-        run: ./gitleaks git --redact -v .
-      - name: Scan working tree
-        run: ./gitleaks dir --redact -v .
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+          GITLEAKS_ENABLE_COMMENTS: false
 
   dependency-review:
     name: 📦 Dependency review
