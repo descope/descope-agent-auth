@@ -11,6 +11,11 @@
           "path": "pyproject.toml",
           "jsonpath": "$.project.version"
         },
+        {
+          "type": "toml",
+          "path": "uv.lock",
+          "jsonpath": "$.package[?(@.name.value=='descope-agent-auth')].version"
+        },
         "descope_agent_auth/_version.py"
       ]
     },
