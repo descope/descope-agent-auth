@@ -70,6 +70,8 @@ jobs:
   gitleaks:
     name: 🔒 Gitleaks
     runs-on: ubuntu-latest
+    # Fork PRs get no secrets, so GITLEAKS_LICENSE is unavailable there.
+    if: ${{ !github.event.pull_request.head.repo.fork }}
     permissions:
       contents: read
       pull-requests: read

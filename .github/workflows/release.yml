@@ -101,6 +101,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: typescript/package.json
+          check-latest: true # resolve the newest Node, not an older cached one; npm >= 11.5.1 is needed for trusted publishing
           registry-url: https://registry.npmjs.org
 
       - name: Install dependencies
