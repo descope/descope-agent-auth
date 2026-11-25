@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "descope-agent-auth"
-version = "0.1.0"
+version = "0.1.1"
 description = "Client-side SDK for wiring a custom agent to Descope: acquire a Descope credential and exchange it for Connection/Resource tokens from the vault."
 readme = "README.md"
 requires-python = ">=3.9"
