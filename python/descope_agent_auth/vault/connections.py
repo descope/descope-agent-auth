@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any, List, Optional
+from typing import Any
 
 from .._endpoints import (
     OUTBOUND_TENANT_TOKEN,
@@ -24,7 +24,7 @@ from ..types import ApprovalRequest, VaultToken
 
 
 def _cache_key(
-    connection: str, identifier: str, scopes: Optional[List[str]], tenant_id: Optional[str]
+    connection: str, identifier: str, scopes: list[str] | None, tenant_id: str | None
 ) -> str:
     # tenant_id is part of the key: one Connection can hold several user tokens for
     # the same user, one per tenant, and they are NOT interchangeable.
@@ -33,7 +33,7 @@ def _cache_key(
     return f"vault:user:{connection}:{identifier}:{tenant_part}:{scope_part}"
 
 
-def _tenant_cache_key(connection: str, tenant_id: str, scopes: Optional[List[str]]) -> str:
+def _tenant_cache_key(connection: str, tenant_id: str, scopes: list[str] | None) -> str:
     scope_part = ",".join(sorted(scopes)) if scopes else "<defaults>"
     return f"vault:tenant:{connection}:{tenant_id}:{scope_part}"
 
@@ -41,19 +41,19 @@ def _tenant_cache_key(connection: str, tenant_id: str, scopes: Optional[List[str
 def _build_connect_body(
     *,
     connection: str,
-    tenant_id: Optional[str],
-    scopes: Optional[List[str]],
-    redirect_url: Optional[str],
-    connect_options: Optional[dict],
-) -> dict:
+    tenant_id: str | None,
+    scopes: list[str] | None,
+    redirect_url: str | None,
+    connect_options: dict[str, Any] | None,
+) -> dict[str, Any]:
     """Body for the connect URL: the call's scopes + redirect_url, plus any extra
     provider-specific passthrough fields from connect_options."""
-    options: dict = dict(connect_options or {})
+    options: dict[str, Any] = dict(connect_options or {})
     if redirect_url:
         options["redirectUrl"] = redirect_url
     if scopes:
         options["scopes"] = list(scopes)
-    connect_body: dict = {"appId": connection}
+    connect_body: dict[str, Any] = {"appId": connection}
     if tenant_id:
         connect_body["tenantId"] = tenant_id
     if options:
@@ -65,16 +65,16 @@ def _build_args(
     *,
     connection: str,
     identifier: str,
-    scopes: Optional[List[str]],
-    tenant_id: Optional[str],
+    scopes: list[str] | None,
+    tenant_id: str | None,
     with_refresh_token: bool,
     force_refresh: bool,
-    redirect_url: Optional[str],
-    connect_options: Optional[dict],
-    require_approval: Optional[ApprovalRequest],
-    act_as_user_token: Optional[str],
-) -> dict:
-    body: dict = {"appId": connection, "userId": identifier}
+    redirect_url: str | None,
+    connect_options: dict[str, Any] | None,
+    require_approval: ApprovalRequest | None,
+    act_as_user_token: str | None,
+) -> dict[str, Any]:
+    body: dict[str, Any] = {"appId": connection, "userId": identifier}
     if tenant_id:
         body["tenantId"] = tenant_id
     if with_refresh_token or force_refresh:
@@ -112,13 +112,13 @@ def _build_tenant_args(
     *,
     connection: str,
     tenant_id: str,
-    scopes: Optional[List[str]],
+    scopes: list[str] | None,
     with_refresh_token: bool,
     force_refresh: bool,
-    require_approval: Optional[ApprovalRequest],
-    act_as_user_token: Optional[str],
-) -> dict:
-    body: dict = {"appId": connection, "tenantId": tenant_id}
+    require_approval: ApprovalRequest | None,
+    act_as_user_token: str | None,
+) -> dict[str, Any]:
+    body: dict[str, Any] = {"appId": connection, "tenantId": tenant_id}
     if with_refresh_token or force_refresh:
         body["options"] = {"withRefreshToken": with_refresh_token, "forceRefresh": force_refresh}
 
@@ -153,14 +153,14 @@ class ConnectionsClient:
         *,
         connection: str,
         identifier: str,
-        scopes: Optional[List[str]] = None,
-        tenant_id: Optional[str] = None,
+        scopes: list[str] | None = None,
+        tenant_id: str | None = None,
         with_refresh_token: bool = False,
         force_refresh: bool = False,
-        redirect_url: Optional[str] = None,
-        connect_options: Optional[dict] = None,
-        require_approval: Optional[ApprovalRequest] = None,
-        act_as_user_token: Optional[str] = None,
+        redirect_url: str | None = None,
+        connect_options: dict[str, Any] | None = None,
+        require_approval: ApprovalRequest | None = None,
+        act_as_user_token: str | None = None,
     ) -> VaultToken:
         """Return a currently-valid **user-level** downstream token for ``identifier``.
 
@@ -208,12 +208,12 @@ class ConnectionsClient:
         *,
         connection: str,
         identifier: str,
-        scopes: Optional[List[str]] = None,
-        tenant_id: Optional[str] = None,
-        redirect_url: Optional[str] = None,
-        connect_options: Optional[dict] = None,
-        act_as_user_token: Optional[str] = None,
-    ) -> Optional[str]:
+        scopes: list[str] | None = None,
+        tenant_id: str | None = None,
+        redirect_url: str | None = None,
+        connect_options: dict[str, Any] | None = None,
+        act_as_user_token: str | None = None,
+    ) -> str | None:
         """Generate the URL to send a user through to authorize this Connection.
 
         The proactive counterpart of catching ``ConnectionAuthorizationRequired``:
@@ -242,11 +242,11 @@ class ConnectionsClient:
         *,
         connection: str,
         tenant_id: str,
-        scopes: Optional[List[str]] = None,
+        scopes: list[str] | None = None,
         with_refresh_token: bool = False,
         force_refresh: bool = False,
-        require_approval: Optional[ApprovalRequest] = None,
-        act_as_user_token: Optional[str] = None,
+        require_approval: ApprovalRequest | None = None,
+        act_as_user_token: str | None = None,
     ) -> VaultToken:
         """Return a currently-valid **tenant-level** downstream token.
 
@@ -276,9 +276,9 @@ class ConnectionsClient:
         *,
         connection: str,
         identifier: str,
-        scopes: Optional[List[str]] = None,
-        tenant_id: Optional[str] = None,
-        act_as_user_token: Optional[str] = None,
+        scopes: list[str] | None = None,
+        tenant_id: str | None = None,
+        act_as_user_token: str | None = None,
         poll_interval: float = 2.0,
         timeout: float = 300.0,
     ) -> VaultToken:
@@ -314,11 +314,11 @@ class ConnectionsClient:
         request: ToolRequest,
         connection: str,
         identifier: str,
-        scopes: Optional[List[str]] = None,
-        tenant_id: Optional[str] = None,
-        connect_options: Optional[dict] = None,
-        require_approval: Optional[ApprovalRequest] = None,
-        act_as_user_token: Optional[str] = None,
+        scopes: list[str] | None = None,
+        tenant_id: str | None = None,
+        connect_options: dict[str, Any] | None = None,
+        require_approval: ApprovalRequest | None = None,
+        act_as_user_token: str | None = None,
     ) -> Any:
         """Execute-mode counterpart of ``get_token`` (see execution seam).
 

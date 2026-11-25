@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any
 
 from .._async import maybe_await
 from .._endpoints import OUTBOUND_CONNECT
@@ -27,7 +28,7 @@ from ..store.base import TokenStore
 from ..types import ApprovalRequest, Credential, VaultToken
 
 
-def _parse_expiry(value: Any) -> Optional[float]:
+def _parse_expiry(value: Any) -> float | None:
     """Map Descope's accessTokenExpiry (epoch number or RFC3339 string) to unix time."""
     if value is None:
         return None
@@ -52,7 +53,7 @@ def _parse_expiry(value: Any) -> Optional[float]:
     return None
 
 
-def token_object_to_vault_token(obj: dict) -> VaultToken:
+def token_object_to_vault_token(obj: dict[str, Any]) -> VaultToken:
     return VaultToken(
         access_token=str(obj.get("accessToken", "")),
         token_type=obj.get("accessTokenType") or "Bearer",
@@ -74,7 +75,7 @@ class VaultBackend:
         project_id: str,
         get_credential: Callable[[], Awaitable[Credential]],
         store: TokenStore,
-        approval_gate: Optional[Callable[["ApprovalRequest"], Awaitable[None]]] = None,
+        approval_gate: Callable[[ApprovalRequest], Awaitable[None]] | None = None,
         skew_seconds: float = 60.0,
         cache_tokens: bool = True,
     ) -> None:
@@ -92,14 +93,14 @@ class VaultBackend:
 
     # -- auth ---------------------------------------------------------------
 
-    async def _auth_header(self) -> tuple:
+    async def _auth_header(self) -> tuple[str, bool]:
         """Return (header_value, is_privileged) for the current credential."""
         cred = await self._get_credential()
         return f"Bearer {self._project_id}:{cred.token}", cred.is_privileged
 
     # -- cache --------------------------------------------------------------
 
-    async def _cache_get(self, cache_key: str) -> Optional[VaultToken]:
+    async def _cache_get(self, cache_key: str) -> VaultToken | None:
         raw = await maybe_await(self._store.get(cache_key))
         if raw is None:
             return None
@@ -127,14 +128,14 @@ class VaultBackend:
         self,
         *,
         path: str,
-        body: dict,
+        body: dict[str, Any],
         cache_key: str,
         connection: str,
-        identifier: Optional[str],
-        connect_body: Optional[dict],
+        identifier: str | None,
+        connect_body: dict[str, Any] | None,
         force_refresh: bool,
-        require_approval: Optional["ApprovalRequest"] = None,
-        act_as_user_token: Optional[str] = None,
+        require_approval: ApprovalRequest | None = None,
+        act_as_user_token: str | None = None,
     ) -> VaultToken:
         # Phase-2 CIBA gate: a real person must sign off before this sensitive
         # exchange proceeds. Runs before any cache hit so the approval is never
@@ -171,8 +172,8 @@ class VaultBackend:
         # 404 -> user has not connected (or token cleared / wrong scopes).
         if resp.status_code == 404:
             message = f"connection '{connection}' is not authorized for this identity yet"
-            connect_url: Optional[str] = None
-            connect_error: Optional[str] = None
+            connect_url: str | None = None
+            connect_error: str | None = None
             if connect_body is not None:
                 try:
                     connect_url = await self._request_connect_url(connect_body, header)
@@ -203,8 +204,8 @@ class VaultBackend:
         )
 
     async def get_connect_url(
-        self, *, connect_body: Optional[dict], act_as_user_token: Optional[str] = None
-    ) -> Optional[str]:
+        self, *, connect_body: dict[str, Any] | None, act_as_user_token: str | None = None
+    ) -> str | None:
         """Proactively generate a connect URL (the explicit authorize path).
         Raises ``ConnectUrlFailed`` with Descope's reason if no URL comes back."""
         if connect_body is None:
@@ -215,7 +216,7 @@ class VaultBackend:
             header, _privileged = await self._auth_header()
         return await self._request_connect_url(connect_body, header)
 
-    async def _request_connect_url(self, connect_body: dict, header: str) -> str:
+    async def _request_connect_url(self, connect_body: dict[str, Any], header: str) -> str:
         try:
             resp = await self._http.post_json(
                 OUTBOUND_CONNECT,
@@ -226,7 +227,7 @@ class VaultBackend:
             raise
         except AgentAuthError as e:
             raise ConnectUrlFailed(f"connect URL request failed: {e}") from e
-        url = resp.json.get("url") if resp.ok and resp.json else None
+        url: str | None = resp.json.get("url") if resp.ok and resp.json else None
         if url:
             return url
         reason = _msg(resp.json) or resp.text or "response had no url"
@@ -236,7 +237,7 @@ class VaultBackend:
         )
 
 
-def _msg(body: Optional[dict]) -> Optional[str]:
+def _msg(body: dict[str, Any] | None) -> str | None:
     if not body:
         return None
     return body.get("errorDescription") or body.get("error") or body.get("message")

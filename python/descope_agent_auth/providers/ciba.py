@@ -19,7 +19,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from typing import Dict, List, Optional
+from typing import Any
 
 from .._endpoints import CIBA_AUTHENTICATE, GRANT_CIBA, OAUTH2_APPS_TOKEN
 from ..errors import (
@@ -43,9 +43,9 @@ class CibaProvider(CredentialProvider):
         *,
         client_id: str,
         login_hint: str,
-        client_secret: Optional[str] = None,
-        binding_message: Optional[str] = None,
-        scopes: Optional[List[str]] = None,
+        client_secret: str | None = None,
+        binding_message: str | None = None,
+        scopes: list[str] | None = None,
         max_wait_seconds: float = 120.0,
     ) -> None:
         super().__init__()
@@ -68,11 +68,11 @@ class CibaProvider(CredentialProvider):
         self,
         *,
         login_hint: str,
-        binding_message: Optional[str] = None,
-        scopes: Optional[List[str]] = None,
-        timeout_seconds: Optional[float] = None,
-        resource: Optional[str] = None,
-        authorization_details: Optional[List[dict]] = None,
+        binding_message: str | None = None,
+        scopes: list[str] | None = None,
+        timeout_seconds: float | None = None,
+        resource: str | None = None,
+        authorization_details: list[dict[str, Any]] | None = None,
     ) -> Credential:
         """Run one full CIBA cycle (initiate + poll) and return the user-bound token.
 
@@ -119,11 +119,11 @@ class CibaProvider(CredentialProvider):
     async def _initiate(
         self,
         login_hint: str,
-        binding_message: Optional[str],
-        scopes: Optional[List[str]],
-        resource: Optional[str],
-        authorization_details: Optional[List[dict]],
-    ) -> tuple:
+        binding_message: str | None,
+        scopes: list[str] | None,
+        resource: str | None,
+        authorization_details: list[dict[str, Any]] | None,
+    ) -> tuple[str, float, float]:
         data = {
             "client_id": self._client_id,
             "login_hint": login_hint,
@@ -153,7 +153,7 @@ class CibaProvider(CredentialProvider):
         expires_in = float(body.get("expires_in", self._max_wait_seconds))
         return auth_req_id, interval, time.time() + expires_in
 
-    def _poll_body(self, auth_req_id: str) -> dict:
+    def _poll_body(self, auth_req_id: str) -> dict[str, str]:
         body = {"grant_type": GRANT_CIBA, "auth_req_id": auth_req_id, "client_id": self._client_id}
         if self._client_secret:
             body["client_secret"] = self._client_secret
@@ -163,24 +163,24 @@ class CibaProvider(CredentialProvider):
         # Keyed by the user (login_hint): the acquired token is user-bound.
         return f"cred:ciba:{self._project_id}:{self._client_id}:{self._login_hint}"
 
-    def _refresh_client_auth(self) -> dict:
+    def _refresh_client_auth(self) -> dict[str, str]:
         out = {"client_id": self._client_id}
         if self._client_secret:
             out["client_secret"] = self._client_secret
         return out
 
-    def identity_key(self) -> Optional[str]:
+    def identity_key(self) -> str | None:
         # One user per provider (login_hint), so the storage key names the subject.
         return self._storage_key()
 
-    def client_auth(self) -> Optional[Dict[str, str]]:
+    def client_auth(self) -> dict[str, str] | None:
         # Only a confidential CIBA client can authenticate a token exchange.
         if not self._client_secret:
             return None
         return {"client_id": self._client_id, "client_secret": self._client_secret}
 
 
-def _rejected_details_reason(body: Optional[dict]) -> Optional[str]:
+def _rejected_details_reason(body: dict[str, Any] | None) -> str | None:
     # With strict OAuth errors off, Descope sends only its legacy envelope:
     # errorDescription carries the code and errorMessage the reason.
     if not isinstance(body, dict):

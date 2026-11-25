@@ -17,8 +17,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+from collections.abc import Awaitable
 from concurrent.futures import Future
-from typing import Any, Awaitable, Dict, List, Optional, TypeVar, Union
+from typing import Any, TypeVar
 
 from ._http import HttpClient, RetryConfig
 from .errors import AgentAuthError
@@ -46,12 +47,12 @@ class AsyncAgentAuthClient:
         project_id: str,
         credential: CredentialProvider,
         base_url: str = "https://api.descope.com",
-        store: Optional[TokenStore] = None,
-        mode: Union[Mode, str] = Mode.FETCH,
-        approval: Optional[CibaProvider] = None,
+        store: TokenStore | None = None,
+        mode: Mode | str = Mode.FETCH,
+        approval: CibaProvider | None = None,
         timeout: float = 30.0,
-        retry: Optional[RetryConfig] = None,
-        logger: Optional[logging.Logger] = None,
+        retry: RetryConfig | None = None,
+        logger: logging.Logger | None = None,
         cache_tokens: bool = True,
     ) -> None:
         self.project_id = project_id
@@ -137,7 +138,7 @@ class AsyncAgentAuthClient:
     async def aclose(self) -> None:
         await self._http.aclose()
 
-    async def __aenter__(self) -> "AsyncAgentAuthClient":
+    async def __aenter__(self) -> AsyncAgentAuthClient:
         return self
 
     async def __aexit__(self, *exc: object) -> None:
@@ -187,14 +188,14 @@ class _SyncConnections:
         *,
         connection: str,
         identifier: str,
-        scopes: Optional[List[str]] = None,
-        tenant_id: Optional[str] = None,
+        scopes: list[str] | None = None,
+        tenant_id: str | None = None,
         with_refresh_token: bool = False,
         force_refresh: bool = False,
-        redirect_url: Optional[str] = None,
-        connect_options: Optional[Dict[str, Any]] = None,
-        require_approval: Optional[ApprovalRequest] = None,
-        act_as_user_token: Optional[str] = None,
+        redirect_url: str | None = None,
+        connect_options: dict[str, Any] | None = None,
+        require_approval: ApprovalRequest | None = None,
+        act_as_user_token: str | None = None,
     ) -> VaultToken:
         return self._bridge.run(
             self._inner.get_token(
@@ -216,12 +217,12 @@ class _SyncConnections:
         *,
         connection: str,
         identifier: str,
-        scopes: Optional[List[str]] = None,
-        tenant_id: Optional[str] = None,
-        redirect_url: Optional[str] = None,
-        connect_options: Optional[Dict[str, Any]] = None,
-        act_as_user_token: Optional[str] = None,
-    ) -> Optional[str]:
+        scopes: list[str] | None = None,
+        tenant_id: str | None = None,
+        redirect_url: str | None = None,
+        connect_options: dict[str, Any] | None = None,
+        act_as_user_token: str | None = None,
+    ) -> str | None:
         return self._bridge.run(
             self._inner.get_connect_url(
                 connection=connection,
@@ -239,11 +240,11 @@ class _SyncConnections:
         *,
         connection: str,
         tenant_id: str,
-        scopes: Optional[List[str]] = None,
+        scopes: list[str] | None = None,
         with_refresh_token: bool = False,
         force_refresh: bool = False,
-        require_approval: Optional[ApprovalRequest] = None,
-        act_as_user_token: Optional[str] = None,
+        require_approval: ApprovalRequest | None = None,
+        act_as_user_token: str | None = None,
     ) -> VaultToken:
         return self._bridge.run(
             self._inner.get_tenant_token(
@@ -262,9 +263,9 @@ class _SyncConnections:
         *,
         connection: str,
         identifier: str,
-        scopes: Optional[List[str]] = None,
-        tenant_id: Optional[str] = None,
-        act_as_user_token: Optional[str] = None,
+        scopes: list[str] | None = None,
+        tenant_id: str | None = None,
+        act_as_user_token: str | None = None,
         poll_interval: float = 2.0,
         timeout: float = 300.0,
     ) -> VaultToken:
@@ -286,11 +287,11 @@ class _SyncConnections:
         request: ToolRequest,
         connection: str,
         identifier: str,
-        scopes: Optional[List[str]] = None,
-        tenant_id: Optional[str] = None,
-        connect_options: Optional[Dict[str, Any]] = None,
-        require_approval: Optional[ApprovalRequest] = None,
-        act_as_user_token: Optional[str] = None,
+        scopes: list[str] | None = None,
+        tenant_id: str | None = None,
+        connect_options: dict[str, Any] | None = None,
+        require_approval: ApprovalRequest | None = None,
+        act_as_user_token: str | None = None,
     ) -> Any:
         return self._bridge.run(
             self._inner.execute(
@@ -317,11 +318,11 @@ class _SyncResources:
         self,
         *,
         resource: str,
-        scopes: Optional[List[str]] = None,
-        audience: Optional[List[str]] = None,
-        require_approval: Optional[ApprovalRequest] = None,
+        scopes: list[str] | None = None,
+        audience: list[str] | None = None,
+        require_approval: ApprovalRequest | None = None,
         force_refresh: bool = False,
-        act_as_user_token: Optional[str] = None,
+        act_as_user_token: str | None = None,
     ) -> VaultToken:
         return self._bridge.run(
             self._inner.get_token(
@@ -349,12 +350,12 @@ class AgentAuthClient:
         project_id: str,
         credential: CredentialProvider,
         base_url: str = "https://api.descope.com",
-        store: Optional[TokenStore] = None,
-        mode: Union[Mode, str] = Mode.FETCH,
-        approval: Optional[CibaProvider] = None,
+        store: TokenStore | None = None,
+        mode: Mode | str = Mode.FETCH,
+        approval: CibaProvider | None = None,
         timeout: float = 30.0,
-        retry: Optional[RetryConfig] = None,
-        logger: Optional[logging.Logger] = None,
+        retry: RetryConfig | None = None,
+        logger: logging.Logger | None = None,
         cache_tokens: bool = True,
     ) -> None:
         self._bridge = _LoopBridge()
@@ -416,7 +417,7 @@ class AgentAuthClient:
         finally:
             self._bridge.close()
 
-    def __enter__(self) -> "AgentAuthClient":
+    def __enter__(self) -> AgentAuthClient:
         return self
 
     def __exit__(self, *exc: object) -> None:

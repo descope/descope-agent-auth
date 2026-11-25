@@ -10,17 +10,17 @@ Implementations MUST NOT log stored values.
 
 from __future__ import annotations
 
+import builtins
 from abc import ABC, abstractmethod
-from typing import List, Optional
 
 
 class TokenStore(ABC):
     @abstractmethod
-    def get(self, key: str) -> Optional[str]:
+    def get(self, key: str) -> str | None:
         """Return the stored value, or ``None`` if absent."""
 
     @abstractmethod
-    def set(self, key: str, value: str, *, ttl_seconds: Optional[float] = None) -> None:
+    def set(self, key: str, value: str, *, ttl_seconds: float | None = None) -> None:
         """Store ``value`` under ``key``. ``ttl_seconds`` is an optional expiry hint."""
 
     @abstractmethod
@@ -28,5 +28,5 @@ class TokenStore(ABC):
         """Remove ``key`` if present (no error if absent)."""
 
     @abstractmethod
-    def list(self) -> List[str]:
+    def list(self) -> builtins.list[str]:
         """Return the currently-stored (non-expired) keys."""

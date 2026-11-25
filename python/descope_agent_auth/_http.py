@@ -11,8 +11,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import platform
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Optional
+from typing import Any
 
 import httpx
 
@@ -52,11 +53,11 @@ _SENSITIVE_KEYS = {
 }
 
 
-def _redact(data: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
+def _redact(data: Mapping[str, Any] | None) -> dict[str, Any]:
     """Return a copy of ``data`` with sensitive values masked for logging."""
     if not data:
         return {}
-    out: Dict[str, Any] = {}
+    out: dict[str, Any] = {}
     for key, value in data.items():
         if key.lower() in _SENSITIVE_KEYS:
             out[key] = _REDACTED
@@ -71,7 +72,7 @@ def _redact(data: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
 class RetryConfig:
     attempts: int = 3
     backoff_seconds: float = 0.25
-    retry_statuses: frozenset = frozenset({429, 500, 502, 503, 504})
+    retry_statuses: frozenset[int] = frozenset({429, 500, 502, 503, 504})
 
 
 @dataclass(frozen=True)
@@ -91,9 +92,9 @@ class HttpClient:
         base_url: str,
         *,
         timeout: float = 30.0,
-        retry: Optional[RetryConfig] = None,
-        logger: Optional[logging.Logger] = None,
-        _transport: Optional[httpx.AsyncBaseTransport] = None,  # tests inject this
+        retry: RetryConfig | None = None,
+        logger: logging.Logger | None = None,
+        _transport: httpx.AsyncBaseTransport | None = None,  # tests inject this
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._retry = retry or RetryConfig()
@@ -108,7 +109,7 @@ class HttpClient:
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    async def __aenter__(self) -> "HttpClient":
+    async def __aenter__(self) -> HttpClient:
         return self
 
     async def __aexit__(self, *exc: object) -> None:
@@ -118,8 +119,8 @@ class HttpClient:
         self,
         path: str,
         *,
-        json: Optional[Mapping[str, Any]] = None,
-        headers: Optional[Mapping[str, str]] = None,
+        json: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> HttpResponse:
         return await self._request("POST", path, json=json, headers=headers)
 
@@ -128,7 +129,7 @@ class HttpClient:
         path: str,
         *,
         data: Mapping[str, Any],
-        headers: Optional[Mapping[str, str]] = None,
+        headers: Mapping[str, str] | None = None,
     ) -> HttpResponse:
         return await self._request("POST", path, data=data, headers=headers)
 
@@ -136,8 +137,8 @@ class HttpClient:
         self,
         path: str,
         *,
-        params: Optional[Mapping[str, Any]] = None,
-        headers: Optional[Mapping[str, str]] = None,
+        params: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> HttpResponse:
         return await self._request("GET", path, params=params, headers=headers)
 
@@ -146,12 +147,12 @@ class HttpClient:
         method: str,
         path: str,
         *,
-        json: Optional[Mapping[str, Any]] = None,
-        data: Optional[Mapping[str, Any]] = None,
-        params: Optional[Mapping[str, Any]] = None,
-        headers: Optional[Mapping[str, str]] = None,
+        json: Mapping[str, Any] | None = None,
+        data: Mapping[str, Any] | None = None,
+        params: Mapping[str, Any] | None = None,
+        headers: Mapping[str, str] | None = None,
     ) -> HttpResponse:
-        last_exc: Optional[Exception] = None
+        last_exc: Exception | None = None
         for attempt in range(1, self._retry.attempts + 1):
             self._log.debug(
                 "descope request %s %s body=%s headers=%s (attempt %d)",

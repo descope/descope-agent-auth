@@ -8,7 +8,6 @@ authenticating as itself.
 from __future__ import annotations
 
 import base64
-from typing import Dict, List, Optional
 
 from .._endpoints import GRANT_CLIENT_CREDENTIALS, OAUTH2_APPS_TOKEN
 from ..errors import CredentialAcquisitionFailed
@@ -28,7 +27,7 @@ class ClientCredentialsProvider(CredentialProvider):
         *,
         client_id: str,
         client_secret: str,
-        scopes: Optional[List[str]] = None,
+        scopes: list[str] | None = None,
     ) -> None:
         super().__init__()
         self._client_id = client_id
@@ -36,7 +35,7 @@ class ClientCredentialsProvider(CredentialProvider):
         self._scopes = scopes or []
 
     def _basic_auth(self) -> str:
-        raw = f"{self._client_id}:{self._client_secret}".encode("utf-8")
+        raw = f"{self._client_id}:{self._client_secret}".encode()
         return "Basic " + base64.b64encode(raw).decode("ascii")
 
     async def _acquire(self) -> Credential:
@@ -58,10 +57,10 @@ class ClientCredentialsProvider(CredentialProvider):
     def _storage_key(self) -> str:
         return f"cred:client_credentials:{self._project_id}:{self._client_id}"
 
-    def _refresh_client_auth(self) -> dict:
+    def _refresh_client_auth(self) -> dict[str, str]:
         # client_credentials tokens are re-acquired, not refresh-token rotated;
         # base.get_credential falls back to _acquire when there is no refresh token.
         return {}
 
-    def client_auth(self) -> Optional[Dict[str, str]]:
+    def client_auth(self) -> dict[str, str] | None:
         return {"client_id": self._client_id, "client_secret": self._client_secret}

@@ -8,8 +8,6 @@ carrying the connect URL the caller redirects the user to.
 
 from __future__ import annotations
 
-from typing import List, Optional
-
 
 class AgentAuthError(Exception):
     """Base class for all SDK errors."""
@@ -28,10 +26,10 @@ class ConnectionAuthorizationRequired(AgentAuthError):
         self,
         message: str,
         *,
-        connect_url: Optional[str] = None,
-        connection: Optional[str] = None,
-        identifier: Optional[str] = None,
-        connect_error: Optional[str] = None,
+        connect_url: str | None = None,
+        connection: str | None = None,
+        identifier: str | None = None,
+        connect_error: str | None = None,
     ) -> None:
         super().__init__(message)
         self.connect_url = connect_url
@@ -43,7 +41,7 @@ class ConnectionAuthorizationRequired(AgentAuthError):
 class ConnectUrlFailed(AgentAuthError):
     """Descope did not return a connect URL. The message carries Descope's reason."""
 
-    def __init__(self, message: str, *, status_code: Optional[int] = None) -> None:
+    def __init__(self, message: str, *, status_code: int | None = None) -> None:
         super().__init__(message)
         self.status_code = status_code
 
@@ -55,8 +53,8 @@ class PolicyDenied(AgentAuthError):
         self,
         message: str,
         *,
-        connection: Optional[str] = None,
-        scopes: Optional[List[str]] = None,
+        connection: str | None = None,
+        scopes: list[str] | None = None,
     ) -> None:
         super().__init__(message)
         self.connection = connection
@@ -88,7 +86,7 @@ class TokenExchangeFailed(AgentAuthError):
         self,
         message: str,
         *,
-        status_code: Optional[int] = None,
+        status_code: int | None = None,
     ) -> None:
         super().__init__(message)
         self.status_code = status_code

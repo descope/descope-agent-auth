@@ -19,7 +19,8 @@ fetches the scoped token via phase 2, injects it, and lets the
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, Awaitable, Callable, List, Optional, TypeVar
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING, TypeVar
 
 from ..types import ApprovalRequest
 
@@ -31,12 +32,12 @@ AF = TypeVar("AF", bound=Callable[..., Awaitable[object]])
 
 
 def with_connection(
-    client: "AgentAuthClient",  # noqa: F821  (avoid import cycle)
+    client: AgentAuthClient,  # noqa: F821  (avoid import cycle)
     *,
     connection: str,
-    scopes: Optional[List[str]] = None,
-    tenant_id: Optional[str] = None,
-    require_approval: Optional[ApprovalRequest] = None,
+    scopes: list[str] | None = None,
+    tenant_id: str | None = None,
+    require_approval: ApprovalRequest | None = None,
 ) -> Callable[[F], F]:
     """Decorate a tool ``fn(token, identifier, *args, **kwargs)`` to auto-inject a token.
 
@@ -63,12 +64,12 @@ def with_connection(
 
 
 def with_connection_async(
-    client: "AsyncAgentAuthClient",  # noqa: F821  (avoid import cycle)
+    client: AsyncAgentAuthClient,  # noqa: F821  (avoid import cycle)
     *,
     connection: str,
-    scopes: Optional[List[str]] = None,
-    tenant_id: Optional[str] = None,
-    require_approval: Optional[ApprovalRequest] = None,
+    scopes: list[str] | None = None,
+    tenant_id: str | None = None,
+    require_approval: ApprovalRequest | None = None,
 ) -> Callable[[AF], AF]:
     """Async counterpart of :func:`with_connection` for ``AsyncAgentAuthClient``.
 
