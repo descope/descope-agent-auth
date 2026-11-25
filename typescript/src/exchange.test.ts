@@ -2,7 +2,7 @@ import nock from 'nock';
 import { AgentAuthClient } from './client';
 import { BASE_URL, PROJECT_ID, makeClient, tokenObj } from './testutils';
 import { ClientCredentialsProvider, ManagementKeyProvider } from './providers';
-import { AgentAuthError, PolicyDenied, TokenExchangeFailed } from './errors';
+import { AgentAuthError, ConnectUrlFailed, PolicyDenied, TokenExchangeFailed } from './errors';
 
 // Agent client_credentials is served by the inbound-apps server.
 const TOKEN_PATH = '/oauth2/v1/apps/token';
@@ -108,7 +108,25 @@ describe('ConnectionsClient.getToken', () => {
         identifier: 'user@example.com',
         scopes: ['repo'],
       }),
-    ).rejects.toMatchObject({ name: 'ConnectionAuthorizationRequired', connectUrl: undefined });
+    ).rejects.toMatchObject({
+      name: 'ConnectionAuthorizationRequired',
+      connectUrl: undefined,
+      connectError: expect.stringContaining('connect URL request failed'),
+    });
+  });
+
+  it('404 reports why there is no connect URL', async () => {
+    nock(BASE_URL).post(USER_LATEST).reply(404, { error: 'not found' });
+    nock(BASE_URL).post(CONNECT_PATH).reply(400, { errorDescription: 'redirect URL not allowed' });
+    const client = agentClient();
+    const err = await client.connections
+      .getToken({ connection: 'github', identifier: 'user@example.com' })
+      .catch((e) => e);
+    expect(err.name).toBe('ConnectionAuthorizationRequired');
+    expect(err.connectUrl).toBeUndefined();
+    expect(err.connectError).toContain('400');
+    expect(err.connectError).toContain('redirect URL not allowed');
+    expect(err.message).toContain('redirect URL not allowed');
   });
 
   it('connect request nests scopes + extra fields under options', async () => {
@@ -329,6 +347,25 @@ describe('ConnectionsClient.getConnectUrl', () => {
     expect(body.options.scopes).toEqual(['repo']);
     expect(body.options.redirectUrl).toBe('https://app/cb');
     expect(body.userId).toBeUndefined(); // connect body carries no userId
+  });
+
+  it("throws ConnectUrlFailed with Descope's reason", async () => {
+    nock(BASE_URL).post(CONNECT_PATH).reply(400, { errorDescription: 'redirect URL not allowed' });
+    const client = agentClient();
+    const err = await client.connections
+      .getConnectUrl({ connection: 'github', identifier: 'u@x.com' })
+      .catch((e) => e);
+    expect(err).toBeInstanceOf(ConnectUrlFailed);
+    expect(err.statusCode).toBe(400);
+    expect(err.message).toContain('redirect URL not allowed');
+  });
+
+  it('throws ConnectUrlFailed when the response has no url', async () => {
+    nock(BASE_URL).post(CONNECT_PATH).reply(200, {});
+    const client = agentClient();
+    await expect(
+      client.connections.getConnectUrl({ connection: 'github', identifier: 'u@x.com' }),
+    ).rejects.toBeInstanceOf(ConnectUrlFailed);
   });
 });
 

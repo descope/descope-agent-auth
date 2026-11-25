@@ -12,6 +12,7 @@ from descope_agent_auth import (
 from descope_agent_auth.errors import (
     AgentAuthError,
     ConnectionAuthorizationRequired,
+    ConnectUrlFailed,
     PolicyDenied,
     TokenExchangeFailed,
 )
@@ -283,6 +284,45 @@ class TestConnectionsExchange(common.AgentAuthTest):
         self.assertEqual(opts["scopes"], ["repo"])
         self.assertEqual(opts["redirectUrl"], "https://app/cb")
         self.assertNotIn("userId", kwargs["json"])  # connect body carries no userId
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_not_connected_reports_why_there_is_no_connect_url(self, mock_request):
+        mock_request.side_effect = [
+            make_response(CRED),
+            make_response({"error": "not found"}, status=404),
+            make_response({"errorDescription": "redirect URL not allowed"}, status=400),
+        ]
+        client = self._agent_client()
+
+        with self.assertRaises(ConnectionAuthorizationRequired) as ctx:
+            client.connections.get_token(connection="github", identifier="user@example.com")
+
+        self.assertIsNone(ctx.exception.connect_url)
+        self.assertIn("400", ctx.exception.connect_error)
+        self.assertIn("redirect URL not allowed", ctx.exception.connect_error)
+        self.assertIn("redirect URL not allowed", str(ctx.exception))
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_get_connect_url_raises_with_descope_reason(self, mock_request):
+        mock_request.side_effect = [
+            make_response(CRED),
+            make_response({"errorDescription": "redirect URL not allowed"}, status=400),
+        ]
+        client = self._agent_client()
+
+        with self.assertRaises(ConnectUrlFailed) as ctx:
+            client.connections.get_connect_url(connection="github", identifier="u@x.com")
+
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertIn("redirect URL not allowed", str(ctx.exception))
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_get_connect_url_raises_when_response_has_no_url(self, mock_request):
+        mock_request.side_effect = [make_response(CRED), make_response({})]
+        client = self._agent_client()
+
+        with self.assertRaises(ConnectUrlFailed):
+            client.connections.get_connect_url(connection="github", identifier="u@x.com")
 
     @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_wait_for_connection_times_out(self, mock_request):

@@ -566,7 +566,8 @@ whose access token the resource server can check once a Custom Claims action add
 
 | Error | Meaning |
 | --- | --- |
-| `ConnectionAuthorizationRequired` | user hasn't connected the account; carries `connect_url` / `connectUrl` |
+| `ConnectionAuthorizationRequired` | user hasn't connected the account; carries `connect_url` / `connectUrl`, or `connect_error` / `connectError` saying why there's no URL |
+| `ConnectUrlFailed` | `get_connect_url` / `getConnectUrl` got no URL back; the message has Descope's reason |
 | `PolicyDenied` | agent token lacks Policy permission |
 | `ApprovalDenied` / `ApprovalTimeout` | the CIBA gate was rejected or timed out |
 | `CredentialAcquisitionFailed` | the agent couldn't sign in to Descope (bad creds, device-flow timeout, …) |

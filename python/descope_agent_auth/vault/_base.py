@@ -19,6 +19,7 @@ from .._http import HttpClient
 from ..errors import (
     AgentAuthError,
     ConnectionAuthorizationRequired,
+    ConnectUrlFailed,
     PolicyDenied,
     TokenExchangeFailed,
 )
@@ -169,12 +170,21 @@ class VaultBackend:
 
         # 404 -> user has not connected (or token cleared / wrong scopes).
         if resp.status_code == 404:
-            connect_url = await self._try_connect_url(connect_body, header)
+            message = f"connection '{connection}' is not authorized for this identity yet"
+            connect_url: Optional[str] = None
+            connect_error: Optional[str] = None
+            if connect_body is not None:
+                try:
+                    connect_url = await self._request_connect_url(connect_body, header)
+                except ConnectUrlFailed as e:
+                    connect_error = str(e)
+                    message = f"{message}; no connect URL: {connect_error}"
             raise ConnectionAuthorizationRequired(
-                f"connection '{connection}' is not authorized for this identity yet",
+                message,
                 connect_url=connect_url,
                 connection=connection,
                 identifier=identifier,
+                connect_error=connect_error,
             )
 
         # 401/403 -> Policy (or auth) denied. Meaningful for agent tokens;
@@ -195,29 +205,35 @@ class VaultBackend:
     async def get_connect_url(
         self, *, connect_body: Optional[dict], act_as_user_token: Optional[str] = None
     ) -> Optional[str]:
-        """Proactively generate a connect URL (the explicit authorize path)."""
+        """Proactively generate a connect URL (the explicit authorize path).
+        Raises ``ConnectUrlFailed`` with Descope's reason if no URL comes back."""
         if connect_body is None:
             return None
         if act_as_user_token:
             header = f"Bearer {self._project_id}:{act_as_user_token}"
         else:
             header, _privileged = await self._auth_header()
-        return await self._try_connect_url(connect_body, header)
+        return await self._request_connect_url(connect_body, header)
 
-    async def _try_connect_url(self, connect_body: Optional[dict], header: str) -> Optional[str]:
-        if connect_body is None:
-            return None
+    async def _request_connect_url(self, connect_body: dict, header: str) -> str:
         try:
             resp = await self._http.post_json(
                 OUTBOUND_CONNECT,
                 json=connect_body,
                 headers={"Authorization": header, "Content-Type": "application/json"},
             )
-            if resp.ok and resp.json:
-                return resp.json.get("url")
-        except AgentAuthError:
-            return None
-        return None
+        except ConnectUrlFailed:
+            raise
+        except AgentAuthError as e:
+            raise ConnectUrlFailed(f"connect URL request failed: {e}") from e
+        url = resp.json.get("url") if resp.ok and resp.json else None
+        if url:
+            return url
+        reason = _msg(resp.json) or resp.text or "response had no url"
+        raise ConnectUrlFailed(
+            f"connect URL request failed ({resp.status_code}): {reason}",
+            status_code=resp.status_code,
+        )
 
 
 def _msg(body: Optional[dict]) -> Optional[str]:

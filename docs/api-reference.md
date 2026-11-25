@@ -36,7 +36,7 @@ Tokens stored in the Descope Connections vault (provider OAuth tokens or API key
 | --- | --- | --- |
 | `get_token(*, connection, identifier, scopes=None, tenant_id=None, with_refresh_token=False, force_refresh=False, redirect_url=None, connect_options=None, require_approval=None, act_as_user_token=None)` | `VaultToken` | Fetch a **user-level** token. Raises `ConnectionAuthorizationRequired` if the user hasn't connected. |
 | `get_tenant_token(*, connection, tenant_id, scopes=None, with_refresh_token=False, force_refresh=False, require_approval=None, act_as_user_token=None)` | `VaultToken` | Fetch a **tenant-level** (org-shared) token. |
-| `get_connect_url(*, connection, identifier, scopes=None, tenant_id=None, redirect_url=None, connect_options=None, act_as_user_token=None)` | `str \| None` | Generate the URL to send a user through to authorize the connection (the proactive form of catching `ConnectionAuthorizationRequired`). |
+| `get_connect_url(*, connection, identifier, scopes=None, tenant_id=None, redirect_url=None, connect_options=None, act_as_user_token=None)` | `str \| None` | Generate the URL to send a user through to authorize the connection (the proactive form of catching `ConnectionAuthorizationRequired`). Raises `ConnectUrlFailed` with Descope's reason if no URL comes back. |
 | `wait_for_connection(*, connection, identifier, scopes=None, tenant_id=None, act_as_user_token=None, poll_interval=2.0, timeout=300.0)` | `VaultToken` | Poll `get_token` until the user finishes connecting. |
 
 `scopes` overrides the Connection defaults; `act_as_user_token` runs one call as a
@@ -125,7 +125,8 @@ All extend `AgentAuthError`; match with `isinstance` / `instanceof`.
 
 | Error | Meaning |
 | --- | --- |
-| `ConnectionAuthorizationRequired` | user hasn't connected; carries `connect_url` / `connectUrl`, `connection`, `identifier` |
+| `ConnectionAuthorizationRequired` | user hasn't connected; carries `connect_url` / `connectUrl`, `connection`, `identifier`. When Descope couldn't produce a connect URL, `connect_url` is unset and `connect_error` / `connectError` has the reason |
+| `ConnectUrlFailed` | `get_connect_url` / `getConnectUrl` got no URL back; the message has Descope's reason, plus `status_code` / `statusCode` |
 | `PolicyDenied` | the credential lacks Policy permission |
 | `ApprovalDenied` / `ApprovalTimeout` | a CIBA approval gate was rejected / timed out |
 | `CredentialAcquisitionFailed` | the agent couldn't sign in to Descope |

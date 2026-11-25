@@ -315,7 +315,8 @@ All extend `AgentAuthError` (match with `isinstance` / `instanceof`).
 
 | Error | Means | What to do |
 | --- | --- | --- |
-| `ConnectionAuthorizationRequired` | user hasn't connected; carries `connect_url` / `connectUrl` | send the user to the URL, then retry the call (or use `wait_for_connection`) |
+| `ConnectionAuthorizationRequired` | user hasn't connected; carries `connect_url` / `connectUrl` | send the user to the URL, then retry the call (or use `wait_for_connection`). If the URL is missing, `connect_error` / `connectError` has Descope's reason (often a redirect URL the project doesn't allow) |
+| `ConnectUrlFailed` | `get_connect_url` / `getConnectUrl` got no URL back; carries Descope's reason and `status_code` / `statusCode` | fix the cause in the message (redirect URL, Connection config); don't retry blindly |
 | `PolicyDenied` | the credential lacks Policy permission | surface a permission error; do not retry blindly |
 | `ApprovalDenied` / `ApprovalTimeout` | a CIBA approval gate was rejected / timed out | tell the user the action wasn't approved |
 | `CredentialAcquisitionFailed` | the agent couldn't sign in to Descope (bad creds, device/CIBA timeout) | check the `credential=` config |
