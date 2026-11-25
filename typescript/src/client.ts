@@ -111,6 +111,7 @@ export class AgentAuthClient {
       getCredential: () => this.getCredential(),
       getClientAuth: () => this.credential.clientAuth(),
       actsAsClient: this.credential.actsAsClient,
+      getIdentityKey: () => this.credential.identityKey(),
       store: this.store,
       mode: this.mode,
       approvalGate: (request) => this.runApproval(request),

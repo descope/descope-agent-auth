@@ -171,6 +171,10 @@ class CibaProvider(CredentialProvider):
             out["client_secret"] = self._client_secret
         return out
 
+    def identity_key(self) -> Optional[str]:
+        # One user per provider (login_hint), so the storage key names the subject.
+        return self._storage_key()
+
     def client_auth(self) -> Optional[Dict[str, str]]:
         # Only a confidential CIBA client can authenticate a token exchange.
         if not self._client_secret:

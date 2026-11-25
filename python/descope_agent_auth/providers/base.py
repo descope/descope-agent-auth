@@ -159,6 +159,19 @@ class CredentialProvider(ABC):
         """
         return None
 
+    def identity_key(self) -> Optional[str]:
+        """A stable id for whom this provider's own credential represents, or ``None``.
+
+        When a Resource token is minted by exchanging this provider's own credential,
+        the token cache is keyed by this id instead of a digest of the current
+        credential. A cached Resource token is then served without first refreshing
+        (or re-approving) the credential, and survives its rotation. Override only
+        when the id pins down one subject: two providers that may hold different
+        users' credentials must never return the same id. The default ``None`` keys
+        by the credential itself.
+        """
+        return None
+
     # -- persistence --------------------------------------------------------
 
     async def _save(self, cred: Credential) -> None:

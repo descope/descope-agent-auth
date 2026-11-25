@@ -178,6 +178,20 @@ export abstract class CredentialProvider {
     return undefined;
   }
 
+  /**
+   * A stable id for whom this provider's own credential represents, or `undefined`.
+   *
+   * When a Resource token is minted by exchanging this provider's own credential,
+   * the token cache is keyed by this id instead of a digest of the current
+   * credential. A cached Resource token is then served without first refreshing (or
+   * re-approving) the credential, and survives its rotation. Override only when the
+   * id pins down one subject: two providers that may hold different users'
+   * credentials must never return the same id. The default keys by the credential.
+   */
+  identityKey(): string | undefined {
+    return undefined;
+  }
+
   // -- persistence --------------------------------------------------------
 
   private async save(cred: Credential): Promise<void> {

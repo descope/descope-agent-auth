@@ -1,8 +1,19 @@
 import nock from 'nock';
 import { BASE_URL, makeClient } from './testutils';
-import { AccessTokenProvider, ClientCredentialsProvider, ManagementKeyProvider } from './providers';
-import { AgentAuthError, PolicyDenied } from './errors';
+import {
+  AccessTokenProvider,
+  CibaProvider,
+  ClientCredentialsProvider,
+  ManagementKeyProvider,
+} from './providers';
+import {
+  AgentAuthError,
+  CredentialAcquisitionFailed,
+  PolicyDenied,
+  TokenExchangeFailed,
+} from './errors';
 import { MemoryTokenStore } from './store';
+import { Credential } from './types';
 
 // Agent client_credentials and token-exchange are both served by the inbound-apps server.
 const TOKEN_PATH = '/oauth2/v1/apps/token';
@@ -23,6 +34,28 @@ class UserBoundProvider extends AccessTokenProvider {
 
   clientAuth(): Record<string, string> {
     return { client_id: 'cid', client_secret: 's' };
+  }
+}
+
+// A user-bound provider with a stable identity (like CibaProvider). Each
+// credential resolution yields a rotated token, and the calls are counted.
+class IdentifiedUserProvider extends UserBoundProvider {
+  credentialCalls = 0;
+
+  constructor(
+    private readonly user: string,
+    private readonly identity: string,
+  ) {
+    super(`${user}_jwt`);
+  }
+
+  identityKey(): string {
+    return this.identity;
+  }
+
+  async getCredential(): Promise<Credential> {
+    this.credentialCalls += 1;
+    return { token: `${this.user}_jwt_${this.credentialCalls}`, kind: 'agent_token' };
   }
 }
 
@@ -223,5 +256,102 @@ describe('ResourcesClient.getToken', () => {
     await expect(client.resources.getToken({ resource: 'urn:my-api' })).rejects.toBeInstanceOf(
       PolicyDenied,
     );
+  });
+
+  // Every Resource request carries the client secret, so go by the OAuth error, not
+  // the HTTP status. Legacy envelope (strict OAuth errors off) too.
+  it.each<[number, Record<string, unknown>, Function]>([
+    [401, { error: 'invalid_client' }, CredentialAcquisitionFailed],
+    [
+      400,
+      {
+        errorCode: 'E074130',
+        errorDescription: 'invalid_client',
+        errorMessage: 'Invalid client id',
+      },
+      CredentialAcquisitionFailed,
+    ],
+    [400, { error: 'unauthorized_client' }, PolicyDenied],
+    [400, { error: 'invalid_target' }, PolicyDenied],
+    [403, { error: 'access_denied' }, PolicyDenied],
+    [
+      400,
+      { error: 'invalid_scope', error_description: 'Requested scope not granted' },
+      PolicyDenied,
+    ],
+    [
+      400,
+      {
+        errorCode: 'E063313',
+        errorDescription: 'unauthorized_client',
+        errorMessage: 'Client is not authorized',
+      },
+      PolicyDenied,
+    ],
+    [400, { errorCode: 'E063309', errorMessage: 'Scope not allowed' }, PolicyDenied],
+    [403, { message: 'forbidden' }, PolicyDenied],
+    [400, { error: 'invalid_request' }, TokenExchangeFailed],
+    [401, { error: 'invalid_token' }, TokenExchangeFailed],
+  ])('maps %i %j to the matching error', async (status, body, expected) => {
+    const client = agentClient();
+    nock(BASE_URL).post(TOKEN_PATH).reply(status, body);
+    const err = await client.resources.getToken({ resource: 'urn:my-api' }).catch((e) => e);
+    expect(err.constructor).toBe(expected);
+  });
+
+  it('serves a cached token for an identified provider before resolving its credential', async () => {
+    // A provider with a stable identity (CIBA) keys the cache by that identity, so
+    // a cached Resource token never triggers a refresh or a new approval, and the
+    // entry survives the phase-1 credential's rotation.
+    const provider = new IdentifiedUserProvider('alice', 'cred:ciba:P:cid:alice');
+    const client = makeClient(provider);
+    let body: any;
+    nock(BASE_URL)
+      .post(TOKEN_PATH, (b) => {
+        body = b;
+        return true;
+      })
+      .once()
+      .reply(200, { access_token: 'alice_resource_at', expires_in: 3600 });
+
+    const first = await client.resources.getToken({ resource: 'urn:my-api' });
+    const again = await client.resources.getToken({ resource: 'urn:my-api' });
+
+    expect(first.accessToken).toBe('alice_resource_at');
+    expect(again.accessToken).toBe('alice_resource_at');
+    expect(provider.credentialCalls).toBe(1); // only on the cache miss
+    expect(body.subject_token).toBe('alice_jwt_1');
+  });
+
+  it('keys identified providers per identity on a shared store', async () => {
+    const minted = ['alice_resource_at', 'bob_resource_at'];
+    nock(BASE_URL)
+      .post(TOKEN_PATH)
+      .times(2)
+      .reply(() => [200, { access_token: minted.shift(), expires_in: 3600 }]);
+    const store = new MemoryTokenStore();
+    const alice = makeClient(new IdentifiedUserProvider('alice', 'id:alice'), { store });
+    const bob = makeClient(new IdentifiedUserProvider('bob', 'id:bob'), { store });
+
+    expect((await alice.resources.getToken({ resource: 'urn:my-api' })).accessToken).toBe(
+      'alice_resource_at',
+    );
+    expect((await bob.resources.getToken({ resource: 'urn:my-api' })).accessToken).toBe(
+      'bob_resource_at',
+    );
+  });
+
+  it('gives each CIBA user its own identity', () => {
+    const alice = new CibaProvider({ clientId: 'cid', clientSecret: 's', loginHint: 'a@x.com' });
+    const bob = new CibaProvider({ clientId: 'cid', clientSecret: 's', loginHint: 'b@x.com' });
+    makeClient(alice);
+    makeClient(bob);
+    expect(alice.identityKey()).toBeDefined();
+    expect(alice.identityKey()).not.toBe(bob.identityKey());
+    // Providers without one stable subject key by the credential instead.
+    expect(
+      new ClientCredentialsProvider({ clientId: 'cid', clientSecret: 's' }).identityKey(),
+    ).toBeUndefined();
+    expect(new AccessTokenProvider({ accessToken: 't' }).identityKey()).toBeUndefined();
   });
 });

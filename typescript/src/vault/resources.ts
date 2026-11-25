@@ -27,7 +27,12 @@ import {
   TOKEN_TYPE_ACCESS_TOKEN,
 } from '../endpoints';
 import { sha256Base64Url } from '../runtime';
-import { AgentAuthError, PolicyDenied, TokenExchangeFailed } from '../errors';
+import {
+  AgentAuthError,
+  CredentialAcquisitionFailed,
+  PolicyDenied,
+  TokenExchangeFailed,
+} from '../errors';
 import { HttpClient } from '../httpClient';
 import { TokenStore } from '../store/base';
 import { ApprovalRequest, Credential, Mode, VaultToken, vaultTokenExpired } from '../types';
@@ -54,6 +59,8 @@ export interface ResourcesClientDeps {
    * use the `client_credentials` grant rather than exchanging its credential.
    */
   actsAsClient?: boolean;
+  /** The provider's stable identity, when it has one (CIBA: client + user). */
+  getIdentityKey?: () => string | undefined;
   store: TokenStore;
   mode: Mode;
   approvalGate?: ApprovalGate;
@@ -62,27 +69,54 @@ export interface ResourcesClientDeps {
   cacheTokens?: boolean;
 }
 
-const cacheKey = async (
+const cacheKey = (
   resource: string,
   scopes: string[] | undefined,
   audience: string[] | undefined,
   clientId: string,
-  subjectToken: string | undefined,
-): Promise<string> => {
+  subject: string,
+): string => {
   const scopePart = scopes && scopes.length ? [...scopes].sort().join(',') : '<defaults>';
   const audPart = audience && audience.length ? [...audience].sort().join(',') : '<none>';
   // A Resource token belongs to one (actor, subject) pair: the client that
-  // authenticates the request (act.sub on an exchange) and the subject (the token
-  // being exchanged -- a user's token, or a phase-1 credential that can itself be
-  // user-bound, e.g. CIBA -- or the client itself on a client_credentials request).
-  // Key by both so a shared TokenStore never serves one client's or one user's
-  // token to another. Only a digest of a subject token lands in the key.
-  const subjectPart = subjectToken === undefined ? 'self' : await sha256Base64Url(subjectToken);
-  return `vault:resource:${clientId}:${subjectPart}:${resource}:${audPart}:${scopePart}`;
+  // authenticates the request (act.sub on an exchange) and the subject. Key by
+  // both so a shared TokenStore never serves one client's or one user's token to
+  // another. `subject` is 'self' (client_credentials), a digest of the token being
+  // exchanged, or 'id:' + a digest of the provider's stable identity (see
+  // CredentialProvider.identityKey). No raw token or identity lands in the key.
+  return `vault:resource:${clientId}:${subject}:${resource}:${audPart}:${scopePart}`;
 };
 
 const errMsg = (body: any): string | undefined =>
-  body?.error_description || body?.error || body?.errorDescription;
+  body?.error_description || body?.errorMessage || body?.error || body?.errorDescription;
+
+// OAuth error codes (RFC 6749 / 8693 / 8707) that mean "no Policy grants this".
+const POLICY_ERRORS = new Set(['unauthorized_client', 'invalid_target', 'access_denied']);
+// Descope's own codes for the same, sent in the legacy envelope (`errorCode`):
+// E063309 for the agent's own token, E063313 when acting for a user.
+const POLICY_ERROR_CODES = new Set(['E063309', 'E063313']);
+const SCOPE_NOT_GRANTED = 'requested scope not granted';
+
+/**
+ * Classify a failed Resource token response by the error the server returns:
+ * `client` (the agent's client auth was rejected), `policy` (no Policy grants the
+ * request), or `other`. Every request carries the client secret, so a 401 is
+ * usually a bad secret, not a Policy decision: go by the OAuth `error` rather than
+ * the HTTP status. Descope can also send its legacy envelope (strict OAuth errors
+ * off), where `errorDescription` carries the OAuth code and `errorCode` /
+ * `errorMessage` Descope's own code and reason.
+ */
+export const tokenErrorClass = (statusCode: number, body: any): 'client' | 'policy' | 'other' => {
+  const b = body && typeof body === 'object' ? body : {};
+  const codes = [b.error, b.errorDescription];
+  if (codes.includes('invalid_client')) return 'client';
+  if (codes.some((c) => POLICY_ERRORS.has(c)) || POLICY_ERROR_CODES.has(b.errorCode)) {
+    return 'policy';
+  }
+  const reason = [b.error_description, b.errorMessage].filter(Boolean).join(' ').toLowerCase();
+  if (reason.includes(SCOPE_NOT_GRANTED) || statusCode === 403) return 'policy';
+  return 'other';
+};
 
 export class ResourcesClient {
   private readonly skew: number;
@@ -125,39 +159,44 @@ export class ResourcesClient {
 
     // The subject is an explicit user token (user-scoped), nothing (a
     // client-credentials agent acting as itself), or the client's own phase-1
-    // credential. A Management Key is not an OAuth token, so it cannot be the
-    // subject of a token-exchange. Resolve it before the cache lookup: the cache
-    // key is bound to the subject.
-    let subjectToken: string | undefined;
-    if (args.actAsUserToken) {
-      subjectToken = args.actAsUserToken;
-    } else if (this.deps.actsAsClient) {
-      subjectToken = undefined;
+    // credential. The cache key is bound to the subject. For the own-credential
+    // path, a provider with a stable identity (CIBA: one user) is keyed by that
+    // identity, so a cached Resource token is served without touching -- and
+    // possibly refreshing or re-approving -- the phase-1 credential, and the entry
+    // survives that credential's rotation. Without one, the credential must be
+    // resolved first so its digest can key the entry.
+    const asSelf = !args.actAsUserToken && !!this.deps.actsAsClient;
+    let subjectToken: string | undefined = args.actAsUserToken || undefined;
+    let subject: string;
+    if (subjectToken !== undefined) {
+      subject = await sha256Base64Url(subjectToken);
+    } else if (asSelf) {
+      subject = 'self';
     } else {
-      const cred = await this.deps.getCredential();
-      if (cred.kind === 'management_key') {
-        throw new AgentAuthError(
-          'Resource tokens use the token-exchange grant and require an OAuth agent identity ' +
-            '(Client ID/Secret via a phase-1 provider) or an actAsUserToken, not a Management Key.',
-        );
+      const identity = this.deps.getIdentityKey?.();
+      if (identity) {
+        subject = `id:${await sha256Base64Url(identity)}`;
+      } else {
+        subjectToken = await this.ownSubjectToken();
+        subject = await sha256Base64Url(subjectToken);
       }
-      subjectToken = cred.token;
     }
 
-    const key = await cacheKey(
+    const key = cacheKey(
       args.resource,
       args.scopes,
       args.audience,
       clientAuth.client_id ?? '',
-      subjectToken,
+      subject,
     );
     if (this.cacheTokens && !args.forceRefresh) {
       const cached = await this.cacheGet(key);
       if (cached) return cached;
     }
+    if (!asSelf && subjectToken === undefined) subjectToken = await this.ownSubjectToken();
 
     const data: Record<string, string | string[]> =
-      subjectToken === undefined
+      asSelf || subjectToken === undefined
         ? // The agent acting as itself: Descope applies client-access Policies only
           // to a client_credentials request that names the resource.
           {
@@ -176,12 +215,21 @@ export class ResourcesClient {
     if (args.audience && args.audience.length) data.audience = args.audience;
 
     const resp = await this.deps.http.postForm(OAUTH2_APPS_TOKEN, data);
-    if (resp.statusCode === 401 || resp.statusCode === 403) {
-      throw new PolicyDenied(
-        `policy denied for resource '${args.resource}' ` +
-          `(${resp.statusCode}): ${errMsg(resp.json) ?? resp.text}`,
-        { connection: args.resource, scopes: args.scopes },
-      );
+    if (!resp.ok) {
+      const reason = errMsg(resp.json) ?? resp.text;
+      const errorClass = tokenErrorClass(resp.statusCode, resp.json);
+      if (errorClass === 'client') {
+        throw new CredentialAcquisitionFailed(
+          `Descope rejected the agent client (${resp.statusCode}): ${reason}. ` +
+            'Check the clientId and clientSecret.',
+        );
+      }
+      if (errorClass === 'policy') {
+        throw new PolicyDenied(
+          `policy denied for resource '${args.resource}' (${resp.statusCode}): ${reason}`,
+          { connection: args.resource, scopes: args.scopes },
+        );
+      }
     }
     if (!resp.ok || !resp.json?.access_token) {
       throw new TokenExchangeFailed(
@@ -193,6 +241,20 @@ export class ResourcesClient {
     const token = toVaultToken(resp.json, args.resource);
     if (this.cacheTokens) await this.cacheSet(key, token);
     return token;
+  }
+
+  /** The client's own phase-1 credential as the exchange subject. */
+  private async ownSubjectToken(): Promise<string> {
+    const cred = await this.deps.getCredential();
+    // A Management Key is not an OAuth token, so it cannot be the subject of a
+    // token exchange.
+    if (cred.kind === 'management_key') {
+      throw new AgentAuthError(
+        'Resource tokens use the token-exchange grant and require an OAuth agent identity ' +
+          '(Client ID/Secret via a phase-1 provider) or an actAsUserToken, not a Management Key.',
+      );
+    }
+    return cred.token;
   }
 
   private async cacheGet(key: string): Promise<VaultToken | undefined> {

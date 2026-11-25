@@ -100,6 +100,7 @@ class AsyncAgentAuthClient:
             get_credential=self.get_credential,
             get_client_auth=self.credential.client_auth,
             acts_as_client=self.credential.acts_as_client,
+            get_identity_key=self.credential.identity_key,
             store=self.store,
             mode=self.mode,
             approval_gate=self._run_approval,

@@ -129,7 +129,7 @@ All extend `AgentAuthError`; match with `isinstance` / `instanceof`.
 | `ConnectUrlFailed` | `get_connect_url` / `getConnectUrl` got no URL back; the message has Descope's reason, plus `status_code` / `statusCode` |
 | `PolicyDenied` | the credential lacks Policy permission |
 | `ApprovalDenied` / `ApprovalTimeout` | a CIBA approval gate was rejected / timed out |
-| `CredentialAcquisitionFailed` | the agent couldn't sign in to Descope |
+| `CredentialAcquisitionFailed` | the agent couldn't sign in to Descope, including a Resource token request rejected with `invalid_client` (wrong client ID or secret) |
 | `InvalidAuthorizationDetails` | Descope rejected (or didn't apply) a CIBA request's `authorization_details`; carries the server's `error_description` / `errorDescription`. Subclass of `CredentialAcquisitionFailed`; fix the request, don't retry |
 | `TokenExchangeFailed` | other token-fetch failure |
 
