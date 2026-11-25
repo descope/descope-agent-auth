@@ -16,10 +16,10 @@ import { MemoryTokenStore } from './store';
 import { BASE_URL, makeClient } from './testutils';
 
 // Make polling instant: stub the exported sleep used by the providers.
-jest.mock('./httpClient', () => {
-  const actual = jest.requireActual('./httpClient');
-  return { ...actual, sleep: () => Promise.resolve() };
-});
+vi.mock('./httpClient', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  sleep: () => Promise.resolve(),
+}));
 
 const TOKEN_PATH = '/oauth2/v1/token';
 const DEVICE_PATH = '/oauth2/v1/device';

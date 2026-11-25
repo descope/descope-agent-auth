@@ -108,6 +108,6 @@ jobs:
       - name: Build
         run: npm run build
 
-      # Already built above; --ignore-scripts skips prepublishOnly/prepare (husky).
+      # Already built above; --ignore-scripts skips the prepublishOnly rebuild.
       - name: Publish
         run: npm publish --provenance --access public --ignore-scripts

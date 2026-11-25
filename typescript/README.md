@@ -81,7 +81,7 @@ All sign-in providers, Connection and Resource token exchange, a pluggable token
 | Script             | Purpose                                      |
 | ------------------ | -------------------------------------------- |
 | `npm run build`    | dual CJS + ESM bundle with type declarations |
-| `npm test`         | Jest + nock with coverage                    |
+| `npm test`         | Vitest + nock with coverage                  |
 | `npm run lint`     | Biome lint + format check                    |
 | `npm run lint:fix` | Biome lint + format, applying fixes          |
 

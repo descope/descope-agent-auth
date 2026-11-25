@@ -6,10 +6,10 @@ import { BASE_URL, makeClient, PROJECT_ID, tokenObj } from './testutils';
 import { withConnection } from './tools';
 
 // Make CIBA polling instant.
-jest.mock('./httpClient', () => {
-  const actual = jest.requireActual('./httpClient');
-  return { ...actual, sleep: () => Promise.resolve() };
-});
+vi.mock('./httpClient', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  sleep: () => Promise.resolve(),
+}));
 
 const USER_LATEST = '/v1/mgmt/outbound/app/user/token/latest';
 const CONNECT_PATH = '/v1/mgmt/outbound/app/connect';
