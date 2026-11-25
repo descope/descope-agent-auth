@@ -31,6 +31,7 @@ DEVICE_AUTHORIZATION = "/oauth2/v1/device"
 # CIBA is served only by the inbound-apps authorization server.
 CIBA_AUTHENTICATE = "/oauth2/v1/apps/bc-authorize"
 
+
 # OIDC discovery document (project-scoped).
 def discovery(project_id: str) -> str:
     return f"/{project_id}/.well-known/openid-configuration"

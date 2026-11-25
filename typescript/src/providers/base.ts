@@ -13,9 +13,9 @@
 
 import { GRANT_REFRESH_TOKEN, OAUTH2_TOKEN } from '../endpoints';
 import { CredentialAcquisitionFailed } from '../errors';
-import { HttpClient, HttpResponse } from '../httpClient';
-import { TokenStore } from '../store/base';
-import { Credential, CredentialKind, credentialExpired, isPrivileged } from '../types';
+import type { HttpClient, HttpResponse } from '../httpClient';
+import type { TokenStore } from '../store/base';
+import { type Credential, type CredentialKind, credentialExpired, isPrivileged } from '../types';
 
 export const errMessage = (body: any): string | undefined => {
   if (!body) return undefined;
@@ -28,7 +28,7 @@ export const tokenResponseToCredential = (
   kind: CredentialKind,
   fallback?: Credential,
 ): Credential => {
-  if (!body || !body.access_token) {
+  if (!body?.access_token) {
     throw new CredentialAcquisitionFailed('token response missing access_token');
   }
   let expiresAt: number | undefined;

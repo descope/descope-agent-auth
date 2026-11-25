@@ -1,6 +1,6 @@
 import nock from 'nock';
-import { BASE_URL, PROJECT_ID, makeClient, tokenObj } from './testutils';
 import { AccessTokenProvider, ClientCredentialsProvider } from './providers';
+import { BASE_URL, makeClient, PROJECT_ID, tokenObj } from './testutils';
 
 const USER_LATEST = '/v1/mgmt/outbound/app/user/token/latest';
 // Agent client_credentials and token-exchange are both served by the inbound-apps server.

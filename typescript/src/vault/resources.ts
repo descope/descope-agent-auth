@@ -26,17 +26,23 @@ import {
   OAUTH2_APPS_TOKEN,
   TOKEN_TYPE_ACCESS_TOKEN,
 } from '../endpoints';
-import { sha256Base64Url } from '../runtime';
 import {
   AgentAuthError,
   CredentialAcquisitionFailed,
   PolicyDenied,
   TokenExchangeFailed,
 } from '../errors';
-import { HttpClient } from '../httpClient';
-import { TokenStore } from '../store/base';
-import { ApprovalRequest, Credential, Mode, VaultToken, vaultTokenExpired } from '../types';
-import { ApprovalGate } from './base';
+import type { HttpClient } from '../httpClient';
+import { sha256Base64Url } from '../runtime';
+import type { TokenStore } from '../store/base';
+import {
+  type ApprovalRequest,
+  type Credential,
+  type Mode,
+  type VaultToken,
+  vaultTokenExpired,
+} from '../types';
+import type { ApprovalGate } from './base';
 
 export interface GetResourceTokenArgs {
   resource: string;
@@ -76,8 +82,8 @@ const cacheKey = (
   clientId: string,
   subject: string,
 ): string => {
-  const scopePart = scopes && scopes.length ? [...scopes].sort().join(',') : '<defaults>';
-  const audPart = audience && audience.length ? [...audience].sort().join(',') : '<none>';
+  const scopePart = scopes?.length ? [...scopes].sort().join(',') : '<defaults>';
+  const audPart = audience?.length ? [...audience].sort().join(',') : '<none>';
   // A Resource token belongs to one (actor, subject) pair: the client that
   // authenticates the request (act.sub on an exchange) and the subject. Key by
   // both so a shared TokenStore never serves one client's or one user's token to
@@ -211,8 +217,8 @@ export class ResourcesClient {
             resource: args.resource,
             ...clientAuth,
           };
-    if (args.scopes && args.scopes.length) data.scope = args.scopes.join(' ');
-    if (args.audience && args.audience.length) data.audience = args.audience;
+    if (args.scopes?.length) data.scope = args.scopes.join(' ');
+    if (args.audience?.length) data.audience = args.audience;
 
     const resp = await this.deps.http.postForm(OAUTH2_APPS_TOKEN, data);
     if (!resp.ok) {

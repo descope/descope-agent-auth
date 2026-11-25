@@ -1,19 +1,19 @@
 import nock from 'nock';
-import { BASE_URL, makeClient } from './testutils';
-import {
-  AccessTokenProvider,
-  CibaProvider,
-  ClientCredentialsProvider,
-  ManagementKeyProvider,
-} from './providers';
 import {
   AgentAuthError,
   CredentialAcquisitionFailed,
   PolicyDenied,
   TokenExchangeFailed,
 } from './errors';
+import {
+  AccessTokenProvider,
+  CibaProvider,
+  ClientCredentialsProvider,
+  ManagementKeyProvider,
+} from './providers';
 import { MemoryTokenStore } from './store';
-import { Credential } from './types';
+import { BASE_URL, makeClient } from './testutils';
+import type { Credential } from './types';
 
 // Agent client_credentials and token-exchange are both served by the inbound-apps server.
 const TOKEN_PATH = '/oauth2/v1/apps/token';
@@ -260,7 +260,7 @@ describe('ResourcesClient.getToken', () => {
 
   // Every Resource request carries the client secret, so go by the OAuth error, not
   // the HTTP status. Legacy envelope (strict OAuth errors off) too.
-  it.each<[number, Record<string, unknown>, Function]>([
+  it.each<[number, Record<string, unknown>, typeof AgentAuthError]>([
     [401, { error: 'invalid_client' }, CredentialAcquisitionFailed],
     [
       400,

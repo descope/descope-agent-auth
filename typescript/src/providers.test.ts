@@ -1,5 +1,10 @@
 import nock from 'nock';
-import { BASE_URL, makeClient } from './testutils';
+import {
+  ApprovalDenied,
+  ApprovalTimeout,
+  CredentialAcquisitionFailed,
+  InvalidAuthorizationDetails,
+} from './errors';
 import {
   CibaProvider,
   ClientCredentialsProvider,
@@ -7,13 +12,8 @@ import {
   JwtBearerProvider,
   ManagementKeyProvider,
 } from './providers';
-import {
-  ApprovalDenied,
-  ApprovalTimeout,
-  CredentialAcquisitionFailed,
-  InvalidAuthorizationDetails,
-} from './errors';
 import { MemoryTokenStore } from './store';
+import { BASE_URL, makeClient } from './testutils';
 
 // Make polling instant: stub the exported sleep used by the providers.
 jest.mock('./httpClient', () => {

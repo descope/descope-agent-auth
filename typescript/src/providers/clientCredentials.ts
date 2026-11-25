@@ -9,7 +9,7 @@
 import { GRANT_CLIENT_CREDENTIALS, OAUTH2_APPS_TOKEN } from '../endpoints';
 import { CredentialAcquisitionFailed } from '../errors';
 import { base64 } from '../runtime';
-import { Credential } from '../types';
+import type { Credential } from '../types';
 import { CredentialProvider, errMessage, tokenResponseToCredential } from './base';
 
 export interface ClientCredentialsOptions {

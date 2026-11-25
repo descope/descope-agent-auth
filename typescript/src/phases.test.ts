@@ -1,9 +1,9 @@
 import nock from 'nock';
 import { AgentAuthClient } from './client';
-import { BASE_URL, PROJECT_ID, makeClient, tokenObj } from './testutils';
-import { CibaProvider, ManagementKeyProvider } from './providers';
-import { withConnection } from './tools';
 import { AgentAuthError, ApprovalDenied, ConnectionAuthorizationRequired } from './errors';
+import { CibaProvider, ManagementKeyProvider } from './providers';
+import { BASE_URL, makeClient, PROJECT_ID, tokenObj } from './testutils';
+import { withConnection } from './tools';
 
 // Make CIBA polling instant.
 jest.mock('./httpClient', () => {

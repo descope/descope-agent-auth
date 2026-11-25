@@ -42,9 +42,7 @@ class TestAsyncClient(common.AgentAuthTest):
         ]
 
         async def scenario():
-            client = _async_client(
-                ClientCredentialsProvider(client_id="cid", client_secret="s")
-            )
+            client = _async_client(ClientCredentialsProvider(client_id="cid", client_secret="s"))
             try:
                 return await client.connections.get_token(
                     connection="github", identifier="user@example.com"
@@ -93,9 +91,7 @@ class TestAsyncClient(common.AgentAuthTest):
         )
 
         async def scenario():
-            client = _async_client(
-                ClientCredentialsProvider(client_id="cid", client_secret="s")
-            )
+            client = _async_client(ClientCredentialsProvider(client_id="cid", client_secret="s"))
             try:
                 return await client.resources.get_token(
                     resource="urn:my-api", act_as_user_token="user_jwt"

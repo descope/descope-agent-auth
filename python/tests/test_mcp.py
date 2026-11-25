@@ -136,9 +136,7 @@ def test_auth_injects_header_through_real_httpx_client():
         return httpx.Response(200, json={"ok": True})
 
     async def run() -> None:
-        async with httpx.AsyncClient(
-            transport=httpx.MockTransport(handler), auth=auth
-        ) as http:
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler), auth=auth) as http:
             await http.post("https://mcp.example/")
 
     asyncio.run(run())

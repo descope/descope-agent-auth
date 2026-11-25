@@ -14,8 +14,7 @@ on:
 jobs:
   python:
     name: 🐍 Python
-    # ubuntu-latest (26.04) has no Python 3.9 build, and the package still supports 3.9.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: python
@@ -28,15 +27,18 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+      # uv installs the matrix Python itself, so 3.9 works on any runner image.
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           python-version: ${{ matrix.version }}
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: uv sync --locked
       - name: Lint (ruff)
-        run: ruff check descope_agent_auth
+        run: uv run ruff check .
+      - name: Format (ruff)
+        run: uv run ruff format --check .
       - name: Test (pytest)
-        run: pytest -q
+        run: uv run pytest -q
 
   typescript:
     name: 🟦 TypeScript
@@ -60,10 +62,8 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Audit
         run: npm audit --audit-level=moderate
-      - name: Format check
-        run: npm run format-check
-      - name: Lint
-        run: npx eslint "src/**/*.ts"
+      - name: Lint and format (biome)
+        run: npm run lint
       - name: Build
         run: npm run build
       - name: Test

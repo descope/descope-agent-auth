@@ -9,8 +9,8 @@
  */
 
 import { CredentialAcquisitionFailed } from '../errors';
-import { Logger } from '../httpClient';
-import { Credential } from '../types';
+import type { Logger } from '../httpClient';
+import type { Credential } from '../types';
 import { CredentialProvider } from './base';
 
 export interface ManagementKeyOptions {
@@ -34,7 +34,7 @@ export class ManagementKeyProvider extends CredentialProvider {
       );
     }
     this.managementKey = opts.managementKey;
-    // eslint-disable-next-line no-console
+    // biome-ignore lint/suspicious/noConsole: default logger must surface the Policy-bypass warning
     const logger = opts.logger ?? { debug: () => {}, warn: console.warn.bind(console) };
     logger.warn(
       'ManagementKeyProvider in use: this credential BYPASSES Policies and ' +

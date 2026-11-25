@@ -1,8 +1,8 @@
 import nock from 'nock';
-import { BASE_URL, makeClient, tokenObj } from './testutils';
-import { ManagementKeyProvider } from './providers';
-import { langgraphConnectionTool, interruptPayload } from './integrations/langgraph';
 import { ApprovalDenied, ConnectionAuthorizationRequired, PolicyDenied } from './errors';
+import { interruptPayload, langgraphConnectionTool } from './integrations/langgraph';
+import { ManagementKeyProvider } from './providers';
+import { BASE_URL, makeClient, tokenObj } from './testutils';
 
 const USER_SCOPED = '/v1/mgmt/outbound/app/user/token';
 const CONNECT_PATH = '/v1/mgmt/outbound/app/connect';

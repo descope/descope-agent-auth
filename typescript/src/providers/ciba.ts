@@ -20,7 +20,7 @@ import {
   InvalidAuthorizationDetails,
 } from '../errors';
 import { sleep } from '../httpClient';
-import { Credential } from '../types';
+import type { Credential } from '../types';
 import { CredentialProvider, errMessage, tokenResponseToCredential } from './base';
 
 export interface CibaOptions {
@@ -121,9 +121,7 @@ export class CibaProvider extends CredentialProvider {
     const deadline = Math.min(expiresAt, Date.now() / 1000 + timeout);
 
     while (Date.now() / 1000 < deadline) {
-      // eslint-disable-next-line no-await-in-loop
       await sleep(interval * 1000);
-      // eslint-disable-next-line no-await-in-loop
       const resp = await this.requireHttp().postForm(OAUTH2_APPS_TOKEN, this.pollBody(authReqId));
       if (resp.ok) {
         const credential = tokenResponseToCredential(resp.json, this.kind);
@@ -131,10 +129,10 @@ export class CibaProvider extends CredentialProvider {
         return credential;
       }
       const error = resp.json?.error;
-      if (error === 'authorization_pending') continue; // eslint-disable-line no-continue
+      if (error === 'authorization_pending') continue;
       if (error === 'slow_down') {
         interval += 5;
-        continue; // eslint-disable-line no-continue
+        continue;
       }
       if (error === 'access_denied' || error === 'denied') {
         throw new ApprovalDenied('user rejected the CIBA approval request');

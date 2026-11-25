@@ -15,9 +15,14 @@ import {
   PolicyDenied,
   TokenExchangeFailed,
 } from '../errors';
-import { HttpClient } from '../httpClient';
-import { TokenStore } from '../store/base';
-import { ApprovalRequest, Credential, VaultToken, vaultTokenExpired } from '../types';
+import type { HttpClient, HttpResponse } from '../httpClient';
+import type { TokenStore } from '../store/base';
+import {
+  type ApprovalRequest,
+  type Credential,
+  type VaultToken,
+  vaultTokenExpired,
+} from '../types';
 
 export type ApprovalGate = (request: ApprovalRequest) => Promise<void>;
 
@@ -203,7 +208,7 @@ export class VaultBackend {
     connectBody: Record<string, unknown>,
     header: string,
   ): Promise<string> {
-    let resp;
+    let resp: HttpResponse;
     try {
       resp = await this.http.postJson(OUTBOUND_CONNECT, connectBody, { Authorization: header });
     } catch (err) {

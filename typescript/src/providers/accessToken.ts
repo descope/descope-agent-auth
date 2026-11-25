@@ -21,7 +21,7 @@
  * `connections.getToken` / `resources.getToken`.
  */
 
-import { Credential } from '../types';
+import type { Credential } from '../types';
 import { CredentialProvider } from './base';
 
 export interface AccessTokenOptions {

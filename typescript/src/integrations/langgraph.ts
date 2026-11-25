@@ -23,7 +23,7 @@
 
 import type { AgentAuthClient } from '../client';
 import {
-  AgentAuthError,
+  type AgentAuthError,
   ApprovalDenied,
   ApprovalTimeout,
   ConnectionAuthorizationRequired,
@@ -73,7 +73,6 @@ export function langgraphConnectionTool<TArgs extends unknown[], TResult>(
   return async (identifier: string, ...args: TArgs): Promise<TResult> => {
     for (;;) {
       try {
-        // eslint-disable-next-line no-await-in-loop
         const token = await client.connections.getToken({
           connection: options.connection,
           identifier,
@@ -81,7 +80,6 @@ export function langgraphConnectionTool<TArgs extends unknown[], TResult>(
           tenantId: options.tenantId,
           requireApproval: options.requireApproval,
         });
-        // eslint-disable-next-line no-await-in-loop
         return await fn(token.accessToken, identifier, ...args);
       } catch (err) {
         const isConn = err instanceof ConnectionAuthorizationRequired;
@@ -90,7 +88,6 @@ export function langgraphConnectionTool<TArgs extends unknown[], TResult>(
           // On the first pass LangGraph's interrupt() throws to pause the graph; on
           // resume the node re-runs and the loop retries the exchange.
           options.interrupt(interruptPayload(err as AgentAuthError));
-          // eslint-disable-next-line no-continue
           continue;
         }
         throw err;

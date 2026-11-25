@@ -4,86 +4,78 @@
  * more.
  */
 
-export { AgentAuthClient } from './client';
 export type { AgentAuthClientOptions } from './client';
-
-// providers
+export { AgentAuthClient } from './client';
+// errors
 export {
-  CredentialProvider,
-  AccessTokenProvider,
-  ClientCredentialsProvider,
-  DeviceCodeProvider,
-  CibaProvider,
-  JwtBearerProvider,
-  ManagementKeyProvider,
-} from './providers';
-export type {
-  AccessTokenOptions,
-  ClientCredentialsOptions,
-  DeviceCodeOptions,
-  CibaOptions,
-  CibaAuthenticateArgs,
-  JwtBearerOptions,
-  ManagementKeyOptions,
-} from './providers';
-
-// store
-export { MemoryTokenStore } from './store';
-export type { TokenStore } from './store';
-
-// tools
-export { withConnection } from './tools';
-export type { WithConnectionOptions, ToolFn } from './tools';
-
+  AgentAuthError,
+  ApprovalDenied,
+  ApprovalTimeout,
+  ConnectionAuthorizationRequired,
+  ConnectUrlFailed,
+  CredentialAcquisitionFailed,
+  InvalidAuthorizationDetails,
+  PolicyDenied,
+  TokenExchangeFailed,
+} from './errors';
+export type { ToolRequest } from './execution';
+// execution seam
+export { Execution } from './execution';
+// http config types
+export type { Logger, RetryConfig } from './httpClient';
+export type { InterruptFn, LangGraphConnectionOptions } from './integrations/langgraph';
 // integrations (optional, framework-specific)
-export { langgraphConnectionTool, interruptPayload } from './integrations/langgraph';
-export type { LangGraphConnectionOptions, InterruptFn } from './integrations/langgraph';
+export { interruptPayload, langgraphConnectionTool } from './integrations/langgraph';
+export type {
+  McpAuthProvider,
+  McpConnectionAuthOptions,
+  McpOAuthTokens,
+  McpResourceAuthOptions,
+} from './integrations/mcp';
 export {
   descopeMcpConnectionAuthProvider,
   descopeMcpResourceAuthProvider,
 } from './integrations/mcp';
 export type {
-  McpAuthProvider,
-  McpOAuthTokens,
-  McpConnectionAuthOptions,
-  McpResourceAuthOptions,
-} from './integrations/mcp';
-
-// execution seam
-export { Execution } from './execution';
-export type { ToolRequest } from './execution';
-
-// vault arg types
-export type { GetConnectionTokenArgs, GetResourceTokenArgs } from './vault';
-export type {
-  ExecuteConnectionArgs,
-  GetTenantConnectionTokenArgs,
-  GetConnectUrlArgs,
-  WaitForConnectionArgs,
-} from './vault/connections';
+  AccessTokenOptions,
+  CibaAuthenticateArgs,
+  CibaOptions,
+  ClientCredentialsOptions,
+  DeviceCodeOptions,
+  JwtBearerOptions,
+  ManagementKeyOptions,
+} from './providers';
+// providers
+export {
+  AccessTokenProvider,
+  CibaProvider,
+  ClientCredentialsProvider,
+  CredentialProvider,
+  DeviceCodeProvider,
+  JwtBearerProvider,
+  ManagementKeyProvider,
+} from './providers';
+export type { TokenStore } from './store';
+// store
+export { MemoryTokenStore } from './store';
+export type { ToolFn, WithConnectionOptions } from './tools';
+// tools
+export { withConnection } from './tools';
 
 // types
 export type {
+  ApprovalRequest,
   Credential,
   CredentialKind,
   Mode,
   PendingAuthorization,
-  ApprovalRequest,
   VaultToken,
 } from './types';
-
-// errors
-export {
-  AgentAuthError,
-  ConnectionAuthorizationRequired,
-  ConnectUrlFailed,
-  PolicyDenied,
-  CredentialAcquisitionFailed,
-  InvalidAuthorizationDetails,
-  TokenExchangeFailed,
-  ApprovalDenied,
-  ApprovalTimeout,
-} from './errors';
-
-// http config types
-export type { RetryConfig, Logger } from './httpClient';
+// vault arg types
+export type { GetConnectionTokenArgs, GetResourceTokenArgs } from './vault';
+export type {
+  ExecuteConnectionArgs,
+  GetConnectUrlArgs,
+  GetTenantConnectionTokenArgs,
+  WaitForConnectionArgs,
+} from './vault/connections';

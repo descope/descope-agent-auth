@@ -3,8 +3,8 @@
 // this SDK uses its own name rather than `nodejs` (the core node-sdk).
 import nock from 'nock';
 import pkg from '../package.json';
-import { BASE_URL, makeClient } from './testutils';
 import { ClientCredentialsProvider } from './providers';
+import { BASE_URL, makeClient } from './testutils';
 import { SDK_VERSION } from './version';
 
 beforeAll(() => nock.disableNetConnect());

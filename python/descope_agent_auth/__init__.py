@@ -2,8 +2,8 @@
 for Connection / Resource tokens from the Descope vault. Two phases, nothing more.
 """
 
+from ._version import __version__ as __version__
 from .client import AgentAuthClient, AsyncAgentAuthClient
-from .execution import Execution, ToolRequest
 from .errors import (
     AgentAuthError,
     ApprovalDenied,
@@ -15,6 +15,7 @@ from .errors import (
     PolicyDenied,
     TokenExchangeFailed,
 )
+from .execution import Execution, ToolRequest
 from .providers import (
     AccessTokenProvider,
     CibaProvider,
@@ -34,7 +35,6 @@ from .types import (
     PendingAuthorization,
     VaultToken,
 )
-from ._version import __version__ as __version__
 
 __all__ = [
     "AgentAuthClient",

@@ -1,6 +1,6 @@
 /** In-memory token store: the default, fine for single-process agents. */
 
-import { TokenStore } from './base';
+import type { TokenStore } from './base';
 
 interface Entry {
   value: string;

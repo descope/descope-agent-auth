@@ -133,7 +133,9 @@ class TestCibaProvider(common.AgentAuthTest):
 
     def _assert_paths(self, mock_request, polls):
         paths = [c.args[1] for c in mock_request.call_args_list]
-        self.assertEqual(["/oauth2/v1/apps/bc-authorize"] + ["/oauth2/v1/apps/token"] * polls, paths)
+        self.assertEqual(
+            ["/oauth2/v1/apps/bc-authorize"] + ["/oauth2/v1/apps/token"] * polls, paths
+        )
 
     @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_pending_then_approved(self, mock_request):
@@ -180,7 +182,9 @@ class TestCibaProvider(common.AgentAuthTest):
             else make_response({"error": "authorization_pending"}, status=400)
         )
         client = self.make_client(provider)
-        with patch("descope_agent_auth.providers.ciba.time.time", side_effect=itertools.count(1000)):
+        with patch(
+            "descope_agent_auth.providers.ciba.time.time", side_effect=itertools.count(1000)
+        ):
             with self.assertRaises(ApprovalTimeout):
                 client._bridge.run(
                     provider.authenticate(login_hint="user@example.com", **authenticate_args)

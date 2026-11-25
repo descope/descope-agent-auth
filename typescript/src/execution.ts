@@ -14,8 +14,8 @@
  */
 
 import { AgentAuthError } from './errors';
-import { Mode, VaultToken } from './types';
-import { FetchArgs, VaultBackend } from './vault/base';
+import type { Mode, VaultToken } from './types';
+import type { FetchArgs, VaultBackend } from './vault/base';
 
 /**
  * Describes a downstream API call for execute mode. In execute mode the caller
@@ -66,7 +66,6 @@ export class Execution {
    * Stubbed until that endpoint ships; the seam exists so enabling it is a `mode`
    * change for the developer, not a rewrite.
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async execute(_request: ToolRequest, _args: FetchArgs): Promise<unknown> {
     if (this.modeValue !== 'execute') {
       throw new AgentAuthError("execute() requires the client to be created with mode: 'execute'");

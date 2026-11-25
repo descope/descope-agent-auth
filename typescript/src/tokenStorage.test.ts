@@ -1,6 +1,5 @@
 import nock from 'nock';
 import { AgentAuthClient } from './client';
-import { BASE_URL, PROJECT_ID } from './testutils';
 import {
   CibaProvider,
   ClientCredentialsProvider,
@@ -8,6 +7,7 @@ import {
   ManagementKeyProvider,
 } from './providers';
 import { MemoryTokenStore } from './store';
+import { BASE_URL, PROJECT_ID } from './testutils';
 
 // Make polling instant where relevant.
 jest.mock('./httpClient', () => {

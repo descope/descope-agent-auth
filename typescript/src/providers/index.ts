@@ -1,14 +1,13 @@
-export { CredentialProvider } from './base';
-export { AccessTokenProvider } from './accessToken';
-export { ClientCredentialsProvider } from './clientCredentials';
-export { DeviceCodeProvider } from './deviceCode';
-export { CibaProvider } from './ciba';
-export { JwtBearerProvider } from './jwtBearer';
-export { ManagementKeyProvider } from './managementKey';
-
 export type { AccessTokenOptions } from './accessToken';
+export { AccessTokenProvider } from './accessToken';
+export { CredentialProvider } from './base';
+export type { CibaAuthenticateArgs, CibaOptions } from './ciba';
+export { CibaProvider } from './ciba';
 export type { ClientCredentialsOptions } from './clientCredentials';
+export { ClientCredentialsProvider } from './clientCredentials';
 export type { DeviceCodeOptions } from './deviceCode';
-export type { CibaOptions, CibaAuthenticateArgs } from './ciba';
+export { DeviceCodeProvider } from './deviceCode';
 export type { JwtBearerOptions } from './jwtBearer';
+export { JwtBearerProvider } from './jwtBearer';
 export type { ManagementKeyOptions } from './managementKey';
+export { ManagementKeyProvider } from './managementKey';

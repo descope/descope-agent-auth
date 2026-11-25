@@ -14,10 +14,10 @@ import {
   OUTBOUND_USER_TOKEN_LATEST,
 } from '../endpoints';
 import { AgentAuthError, ConnectionAuthorizationRequired } from '../errors';
+import type { Execution, ToolRequest } from '../execution';
 import { sleep } from '../httpClient';
-import { Execution, ToolRequest } from '../execution';
-import { ApprovalRequest, VaultToken } from '../types';
-import { FetchArgs } from './base';
+import type { ApprovalRequest, VaultToken } from '../types';
+import type { FetchArgs } from './base';
 
 export interface GetConnectionTokenArgs {
   connection: string;
@@ -87,12 +87,12 @@ const cacheKey = (
 ): string => {
   // tenantId is part of the key: one Connection can hold several user tokens for
   // the same user, one per tenant, and they are NOT interchangeable.
-  const scopePart = scopes && scopes.length ? [...scopes].sort().join(',') : '<defaults>';
+  const scopePart = scopes?.length ? [...scopes].sort().join(',') : '<defaults>';
   return `vault:user:${connection}:${identifier}:${tenantId ?? '<none>'}:${scopePart}`;
 };
 
 const tenantCacheKey = (connection: string, tenantId: string, scopes?: string[]): string => {
-  const scopePart = scopes && scopes.length ? [...scopes].sort().join(',') : '<defaults>';
+  const scopePart = scopes?.length ? [...scopes].sort().join(',') : '<defaults>';
   return `vault:tenant:${connection}:${tenantId}:${scopePart}`;
 };
 
@@ -107,7 +107,7 @@ const buildConnectBody = (args: {
   // fields from connectOptions.
   const options: Record<string, unknown> = { ...(args.connectOptions ?? {}) };
   if (args.redirectUrl) options.redirectUrl = args.redirectUrl;
-  if (args.scopes && args.scopes.length) options.scopes = args.scopes;
+  if (args.scopes?.length) options.scopes = args.scopes;
   const connectBody: Record<string, unknown> = { appId: args.connection };
   if (args.tenantId) connectBody.tenantId = args.tenantId;
   if (Object.keys(options).length > 0) connectBody.options = options;
@@ -127,7 +127,7 @@ const buildArgs = (args: GetConnectionTokenArgs): FetchArgs => {
 
   // Omitted scopes -> /latest (Connection defaults); explicit scopes -> override.
   let path = OUTBOUND_USER_TOKEN_LATEST;
-  if (scopes && scopes.length) {
+  if (scopes?.length) {
     path = OUTBOUND_USER_TOKEN;
     body.scopes = scopes;
   }
@@ -164,7 +164,7 @@ const buildTenantArgs = (args: GetTenantConnectionTokenArgs): FetchArgs => {
   }
 
   let path = OUTBOUND_TENANT_TOKEN_LATEST;
-  if (scopes && scopes.length) {
+  if (scopes?.length) {
     path = OUTBOUND_TENANT_TOKEN;
     body.scopes = scopes;
   }
@@ -254,7 +254,6 @@ export class ConnectionsClient {
     const deadline = Date.now() + (timeoutSeconds ?? 300) * 1000;
     for (;;) {
       try {
-        // eslint-disable-next-line no-await-in-loop
         return await this.getToken({ ...tokenArgs, forceRefresh: true });
       } catch (err) {
         if (!(err instanceof ConnectionAuthorizationRequired)) throw err;
@@ -265,7 +264,6 @@ export class ConnectionsClient {
               `to connect '${args.connection}'`,
           );
         }
-        // eslint-disable-next-line no-await-in-loop
         await sleep(Math.min(pollMs, remaining));
       }
     }

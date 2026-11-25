@@ -1,9 +1,9 @@
+import type { AgentAuthClient } from './client';
+import { ConnectionAuthorizationRequired, PolicyDenied } from './errors';
 import {
   descopeMcpConnectionAuthProvider,
   descopeMcpResourceAuthProvider,
 } from './integrations/mcp';
-import type { AgentAuthClient } from './client';
-import { ConnectionAuthorizationRequired, PolicyDenied } from './errors';
 import type { VaultToken } from './types';
 
 const vaultToken = (over: Partial<VaultToken> = {}): VaultToken => ({
