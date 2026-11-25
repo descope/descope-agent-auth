@@ -5,6 +5,8 @@ permissions:
 
 on:
   pull_request:
+    # edited: re-check the title. Every job re-runs, so a green gate never masks an earlier red one.
+    types: [opened, edited, synchronize, reopened]
   push:
     branches:
       - main
