@@ -98,6 +98,11 @@ export class AgentAuthClient {
       (request) => this.runApproval(request),
       undefined,
       cacheTokens,
+      {
+        actsAsClient: this.credential.actsAsClient,
+        getClientAuth: () => this.credential.clientAuth(),
+        getIdentityKey: () => this.credential.identityKey(),
+      },
     );
     // The execution seam wraps the backend: fetch is wired, execute is stubbed
     // behind the mode flag so enabling it later is a config change, not a rewrite.

@@ -16,6 +16,7 @@ import {
   TokenExchangeFailed,
 } from '../errors';
 import { HttpClient } from '../httpClient';
+import { sha256Base64Url } from '../runtime';
 import { TokenStore } from '../store/base';
 import { ApprovalRequest, Credential, VaultToken, vaultTokenExpired } from '../types';
 
@@ -68,6 +69,13 @@ export interface FetchArgs {
   actAsUserToken?: string;
 }
 
+/** Where VaultBackend learns who a fetch authenticates as, to scope its cache. */
+export interface PrincipalSource {
+  actsAsClient?: boolean;
+  getClientAuth?: () => Record<string, string> | undefined;
+  getIdentityKey?: () => string | undefined;
+}
+
 export class VaultBackend {
   constructor(
     private readonly http: HttpClient,
@@ -80,7 +88,35 @@ export class VaultBackend {
     // Descope, so Policies are re-enforced on every call (a cached token skips the
     // retrieval-time policy check until it expires).
     private readonly cacheTokens = true,
+    // Used to bind each cached token to the caller that fetched it (see scopedKey).
+    private readonly principal: PrincipalSource = {},
   ) {}
+
+  /**
+   * Bind a cache key to the project and to the caller the fetch authenticates as.
+   *
+   * Descope decides per caller whether it may read a Connection token, so a cached
+   * token may only be served to that same caller: never to another user acting
+   * through this client, nor to another agent client or project sharing the
+   * TokenStore. The caller is a digest of `actAsUserToken`; otherwise the agent's
+   * client ID (a client-credentials agent acting as itself), the provider's stable
+   * identity, or a digest of its current credential. No raw token lands in the key.
+   */
+  private async scopedKey(cacheKey: string, actAsUserToken?: string): Promise<string> {
+    let principal: string;
+    if (actAsUserToken) {
+      principal = `user:${await sha256Base64Url(actAsUserToken)}`;
+    } else {
+      const clientId = this.principal.actsAsClient
+        ? this.principal.getClientAuth?.()?.client_id
+        : undefined;
+      const identity = this.principal.getIdentityKey?.();
+      if (clientId) principal = `client:${await sha256Base64Url(clientId)}`;
+      else if (identity) principal = `id:${await sha256Base64Url(identity)}`;
+      else principal = `cred:${await sha256Base64Url((await this.getCredential()).token)}`;
+    }
+    return `${cacheKey}:project:${await sha256Base64Url(this.projectId)}:${principal}`;
+  }
 
   private async authHeader(): Promise<string> {
     const cred = await this.getCredential();
@@ -128,8 +164,11 @@ export class VaultBackend {
       await this.approvalGate(args.requireApproval);
     }
 
+    const cacheKey = this.cacheTokens
+      ? await this.scopedKey(args.cacheKey, args.actAsUserToken)
+      : args.cacheKey;
     if (this.cacheTokens && !args.forceRefresh) {
-      const cached = await this.cacheGet(args.cacheKey);
+      const cached = await this.cacheGet(cacheKey);
       if (cached) return cached;
     }
 
@@ -142,7 +181,7 @@ export class VaultBackend {
 
     if (resp.ok && resp.json?.token) {
       const token = tokenObjectToVaultToken(resp.json.token);
-      if (this.cacheTokens) await this.cacheSet(args.cacheKey, token);
+      if (this.cacheTokens) await this.cacheSet(cacheKey, token);
       return token;
     }
 

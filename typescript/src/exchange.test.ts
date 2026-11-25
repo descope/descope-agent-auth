@@ -3,6 +3,7 @@ import { AgentAuthClient } from './client';
 import { BASE_URL, PROJECT_ID, makeClient, tokenObj } from './testutils';
 import { ClientCredentialsProvider, ManagementKeyProvider } from './providers';
 import { AgentAuthError, ConnectUrlFailed, PolicyDenied, TokenExchangeFailed } from './errors';
+import { MemoryTokenStore } from './store';
 
 // Agent client_credentials is served by the inbound-apps server.
 const TOKEN_PATH = '/oauth2/v1/apps/token';
@@ -247,6 +248,108 @@ describe('ConnectionsClient.getToken', () => {
       tenantId: 't2',
     });
     expect(nock.pendingMocks()).toHaveLength(0); // both interceptors consumed
+  });
+  // Cache scoping (descope/etc#17066): a cached Connection token must only be served
+  // to the caller that fetched it, never to another user or agent client that shares
+  // the client or the TokenStore.
+  const agentOn = (store: MemoryTokenStore, clientId: string): AgentAuthClient => {
+    nock(BASE_URL)
+      .post(TOKEN_PATH)
+      .reply(200, { access_token: `at-${clientId}`, expires_in: 3600 });
+    return makeClient(new ClientCredentialsProvider({ clientId, clientSecret: 's' }), { store });
+  };
+  const mgmtOn = (projectId: string, store: MemoryTokenStore): AgentAuthClient =>
+    new AgentAuthClient({
+      projectId,
+      baseUrl: BASE_URL,
+      store,
+      credential: new ManagementKeyProvider({
+        managementKey: 'K123',
+        allowManagementKey: true,
+        logger: silentLogger,
+      }),
+    });
+
+  it('does not serve one acting user the cached token of another', async () => {
+    nock(BASE_URL)
+      .post(USER_LATEST)
+      .reply(200, { token: tokenObj({ accessToken: 'token-for-A' }) });
+    nock(BASE_URL)
+      .post(USER_LATEST)
+      .reply(200, { token: tokenObj({ accessToken: 'token-for-B' }) });
+    const client = mgmtClient();
+    const get = (actAsUserToken: string) =>
+      client.connections.getToken({ connection: 'github', identifier: 'u@x.com', actAsUserToken });
+    expect((await get('user-A-jwt')).accessToken).toBe('token-for-A');
+    expect((await get('user-B-jwt')).accessToken).toBe('token-for-B');
+  });
+
+  it('still caches for the same acting user', async () => {
+    const scope = nock(BASE_URL).post(USER_LATEST).reply(200, { token: tokenObj() });
+    const client = mgmtClient();
+    const get = () =>
+      client.connections.getToken({
+        connection: 'github',
+        identifier: 'u@x.com',
+        actAsUserToken: 'user-A-jwt',
+      });
+    await get();
+    await get();
+    expect(scope.isDone()).toBe(true);
+  });
+
+  it('does not share cached tokens between agent clients on one store', async () => {
+    nock(BASE_URL)
+      .post(USER_LATEST)
+      .reply(200, { token: tokenObj({ accessToken: 'via-agent-1' }) });
+    nock(BASE_URL)
+      .post(USER_LATEST)
+      .reply(200, { token: tokenObj({ accessToken: 'via-agent-2' }) });
+    const store = new MemoryTokenStore();
+    await agentOn(store, 'cid1').connections.getToken({
+      connection: 'github',
+      identifier: 'u@x.com',
+    });
+    const tok = await agentOn(store, 'cid2').connections.getToken({
+      connection: 'github',
+      identifier: 'u@x.com',
+    });
+    expect(tok.accessToken).toBe('via-agent-2');
+  });
+
+  it('does not share cached tokens between projects on one store', async () => {
+    nock(BASE_URL)
+      .post(USER_LATEST)
+      .reply(200, { token: tokenObj({ accessToken: 'in-P1' }) });
+    nock(BASE_URL)
+      .post(USER_LATEST)
+      .reply(200, { token: tokenObj({ accessToken: 'in-P2' }) });
+    const store = new MemoryTokenStore();
+    await mgmtOn('P1', store).connections.getToken({ connection: 'github', identifier: 'u@x.com' });
+    const tok = await mgmtOn('P2', store).connections.getToken({
+      connection: 'github',
+      identifier: 'u@x.com',
+    });
+    expect(tok.accessToken).toBe('in-P2');
+  });
+
+  it('does not share cached tenant tokens between agent clients on one store', async () => {
+    nock(BASE_URL)
+      .post(TENANT_LATEST)
+      .reply(200, { token: tokenObj({ accessToken: 'tenant-1' }) });
+    nock(BASE_URL)
+      .post(TENANT_LATEST)
+      .reply(200, { token: tokenObj({ accessToken: 'tenant-2' }) });
+    const store = new MemoryTokenStore();
+    await agentOn(store, 'cid1').connections.getTenantToken({
+      connection: 'github',
+      tenantId: 't1',
+    });
+    const tok = await agentOn(store, 'cid2').connections.getTenantToken({
+      connection: 'github',
+      tenantId: 't1',
+    });
+    expect(tok.accessToken).toBe('tenant-2');
   });
 });
 

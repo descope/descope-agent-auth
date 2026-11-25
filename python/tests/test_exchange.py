@@ -5,6 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 from descope_agent_auth import (
+    AgentAuthClient,
     AccessTokenProvider,
     CibaProvider,
     ClientCredentialsProvider,
@@ -198,6 +199,110 @@ class TestConnectionsExchange(common.AgentAuthTest):
         client.connections.get_token(connection="github", identifier="u@x.com", tenant_id="t2")
 
         self.assertEqual(mock_request.call_count, 2)  # not served from cache
+
+    # -- cache scoping (descope/etc#17066): a cached Connection token must only be
+    # served to the caller that fetched it, never to another user or agent client
+    # that shares the client or the TokenStore.
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_cache_not_shared_between_acting_users(self, mock_request):
+        mock_request.side_effect = [
+            make_response({"token": token_obj(accessToken="token-for-A")}),
+            make_response({"token": token_obj(accessToken="token-for-B")}),
+        ]
+        client = self._mgmt_client()
+
+        a = client.connections.get_token(
+            connection="github", identifier="u@x.com", act_as_user_token="user-A-jwt"
+        )
+        b = client.connections.get_token(
+            connection="github", identifier="u@x.com", act_as_user_token="user-B-jwt"
+        )
+
+        self.assertEqual(a.access_token, "token-for-A")
+        self.assertEqual(b.access_token, "token-for-B")
+        _, kwargs = mock_request.call_args
+        self.assertEqual(kwargs["headers"]["Authorization"], f"Bearer {PROJECT_ID}:user-B-jwt")
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_same_acting_user_is_still_cached(self, mock_request):
+        mock_request.return_value = make_response({"token": token_obj()})
+        client = self._mgmt_client()
+
+        for _ in range(2):
+            client.connections.get_token(
+                connection="github", identifier="u@x.com", act_as_user_token="user-A-jwt"
+            )
+
+        self.assertEqual(mock_request.call_count, 1)
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_cache_not_shared_between_agent_clients_on_one_store(self, mock_request):
+        mock_request.side_effect = [
+            make_response(CRED),
+            make_response({"token": token_obj(accessToken="token-via-agent-1")}),
+            make_response(CRED),
+            make_response({"token": token_obj(accessToken="token-via-agent-2")}),
+        ]
+        store = MemoryTokenStore()
+        one = self.make_client(
+            ClientCredentialsProvider(client_id="cid1", client_secret="s"), store=store
+        )
+        two = self.make_client(
+            ClientCredentialsProvider(client_id="cid2", client_secret="s"), store=store
+        )
+
+        one.connections.get_token(connection="github", identifier="u@x.com")
+        tok = two.connections.get_token(connection="github", identifier="u@x.com")
+
+        self.assertEqual(tok.access_token, "token-via-agent-2")
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_cache_not_shared_between_projects_on_one_store(self, mock_request):
+        mock_request.side_effect = [
+            make_response({"token": token_obj(accessToken="token-in-P1")}),
+            make_response({"token": token_obj(accessToken="token-in-P2")}),
+        ]
+        store = MemoryTokenStore()
+        mgmt = dict(management_key="K123", allow_management_key=True)
+        p1 = AgentAuthClient(
+            project_id="P1",
+            base_url=common.DEFAULT_BASE_URL,
+            credential=ManagementKeyProvider(**mgmt),
+            store=store,
+        )
+        p2 = AgentAuthClient(
+            project_id="P2",
+            base_url=common.DEFAULT_BASE_URL,
+            credential=ManagementKeyProvider(**mgmt),
+            store=store,
+        )
+
+        p1.connections.get_token(connection="github", identifier="u@x.com")
+        tok = p2.connections.get_token(connection="github", identifier="u@x.com")
+
+        self.assertEqual(tok.access_token, "token-in-P2")
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_tenant_cache_not_shared_between_agent_clients_on_one_store(self, mock_request):
+        mock_request.side_effect = [
+            make_response(CRED),
+            make_response({"token": token_obj(accessToken="tenant-via-agent-1")}),
+            make_response(CRED),
+            make_response({"token": token_obj(accessToken="tenant-via-agent-2")}),
+        ]
+        store = MemoryTokenStore()
+        one = self.make_client(
+            ClientCredentialsProvider(client_id="cid1", client_secret="s"), store=store
+        )
+        two = self.make_client(
+            ClientCredentialsProvider(client_id="cid2", client_secret="s"), store=store
+        )
+
+        one.connections.get_tenant_token(connection="github", tenant_id="t1")
+        tok = two.connections.get_tenant_token(connection="github", tenant_id="t1")
+
+        self.assertEqual(tok.access_token, "tenant-via-agent-2")
 
     @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_tenant_token_latest(self, mock_request):

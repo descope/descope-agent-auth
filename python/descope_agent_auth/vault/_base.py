@@ -8,6 +8,7 @@ the result -- including the headline 404 -> ConnectionAuthorizationRequired path
 
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 from datetime import datetime, timezone
@@ -25,6 +26,10 @@ from ..errors import (
 )
 from ..store.base import TokenStore
 from ..types import ApprovalRequest, Credential, VaultToken
+
+
+def _digest(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
 def _parse_expiry(value: Any) -> Optional[float]:
@@ -77,6 +82,9 @@ class VaultBackend:
         approval_gate: Optional[Callable[["ApprovalRequest"], Awaitable[None]]] = None,
         skew_seconds: float = 60.0,
         cache_tokens: bool = True,
+        acts_as_client: bool = False,
+        get_client_auth: Optional[Callable[[], Optional[dict]]] = None,
+        get_identity_key: Optional[Callable[[], Optional[str]]] = None,
     ) -> None:
         self._http = http
         self._project_id = project_id
@@ -89,6 +97,10 @@ class VaultBackend:
         # Descope, so Policies are re-enforced on every call (caching a token skips
         # the retrieval-time policy check until it expires).
         self._cache_tokens = cache_tokens
+        # Used to bind each cached token to the caller that fetched it (see _scoped_key).
+        self._acts_as_client = acts_as_client
+        self._get_client_auth = get_client_auth
+        self._get_identity_key = get_identity_key
 
     # -- auth ---------------------------------------------------------------
 
@@ -98,6 +110,32 @@ class VaultBackend:
         return f"Bearer {self._project_id}:{cred.token}", cred.is_privileged
 
     # -- cache --------------------------------------------------------------
+
+    async def _scoped_key(self, cache_key: str, act_as_user_token: Optional[str]) -> str:
+        """Bind a cache key to the project and to the caller the fetch authenticates as.
+
+        Descope decides per caller whether it may read a Connection token, so a cached
+        token may only be served to that same caller: never to another user acting
+        through this client, nor to another agent client or project sharing the
+        TokenStore. The caller is a digest of ``act_as_user_token``; otherwise the
+        agent's client ID (a client-credentials agent acting as itself), the
+        provider's stable identity, or a digest of its current credential. No raw
+        token lands in the key.
+        """
+        if act_as_user_token:
+            principal = "user:" + _digest(act_as_user_token)
+        else:
+            client_id = None
+            if self._acts_as_client and self._get_client_auth is not None:
+                client_id = (self._get_client_auth() or {}).get("client_id")
+            identity = self._get_identity_key() if self._get_identity_key else None
+            if client_id:
+                principal = "client:" + _digest(client_id)
+            elif identity:
+                principal = "id:" + _digest(identity)
+            else:
+                principal = "cred:" + _digest((await self._get_credential()).token)
+        return f"{cache_key}:project:{_digest(self._project_id)}:{principal}"
 
     async def _cache_get(self, cache_key: str) -> Optional[VaultToken]:
         raw = await maybe_await(self._store.get(cache_key))
@@ -147,6 +185,8 @@ class VaultBackend:
                 )
             await self._approval_gate(require_approval)
 
+        if self._cache_tokens:
+            cache_key = await self._scoped_key(cache_key, act_as_user_token)
         if self._cache_tokens and not force_refresh:
             cached = await self._cache_get(cache_key)
             if cached is not None:

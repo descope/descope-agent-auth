@@ -85,6 +85,9 @@ class AsyncAgentAuthClient:
             store=self.store,
             approval_gate=self._run_approval,
             cache_tokens=cache_tokens,
+            acts_as_client=self.credential.acts_as_client,
+            get_client_auth=self.credential.client_auth,
+            get_identity_key=self.credential.identity_key,
         )
         # The execution seam wraps the backend: fetch is wired, execute is stubbed
         # behind the mode flag so enabling it later is a config change, not a rewrite.
