@@ -27,6 +27,7 @@ dev = [
 [project.urls]
 Homepage = "https://www.descope.com"
 Documentation = "https://docs.descope.com/agentic-identity-hub"
+Repository = "https://github.com/descope/descope-agent-auth"
 
 [tool.hatch.build.targets.wheel]
 packages = ["descope_agent_auth"]
