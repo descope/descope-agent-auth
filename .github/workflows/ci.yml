@@ -21,13 +21,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: ['3.9', '3.10', '3.11', '3.12', '3.13']
+        version: ['3.10', '3.11', '3.12', '3.13']
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      # uv installs the matrix Python itself, so 3.9 works on any runner image.
       - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           python-version: ${{ matrix.version }}
