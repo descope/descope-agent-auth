@@ -13,7 +13,7 @@ zero-arg callable returning a fresh JWT (useful for rotating workload tokens).
 
 from __future__ import annotations
 
-from typing import Callable, List, Optional, Union
+from collections.abc import Callable
 
 from .._endpoints import GRANT_JWT_BEARER, OAUTH2_TOKEN
 from ..errors import CredentialAcquisitionFailed
@@ -28,8 +28,8 @@ class JwtBearerProvider(CredentialProvider):
         self,
         *,
         client_id: str,
-        assertion: Union[str, Callable[[], str]],
-        scopes: Optional[List[str]] = None,
+        assertion: str | Callable[[], str],
+        scopes: list[str] | None = None,
     ) -> None:
         super().__init__()
         self._client_id = client_id
@@ -59,5 +59,5 @@ class JwtBearerProvider(CredentialProvider):
     def _storage_key(self) -> str:
         return f"cred:jwt_bearer:{self._project_id}:{self._client_id}"
 
-    def _refresh_client_auth(self) -> dict:
+    def _refresh_client_auth(self) -> dict[str, str]:
         return {"client_id": self._client_id}

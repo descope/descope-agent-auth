@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import time
 from abc import ABC, abstractmethod
-from typing import Dict, Optional
+from typing import Any
 
 from .._async import maybe_await
 from .._endpoints import GRANT_REFRESH_TOKEN, OAUTH2_TOKEN
@@ -51,15 +51,15 @@ class CredentialProvider(ABC):
     acts_as_client: bool = False
 
     def __init__(self) -> None:
-        self._cached: Optional[Credential] = None
+        self._cached: Credential | None = None
         # Bound by AgentAuthClient at init so providers can talk to Descope + persist.
-        self._http: Optional[HttpClient] = None
-        self._project_id: Optional[str] = None
-        self._store: Optional[TokenStore] = None
+        self._http: HttpClient | None = None
+        self._project_id: str | None = None
+        self._store: TokenStore | None = None
 
     # -- wired by the client ------------------------------------------------
 
-    def bind(self, http: HttpClient, project_id: str, store: Optional[TokenStore] = None) -> None:
+    def bind(self, http: HttpClient, project_id: str, store: TokenStore | None = None) -> None:
         self._http = http
         self._project_id = project_id
         self._store = store
@@ -121,7 +121,7 @@ class CredentialProvider(ABC):
     async def _acquire(self) -> Credential:
         """Run the provider's flow and return a fresh credential."""
 
-    def _storage_key(self) -> Optional[str]:
+    def _storage_key(self) -> str | None:
         """A stable key under which to persist this credential, or ``None`` to skip
         persistence (e.g. management key, bring-your-own token)."""
         return None
@@ -145,11 +145,11 @@ class CredentialProvider(ABC):
             )
         return token_response_to_credential(resp.json, kind=self.kind, fallback=current)
 
-    def _refresh_client_auth(self) -> dict:
+    def _refresh_client_auth(self) -> dict[str, str]:
         """Extra form fields / client auth needed for refresh. Override as needed."""
         return {}
 
-    def client_auth(self) -> Optional[Dict[str, str]]:
+    def client_auth(self) -> dict[str, str] | None:
         """Form fields that authenticate this agent as a confidential client.
 
         Resource tokens are minted by an authenticated agent client (it becomes
@@ -159,7 +159,7 @@ class CredentialProvider(ABC):
         """
         return None
 
-    def identity_key(self) -> Optional[str]:
+    def identity_key(self) -> str | None:
         """A stable id for whom this provider's own credential represents, or ``None``.
 
         When a Resource token is minted by exchanging this provider's own credential,
@@ -191,7 +191,7 @@ class CredentialProvider(ABC):
         # entry persists until overwritten. Expiry is decided from cred.expires_at.
         await maybe_await(self._store.set(key, payload))
 
-    async def _load(self) -> Optional[Credential]:
+    async def _load(self) -> Credential | None:
         key = self._storage_key()
         if key is None or self._store is None:
             return None
@@ -216,15 +216,15 @@ class CredentialProvider(ABC):
 
 
 def token_response_to_credential(
-    body: Optional[dict],
+    body: dict[str, Any] | None,
     *,
     kind: CredentialKind,
-    fallback: Optional[Credential] = None,
+    fallback: Credential | None = None,
 ) -> Credential:
     """Parse a standard OAuth2 token response into a ``Credential``."""
     if not body or "access_token" not in body:
         raise CredentialAcquisitionFailed("token response missing access_token")
-    expires_at: Optional[float] = None
+    expires_at: float | None = None
     if isinstance(body.get("expires_in"), (int, float)):
         expires_at = time.time() + float(body["expires_in"])
     refresh = body.get("refresh_token")
@@ -247,7 +247,7 @@ def token_response_to_credential(
     )
 
 
-def _err(body: Optional[dict]) -> Optional[str]:
+def _err(body: dict[str, Any] | None) -> str | None:
     if not body:
         return None
     return body.get("error_description") or body.get("error") or body.get("errorDescription")

@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import time
 import unittest
-from typing import Optional
 from unittest.mock import MagicMock
 
 from descope_agent_auth import AgentAuthClient
@@ -22,7 +21,7 @@ DEFAULT_BASE_URL = "https://api.descope.com"
 PROJECT_ID = "P2test"
 
 
-def make_response(json_data=None, *, status: int = 200, text: Optional[str] = None):
+def make_response(json_data=None, *, status: int = 200, text: str | None = None):
     """Build a mock ``httpx.Response`` usable as a mocked HTTP call return value.
 
     Mirrors what ``descope_agent_auth._http.HttpClient`` reads off a response:

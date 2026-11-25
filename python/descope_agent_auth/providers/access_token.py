@@ -22,8 +22,6 @@ with ``ClientCredentialsProvider`` and pass ``act_as_user_token=`` per call on
 
 from __future__ import annotations
 
-from typing import Optional
-
 from ..types import Credential, CredentialKind
 from .base import CredentialProvider
 
@@ -35,8 +33,8 @@ class AccessTokenProvider(CredentialProvider):
         self,
         *,
         access_token: str,
-        expires_at: Optional[float] = None,
-        refresh_token: Optional[str] = None,
+        expires_at: float | None = None,
+        refresh_token: str | None = None,
     ) -> None:
         super().__init__()
         self._access_token = access_token

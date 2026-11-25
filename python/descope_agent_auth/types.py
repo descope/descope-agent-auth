@@ -9,7 +9,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional
+from typing import Any
 
 
 class CredentialKind(str, Enum):
@@ -53,10 +53,10 @@ class Credential:
 
     token: str
     kind: CredentialKind
-    expires_at: Optional[float] = None
-    refresh_token: Optional[str] = None
-    scope: Optional[str] = None
-    authorization_details: Optional[List[dict]] = field(default=None, hash=False)
+    expires_at: float | None = None
+    refresh_token: str | None = None
+    scope: str | None = None
+    authorization_details: list[dict[str, Any]] | None = field(default=None, hash=False)
 
     @property
     def is_privileged(self) -> bool:
@@ -79,13 +79,13 @@ class VaultToken:
 
     access_token: str
     token_type: str = "Bearer"
-    expires_at: Optional[float] = None
-    scopes: List[str] = field(default_factory=list)
-    refresh_token: Optional[str] = None
+    expires_at: float | None = None
+    scopes: list[str] = field(default_factory=list)
+    refresh_token: str | None = None
     has_refresh_token: bool = False
-    app_id: Optional[str] = None
-    user_id: Optional[str] = None
-    raw: Optional[dict] = None
+    app_id: str | None = None
+    user_id: str | None = None
+    raw: dict[str, Any] | None = None
 
     def is_expired(self, *, skew_seconds: float = 60.0) -> bool:
         if self.expires_at is None:
@@ -108,14 +108,14 @@ class PendingAuthorization:
     """
 
     # Device code fields
-    verification_uri: Optional[str] = None
-    verification_uri_complete: Optional[str] = None
-    user_code: Optional[str] = None
+    verification_uri: str | None = None
+    verification_uri_complete: str | None = None
+    user_code: str | None = None
     # Shared
-    expires_at: Optional[float] = None
+    expires_at: float | None = None
     interval_seconds: float = 5.0
-    message: Optional[str] = None
-    raw: Optional[dict] = None
+    message: str | None = None
+    raw: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -129,8 +129,8 @@ class ApprovalRequest:
     """
 
     login_hint: str
-    binding_message: Optional[str] = None
-    scopes: Optional[List[str]] = None
-    timeout_seconds: Optional[float] = None  # None: the approval provider's max_wait_seconds
-    resource: Optional[str] = None
-    authorization_details: Optional[List[dict]] = field(default=None, hash=False)
+    binding_message: str | None = None
+    scopes: list[str] | None = None
+    timeout_seconds: float | None = None  # None: the approval provider's max_wait_seconds
+    resource: str | None = None
+    authorization_details: list[dict[str, Any]] | None = field(default=None, hash=False)

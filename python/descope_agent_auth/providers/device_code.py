@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Callable, List, Optional, Tuple
+from collections.abc import Callable
 
 from .._endpoints import DEVICE_AUTHORIZATION, GRANT_DEVICE_CODE, OAUTH2_TOKEN
 from ..errors import CredentialAcquisitionFailed
@@ -27,8 +27,8 @@ class DeviceCodeProvider(CredentialProvider):
         self,
         *,
         client_id: str,
-        scopes: Optional[List[str]] = None,
-        on_pending: Optional[Callable[[PendingAuthorization], None]] = None,
+        scopes: list[str] | None = None,
+        on_pending: Callable[[PendingAuthorization], None] | None = None,
         max_wait_seconds: float = 300.0,
     ) -> None:
         super().__init__()
@@ -38,7 +38,7 @@ class DeviceCodeProvider(CredentialProvider):
         self._on_pending = on_pending
         self._max_wait_seconds = max_wait_seconds
 
-    async def _start(self) -> Tuple[str, PendingAuthorization]:
+    async def _start(self) -> tuple[str, PendingAuthorization]:
         """Return ``(device_code, pending)``. The device_code is kept local and
         never placed into ``pending`` (which a caller may log)."""
         data = {"client_id": self._client_id}
@@ -98,6 +98,6 @@ class DeviceCodeProvider(CredentialProvider):
     def _storage_key(self) -> str:
         return f"cred:device:{self._project_id}:{self._client_id}"
 
-    def _refresh_client_auth(self) -> dict:
+    def _refresh_client_auth(self) -> dict[str, str]:
         # Device flow is a public client: refresh needs the client_id.
         return {"client_id": self._client_id}

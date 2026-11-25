@@ -42,8 +42,13 @@ line-length = 100
 
 [tool.ruff.lint]
 # Pinned explicitly so ruff upgrades don't silently widen the rule set.
-select = ["E4", "E7", "E9", "F", "I"]
+select = ["E4", "E7", "E9", "F", "I", "UP"]
 
 [tool.mypy]
 python_version = "3.10"
 strict = true
+
+[[tool.mypy.overrides]]
+# Optional extra (descope-agent-auth[langgraph]); not installed by `uv sync`.
+module = ["langgraph.*"]
+ignore_missing_imports = true

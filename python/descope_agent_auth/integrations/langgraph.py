@@ -25,7 +25,8 @@ the tool retries the exchange.
 from __future__ import annotations
 
 import functools
-from typing import Callable, List, Optional, Sequence, Type
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, Any, cast
 
 from ..errors import (
     AgentAuthError,
@@ -34,6 +35,9 @@ from ..errors import (
     ConnectionAuthorizationRequired,
 )
 from ..types import ApprovalRequest
+
+if TYPE_CHECKING:
+    from ..client import AgentAuthClient
 
 
 def _default_interrupt() -> Callable[[object], object]:
@@ -44,10 +48,11 @@ def _default_interrupt() -> Callable[[object], object]:
             "the LangGraph integration requires 'langgraph'. Install "
             "descope-agent-auth[langgraph], or pass interrupt=... explicitly."
         ) from exc
-    return interrupt
+    # langgraph is an optional extra without bundled stubs in the dev env.
+    return cast("Callable[[object], object]", interrupt)
 
 
-def interrupt_payload(exc: AgentAuthError) -> dict:
+def interrupt_payload(exc: AgentAuthError) -> dict[str, Any]:
     """Build the structured value handed to ``interrupt()`` for a given SDK error."""
     if isinstance(exc, ConnectionAuthorizationRequired):
         return {
@@ -65,15 +70,15 @@ def interrupt_payload(exc: AgentAuthError) -> dict:
 
 
 def connection_tool(
-    client: "AgentAuthClient",  # noqa: F821  (avoid import cycle)
+    client: AgentAuthClient,
     *,
     connection: str,
-    scopes: Optional[List[str]] = None,
-    tenant_id: Optional[str] = None,
-    require_approval: Optional[ApprovalRequest] = None,
-    interrupt: Optional[Callable[[object], object]] = None,
-    interrupt_on: Sequence[Type[AgentAuthError]] = (ConnectionAuthorizationRequired,),
-) -> Callable[[Callable], Callable]:
+    scopes: list[str] | None = None,
+    tenant_id: str | None = None,
+    require_approval: ApprovalRequest | None = None,
+    interrupt: Callable[[object], object] | None = None,
+    interrupt_on: Sequence[type[AgentAuthError]] = (ConnectionAuthorizationRequired,),
+) -> Callable[[Callable[..., object]], Callable[..., object]]:
     """LangGraph-aware variant of ``with_connection``.
 
     Wraps a tool ``fn(token, identifier, *args, **kwargs)``: fetches the scoped
@@ -84,7 +89,7 @@ def connection_tool(
     """
     interruptible = tuple(interrupt_on)
 
-    def decorator(fn: Callable) -> Callable:
+    def decorator(fn: Callable[..., object]) -> Callable[..., object]:
         @functools.wraps(fn)
         def wrapper(identifier: str, *args: object, **kwargs: object) -> object:
             while True:

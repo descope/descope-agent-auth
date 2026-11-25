@@ -35,7 +35,8 @@ the MCP SDK.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, AsyncGenerator, Awaitable, Callable, Generator, List, Optional
+from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
+from typing import TYPE_CHECKING
 
 import httpx
 
@@ -75,14 +76,14 @@ class _BearerInjectingAuth(httpx.Auth):
 
 
 def connection_auth(
-    client: "AsyncAgentAuthClient",
+    client: AsyncAgentAuthClient,
     *,
     connection: str,
     identifier: str,
-    scopes: Optional[List[str]] = None,
-    tenant_id: Optional[str] = None,
-    act_as_user_token: Optional[str] = None,
-    require_approval: Optional[ApprovalRequest] = None,
+    scopes: list[str] | None = None,
+    tenant_id: str | None = None,
+    act_as_user_token: str | None = None,
+    require_approval: ApprovalRequest | None = None,
 ) -> httpx.Auth:
     """Build an ``httpx.Auth`` that injects a Descope **Connection** token (the
     provider's own OAuth token) for ``identifier`` on each MCP request.
@@ -107,13 +108,13 @@ def connection_auth(
 
 
 def resource_auth(
-    client: "AsyncAgentAuthClient",
+    client: AsyncAgentAuthClient,
     *,
     resource: str,
-    scopes: Optional[List[str]] = None,
-    audience: Optional[List[str]] = None,
-    act_as_user_token: Optional[str] = None,
-    require_approval: Optional[ApprovalRequest] = None,
+    scopes: list[str] | None = None,
+    audience: list[str] | None = None,
+    act_as_user_token: str | None = None,
+    require_approval: ApprovalRequest | None = None,
 ) -> httpx.Auth:
     """Build an ``httpx.Auth`` that injects a Descope-minted **Resource** token (for
     an MCP server that uses Descope as its OAuth authorization server).

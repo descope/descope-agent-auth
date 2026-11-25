@@ -24,7 +24,8 @@ from __future__ import annotations
 import hashlib
 import json
 import time
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from .._async import maybe_await
 from .._endpoints import (
@@ -50,8 +51,8 @@ def _digest(value: str) -> str:
 
 def _cache_key(
     resource: str,
-    scopes: Optional[List[str]],
-    audience: Optional[List[str]],
+    scopes: list[str] | None,
+    audience: list[str] | None,
     *,
     client_id: str,
     subject: str,
@@ -67,7 +68,7 @@ def _cache_key(
     return f"vault:resource:{client_id}:{subject}:{resource}:{aud_part}:{scope_part}"
 
 
-def _err(body: Optional[dict]) -> Optional[str]:
+def _err(body: dict[str, Any] | None) -> str | None:
     if not body:
         return None
     return (
@@ -116,14 +117,14 @@ class ResourcesClient:
         *,
         http: HttpClient,
         get_credential: Callable[[], Awaitable[Credential]],
-        get_client_auth: Callable[[], Optional[Dict[str, str]]],
+        get_client_auth: Callable[[], dict[str, str] | None],
         store: TokenStore,
         mode: Mode,
-        approval_gate: Optional[Callable[[ApprovalRequest], Awaitable[None]]] = None,
+        approval_gate: Callable[[ApprovalRequest], Awaitable[None]] | None = None,
         skew_seconds: float = 60.0,
         cache_tokens: bool = True,
         acts_as_client: bool = False,
-        get_identity_key: Optional[Callable[[], Optional[str]]] = None,
+        get_identity_key: Callable[[], str | None] | None = None,
     ) -> None:
         self._http = http
         self._get_credential = get_credential
@@ -145,11 +146,11 @@ class ResourcesClient:
         self,
         *,
         resource: str,
-        scopes: Optional[List[str]] = None,
-        audience: Optional[List[str]] = None,
-        require_approval: Optional[ApprovalRequest] = None,
+        scopes: list[str] | None = None,
+        audience: list[str] | None = None,
+        require_approval: ApprovalRequest | None = None,
         force_refresh: bool = False,
-        act_as_user_token: Optional[str] = None,
+        act_as_user_token: str | None = None,
     ) -> VaultToken:
         """Mint a Resource token.
 
@@ -203,7 +204,7 @@ class ResourcesClient:
         # entry survives that credential's rotation. Without one, the credential
         # must be resolved first so its digest can key the entry.
         as_self = not act_as_user_token and self._acts_as_client
-        subject_token: Optional[str] = act_as_user_token or None
+        subject_token: str | None = act_as_user_token or None
         if act_as_user_token:
             subject = _digest(act_as_user_token)
         elif as_self:
@@ -230,7 +231,7 @@ class ResourcesClient:
         if not as_self and subject_token is None:
             subject_token = await self._own_subject_token()
 
-        data: dict
+        data: dict[str, Any]
         if as_self:
             # The agent acting as itself: Descope applies client-access Policies
             # only to a client_credentials request that names the resource.
@@ -293,8 +294,8 @@ class ResourcesClient:
         return cred.token
 
     @staticmethod
-    def _to_vault_token(body: dict, resource: str) -> VaultToken:
-        expires_at: Optional[float] = None
+    def _to_vault_token(body: dict[str, Any], resource: str) -> VaultToken:
+        expires_at: float | None = None
         if isinstance(body.get("expires_in"), (int, float)):
             expires_at = time.time() + float(body["expires_in"])
         scope = body.get("scope")
@@ -310,7 +311,7 @@ class ResourcesClient:
 
     # -- cache --------------------------------------------------------------
 
-    async def _cache_get(self, cache_key: str) -> Optional[VaultToken]:
+    async def _cache_get(self, cache_key: str) -> VaultToken | None:
         raw = await maybe_await(self._store.get(cache_key))
         if raw is None:
             return None

@@ -18,7 +18,7 @@ change, not a rewrite.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 
 from .errors import AgentAuthError
 from .types import Mode, VaultToken
@@ -38,14 +38,14 @@ class ToolRequest:
 
     method: str
     url: str
-    headers: Optional[dict] = None
+    headers: dict[str, str] | None = None
     body: Any = None
 
 
 class Execution:
     """Routes phase-2 operations according to the configured mode."""
 
-    def __init__(self, *, mode: Mode, backend: "VaultBackend") -> None:
+    def __init__(self, *, mode: Mode, backend: VaultBackend) -> None:
         self._mode = mode
         self._backend = backend
 
@@ -63,8 +63,8 @@ class Execution:
         return await self._backend.fetch(**fetch_args)
 
     async def get_connect_url(
-        self, *, connect_body: Optional[dict], act_as_user_token: Optional[str] = None
-    ) -> Optional[str]:
+        self, *, connect_body: dict[str, Any] | None, act_as_user_token: str | None = None
+    ) -> str | None:
         """Generate a connect URL. Available in both modes -- authorizing a user is
         independent of whether token fetch or hosted execution is used."""
         return await self._backend.get_connect_url(

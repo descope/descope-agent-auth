@@ -36,6 +36,8 @@ jobs:
         run: uv run ruff check .
       - name: Format (ruff)
         run: uv run ruff format --check .
+      - name: Type check (mypy)
+        run: uv run mypy descope_agent_auth
       - name: Test (pytest)
         run: uv run pytest -q
 
