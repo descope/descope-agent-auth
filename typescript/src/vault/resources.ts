@@ -3,22 +3,29 @@
  *
  * A Resource is an API you build and protect with Descope acting as the OAuth
  * authorization server. Unlike a Connection token (a stored API key / provider
- * OAuth token pulled from the vault), a Resource token is minted on the fly by
- * **exchanging** the agent's Descope access token for a Resource-scoped token using
- * the RFC 8693 **token-exchange** grant against the OAuth token endpoint.
+ * OAuth token pulled from the vault), a Resource token is minted on the fly at the
+ * inbound-apps token endpoint (`/oauth2/v1/apps/token`, per the
+ * `/v1/apps/<projectId>` discovery document), always authenticated by a
+ * confidential agent client (`client_id` + `client_secret`). Two grants apply:
  *
- * Because token-exchange needs an OAuth subject token, this requires an OAuth agent
- * identity (Client ID/Secret via any phase-1 provider). It does not apply to a
- * Management Key.
+ * - **The agent acting as itself** (a `ClientCredentialsProvider` client, no
+ *   `actAsUserToken`): a `client_credentials` request that names the `resource`.
+ *   Descope's client-access Policies decide which scopes it gets.
+ * - **The agent acting for a subject** (`actAsUserToken`, or a phase-1 credential
+ *   that represents a user, such as CIBA): an RFC 8693 token exchange of that
+ *   subject token. Descope's token-exchange Policies decide the scopes, and the
+ *   authenticating client is recorded as `act.sub` so the downstream API can see
+ *   which agent is acting for the user.
  *
- * The exchange goes to the inbound-apps token endpoint (`/oauth2/v1/apps/token`,
- * per the `/v1/apps/<projectId>` discovery document) and must be authenticated by a
- * confidential client (`client_id` + `client_secret`). That client is recorded as
- * `act.sub` on the minted token, so the downstream API can see which agent is
- * acting for the user.
+ * A Management Key cannot mint Resource tokens.
  */
 
-import { GRANT_TOKEN_EXCHANGE, OAUTH2_APPS_TOKEN, TOKEN_TYPE_ACCESS_TOKEN } from '../endpoints';
+import {
+  GRANT_CLIENT_CREDENTIALS,
+  GRANT_TOKEN_EXCHANGE,
+  OAUTH2_APPS_TOKEN,
+  TOKEN_TYPE_ACCESS_TOKEN,
+} from '../endpoints';
 import { sha256Base64Url } from '../runtime';
 import { AgentAuthError, PolicyDenied, TokenExchangeFailed } from '../errors';
 import { HttpClient } from '../httpClient';
@@ -42,6 +49,11 @@ export interface ResourcesClientDeps {
   getCredential: () => Promise<Credential>;
   /** Confidential-client auth for the exchange (`client_id` + `client_secret`), if any. */
   getClientAuth: () => Record<string, string> | undefined;
+  /**
+   * Client auth for a Resource token the agent requests as itself with the
+   * `client_credentials` grant; `undefined` means its credential is exchanged.
+   */
+  getSelfClientAuth: () => Record<string, string> | undefined;
   store: TokenStore;
   mode: Mode;
   approvalGate?: ApprovalGate;
@@ -55,16 +67,17 @@ const cacheKey = async (
   scopes: string[] | undefined,
   audience: string[] | undefined,
   clientId: string,
-  subjectToken: string,
+  subjectToken: string | undefined,
 ): Promise<string> => {
   const scopePart = scopes && scopes.length ? [...scopes].sort().join(',') : '<defaults>';
   const audPart = audience && audience.length ? [...audience].sort().join(',') : '<none>';
   // A Resource token belongs to one (actor, subject) pair: the client that
-  // authenticates the exchange (act.sub) and the token being exchanged (a user's
-  // token, or the phase-1 credential, which can itself be user-bound, e.g. CIBA).
+  // authenticates the request (act.sub on an exchange) and the subject (the token
+  // being exchanged -- a user's token, or a phase-1 credential that can itself be
+  // user-bound, e.g. CIBA -- or the client itself on a client_credentials request).
   // Key by both so a shared TokenStore never serves one client's or one user's
-  // token to another. Only a digest of the subject lands in the key.
-  const subjectPart = await sha256Base64Url(subjectToken);
+  // token to another. Only a digest of a subject token lands in the key.
+  const subjectPart = subjectToken === undefined ? 'self' : await sha256Base64Url(subjectToken);
   return `vault:resource:${clientId}:${subjectPart}:${resource}:${audPart}:${scopePart}`;
 };
 
@@ -110,13 +123,17 @@ export class ResourcesClient {
       await this.deps.approvalGate(args.requireApproval);
     }
 
-    // The subject is either an explicit user token (user-scoped) or the client's
-    // own credential. A Management Key is not an OAuth token, so it cannot be the
+    // The subject is an explicit user token (user-scoped), nothing (a
+    // client-credentials agent acting as itself), or the client's own phase-1
+    // credential. A Management Key is not an OAuth token, so it cannot be the
     // subject of a token-exchange. Resolve it before the cache lookup: the cache
-    // key is bound to the subject actually exchanged.
-    let subjectToken: string;
+    // key is bound to the subject.
+    const selfClientAuth = args.actAsUserToken ? undefined : this.deps.getSelfClientAuth();
+    let subjectToken: string | undefined;
     if (args.actAsUserToken) {
       subjectToken = args.actAsUserToken;
+    } else if (selfClientAuth) {
+      subjectToken = undefined;
     } else {
       const cred = await this.deps.getCredential();
       if (cred.kind === 'management_key') {
@@ -140,13 +157,22 @@ export class ResourcesClient {
       if (cached) return cached;
     }
 
-    const data: Record<string, string | string[]> = {
-      grant_type: GRANT_TOKEN_EXCHANGE,
-      subject_token: subjectToken,
-      subject_token_type: TOKEN_TYPE_ACCESS_TOKEN,
-      resource: args.resource,
-      ...clientAuth,
-    };
+    const data: Record<string, string | string[]> =
+      subjectToken === undefined
+        ? // The agent acting as itself: Descope applies client-access Policies only
+          // to a client_credentials request that names the resource.
+          {
+            grant_type: GRANT_CLIENT_CREDENTIALS,
+            resource: args.resource,
+            ...(selfClientAuth ?? clientAuth),
+          }
+        : {
+            grant_type: GRANT_TOKEN_EXCHANGE,
+            subject_token: subjectToken,
+            subject_token_type: TOKEN_TYPE_ACCESS_TOKEN,
+            resource: args.resource,
+            ...clientAuth,
+          };
     if (args.scopes && args.scopes.length) data.scope = args.scopes.join(' ');
     if (args.audience && args.audience.length) data.audience = args.audience;
 
@@ -160,7 +186,7 @@ export class ResourcesClient {
     }
     if (!resp.ok || !resp.json?.access_token) {
       throw new TokenExchangeFailed(
-        `resource token-exchange failed (${resp.statusCode}): ${errMsg(resp.json) ?? resp.text}`,
+        `resource token request failed (${resp.statusCode}): ${errMsg(resp.json) ?? resp.text}`,
         { statusCode: resp.statusCode },
       );
     }

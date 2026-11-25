@@ -151,6 +151,17 @@ class CredentialProvider(ABC):
         """
         return None
 
+    def resource_self_client_auth(self) -> Optional[Dict[str, str]]:
+        """Client auth for a Resource token the agent requests *as itself*.
+
+        Return ``client_id`` + ``client_secret`` when this provider's identity is
+        the agent client (client credentials): the SDK then asks for the Resource
+        token with the ``client_credentials`` grant, which Descope's client-access
+        Policies govern. The default ``None`` means the provider's credential is
+        exchanged instead (RFC 8693), e.g. a CIBA token that represents a user.
+        """
+        return None
+
     # -- persistence --------------------------------------------------------
 
     async def _save(self, cred: Credential) -> None:

@@ -168,6 +168,19 @@ export abstract class CredentialProvider {
     return undefined;
   }
 
+  /**
+   * Client auth for a Resource token the agent requests *as itself*.
+   *
+   * Return `client_id` + `client_secret` when this provider's identity is the agent
+   * client (client credentials): the SDK then asks for the Resource token with the
+   * `client_credentials` grant, which Descope's client-access Policies govern. The
+   * default `undefined` means the provider's credential is exchanged instead
+   * (RFC 8693), e.g. a CIBA token that represents a user.
+   */
+  resourceSelfClientAuth(): Record<string, string> | undefined {
+    return undefined;
+  }
+
   // -- persistence --------------------------------------------------------
 
   private async save(cred: Credential): Promise<void> {

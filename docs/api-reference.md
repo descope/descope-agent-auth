@@ -45,7 +45,10 @@ specific user; `tenant_id` selects a user's per-tenant token. TS: `getToken`,
 
 ## Resources — `client.resources`
 
-Descope-issued OAuth tokens for **your own** APIs, minted via token-exchange.
+Descope-issued OAuth tokens for **your own** APIs. A `ClientCredentialsProvider` agent
+acting as itself gets one with the `client_credentials` grant (Descope's client-access
+Policies apply); with `act_as_user_token`, or a user-bound credential such as CIBA, the
+SDK uses RFC 8693 token exchange (token-exchange Policies apply, `act.sub` = the agent).
 
 | Method | Returns | Purpose |
 | --- | --- | --- |

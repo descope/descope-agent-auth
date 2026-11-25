@@ -104,12 +104,13 @@ export class AgentAuthClient {
     const execution = new Execution(this.mode, backend);
     this.connections = new ConnectionsClient(execution);
     // Connection tokens come from the vault (via the execution seam); Resource
-    // tokens are minted by the token-exchange grant directly off the phase-1
-    // credential, so ResourcesClient is wired to the HTTP + credential layer.
+    // tokens are minted at the token endpoint (client_credentials or token
+    // exchange), so ResourcesClient is wired to the HTTP + credential layer.
     this.resources = new ResourcesClient({
       http: this.http,
       getCredential: () => this.getCredential(),
       getClientAuth: () => this.credential.tokenExchangeClientAuth(),
+      getSelfClientAuth: () => this.credential.resourceSelfClientAuth(),
       store: this.store,
       mode: this.mode,
       approvalGate: (request) => this.runApproval(request),

@@ -4,7 +4,7 @@ The agent runs autonomously (client credentials, no user in the loop), and each 
 pulls the exact token it needs at call time:
 
   * ``query_internal_api`` -> a Descope **Resource token** (your own API, protected by
-    Descope OAuth scopes), minted from the agent's identity via token-exchange.
+    Descope OAuth scopes), minted for the agent itself with client credentials.
   * ``lookup_shared_crm``  -> a **tenant-level Connection** API key (one org-shared
     credential every user shares -- no per-user auth) fetched from the Descope vault.
 

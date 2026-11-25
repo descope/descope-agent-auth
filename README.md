@@ -74,7 +74,8 @@ vault returns the right token, refreshed. If the user hasn't connected yet, you 
 ### 2. Resource token — `client.resources.get_token(...)`
 
 An OAuth token for an API *you* build and protect with **Descope as the authorization
-server**, minted on demand via token-exchange (no prior authorization step). What you
+server**, minted on demand (no prior authorization step): with `client_credentials`
+for the agent itself, or by token exchange for a user. What you
 sign in with sets the scope:
 
 - a **user's** Descope token → scoped to that user;
@@ -95,7 +96,7 @@ flowchart LR
     A1(["Your agent"]) -->|"① get_token()"| SDK["descope-agent-auth"]
 
     SDK -->|"connections"| Vault[("Connections vault")]
-    SDK -->|"resources<br/>(token-exchange)"| AS["Descope OAuth AS"]
+    SDK -->|"resources<br/>(client credentials / token-exchange)"| AS["Descope OAuth AS"]
 
     Vault -->|"API key /<br/>3rd-party OAuth"| A2(["② agent now<br/>holds the token"])
     AS -->|"Resource token"| A2
@@ -117,7 +118,7 @@ A Connection token has to exist before the agent can fetch it. Two ways:
 - **Management API (admin time).** Your backend or IaC writes an API key
   programmatically.
 
-Resource tokens need no provisioning — they're minted on demand via token-exchange.
+Resource tokens need no provisioning — they're minted on demand.
 
 ## Letting an agent act for a user
 
@@ -196,8 +197,9 @@ your front-end, which hands the resulting user token to the SDK.
 | CLI / headless dev tool | `DeviceCodeProvider` |
 
 Then fetch tokens at runtime: **Policies** govern what an OAuth agent token can obtain
-(a Management Key is unrestricted); Resource tokens are minted via token-exchange and
-need an OAuth identity, not a Management Key. Set up sign-in once and ask for a token
+(a Management Key is unrestricted); Resource tokens are minted on demand (client
+credentials for the agent itself, token exchange for a user) and need an OAuth
+identity, not a Management Key. Set up sign-in once and ask for a token
 whenever — you get a currently-valid one. The SDK refreshes a backend-held user grant
 (CIBA, or a handed-off token with a refresh token) without re-prompting; Descope
 refreshes the downstream provider tokens for you. See

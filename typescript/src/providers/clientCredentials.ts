@@ -65,4 +65,8 @@ export class ClientCredentialsProvider extends CredentialProvider {
   tokenExchangeClientAuth(): Record<string, string> {
     return { client_id: this.clientId, client_secret: this.clientSecret };
   }
+
+  resourceSelfClientAuth(): Record<string, string> {
+    return this.tokenExchangeClientAuth();
+  }
 }

@@ -92,13 +92,14 @@ class AsyncAgentAuthClient:
 
         # Phase 2 entry points.
         # Connection tokens come from the vault (via the execution seam); Resource
-        # tokens are minted by the token-exchange grant directly off the phase-1
-        # credential, so ResourcesClient is wired to the HTTP + credential layer.
+        # tokens are minted at the token endpoint (client_credentials or token
+        # exchange), so ResourcesClient is wired to the HTTP + credential layer.
         self.connections = ConnectionsClient(execution)
         self.resources = ResourcesClient(
             http=self._http,
             get_credential=self.get_credential,
             get_client_auth=self.credential.token_exchange_client_auth,
+            get_self_client_auth=self.credential.resource_self_client_auth,
             store=self.store,
             mode=self.mode,
             approval_gate=self._run_approval,

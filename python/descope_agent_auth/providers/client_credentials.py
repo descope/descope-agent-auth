@@ -63,3 +63,6 @@ class ClientCredentialsProvider(CredentialProvider):
 
     def token_exchange_client_auth(self) -> Optional[Dict[str, str]]:
         return {"client_id": self._client_id, "client_secret": self._client_secret}
+
+    def resource_self_client_auth(self) -> Optional[Dict[str, str]]:
+        return self.token_exchange_client_auth()

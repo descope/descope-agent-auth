@@ -2,19 +2,21 @@
 
 A Resource is an API you build and protect with Descope acting as the OAuth
 authorization server. Unlike a Connection token (a stored API key / provider OAuth
-token pulled from the vault), a Resource token is minted on the fly by
-**exchanging** the agent's Descope access token for a Resource-scoped token using
-the RFC 8693 **token-exchange** grant against the OAuth token endpoint.
+token pulled from the vault), a Resource token is minted on the fly at the
+inbound-apps token endpoint (``/oauth2/v1/apps/token``, per the
+``/v1/apps/<projectId>`` discovery document), always authenticated by a
+confidential agent client (``client_id`` + ``client_secret``). Two grants apply:
 
-Because token-exchange needs an OAuth subject token, this path requires an OAuth
-agent identity (Client ID/Secret via any phase-1 provider). It does not apply to a
-Management Key.
+- **The agent acting as itself** (a ``ClientCredentialsProvider`` client, no
+  ``act_as_user_token``): a ``client_credentials`` request that names the
+  ``resource``. Descope's client-access Policies decide which scopes it gets.
+- **The agent acting for a subject** (``act_as_user_token``, or a phase-1
+  credential that represents a user, such as CIBA): an RFC 8693 token exchange of
+  that subject token. Descope's token-exchange Policies decide the scopes, and the
+  authenticating client is recorded as ``act.sub`` so the downstream API can see
+  which agent is acting for the user.
 
-The exchange goes to the inbound-apps token endpoint (``/oauth2/v1/apps/token``,
-per the ``/v1/apps/<projectId>`` discovery document) and must be authenticated by
-a confidential client (``client_id`` + ``client_secret``). That client is recorded
-as ``act.sub`` on the minted token, so the downstream API can see which agent is
-acting for the user.
+A Management Key cannot mint Resource tokens.
 """
 
 from __future__ import annotations
@@ -25,7 +27,12 @@ import time
 from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from .._async import maybe_await
-from .._endpoints import GRANT_TOKEN_EXCHANGE, OAUTH2_APPS_TOKEN, TOKEN_TYPE_ACCESS_TOKEN
+from .._endpoints import (
+    GRANT_CLIENT_CREDENTIALS,
+    GRANT_TOKEN_EXCHANGE,
+    OAUTH2_APPS_TOKEN,
+    TOKEN_TYPE_ACCESS_TOKEN,
+)
 from .._http import HttpClient
 from ..errors import AgentAuthError, PolicyDenied, TokenExchangeFailed
 from ..store.base import TokenStore
@@ -38,16 +45,21 @@ def _cache_key(
     audience: Optional[List[str]],
     *,
     client_id: str,
-    subject_token: str,
+    subject_token: Optional[str],
 ) -> str:
     scope_part = ",".join(sorted(scopes)) if scopes else "<defaults>"
     aud_part = ",".join(sorted(audience)) if audience else "<none>"
     # A Resource token belongs to one (actor, subject) pair: the client that
-    # authenticates the exchange (act.sub) and the token being exchanged (a
-    # user's token, or the phase-1 credential, which can itself be user-bound,
-    # e.g. CIBA). Key by both so a shared TokenStore never serves one client's or
-    # one user's token to another. Only a digest of the subject lands in the key.
-    subject_part = hashlib.sha256(subject_token.encode("utf-8")).hexdigest()
+    # authenticates the request (act.sub on an exchange) and the subject (the
+    # token being exchanged -- a user's token, or a phase-1 credential that can
+    # itself be user-bound, e.g. CIBA -- or the client itself on a
+    # client_credentials request). Key by both so a shared TokenStore never serves
+    # one client's or one user's token to another. Only a digest of a subject
+    # token lands in the key.
+    if subject_token is None:
+        subject_part = "self"
+    else:
+        subject_part = hashlib.sha256(subject_token.encode("utf-8")).hexdigest()
     return f"vault:resource:{client_id}:{subject_part}:{resource}:{aud_part}:{scope_part}"
 
 
@@ -64,6 +76,7 @@ class ResourcesClient:
         http: HttpClient,
         get_credential: Callable[[], Awaitable[Credential]],
         get_client_auth: Callable[[], Optional[Dict[str, str]]],
+        get_self_client_auth: Callable[[], Optional[Dict[str, str]]],
         store: TokenStore,
         mode: Mode,
         approval_gate: Optional[Callable[[ApprovalRequest], Awaitable[None]]] = None,
@@ -73,6 +86,7 @@ class ResourcesClient:
         self._http = http
         self._get_credential = get_credential
         self._get_client_auth = get_client_auth
+        self._get_self_client_auth = get_self_client_auth
         self._store = store
         self._mode = mode
         self._approval_gate = approval_gate
@@ -91,13 +105,15 @@ class ResourcesClient:
         force_refresh: bool = False,
         act_as_user_token: Optional[str] = None,
     ) -> VaultToken:
-        """Mint a Resource token via the token-exchange grant.
+        """Mint a Resource token.
 
         ``resource`` is the RFC 8707 resource indicator (the API you want a token
         for); ``audience`` sets the token-exchange ``audience`` claim when the
         provider requires it. Pass ``act_as_user_token`` to mint a **user-scoped**
         Resource token: that user's Descope access token becomes the ``subject_token``
-        of the exchange, instead of the client's own credential.
+        of a token exchange. Without it, a ``ClientCredentialsProvider`` client
+        requests the token for itself with the ``client_credentials`` grant, and
+        other providers exchange their own phase-1 credential.
 
         Raises ``ApprovalDenied`` / ``ApprovalTimeout`` if a ``require_approval``
         gate fails, ``PolicyDenied`` on 401/403, or ``TokenExchangeFailed`` on
@@ -129,12 +145,17 @@ class ResourcesClient:
                 )
             await self._approval_gate(require_approval)
 
-        # The subject is either an explicit user token (user-scoped) or the
-        # client's own credential. A Management Key is not an OAuth token, so it
-        # cannot be the subject of a token-exchange. Resolve it before the cache
-        # lookup: the cache key is bound to the subject actually exchanged.
+        # The subject is an explicit user token (user-scoped), nothing (a
+        # client-credentials agent acting as itself), or the client's own phase-1
+        # credential. A Management Key is not an OAuth token, so it cannot be the
+        # subject of a token-exchange. Resolve it before the cache lookup: the
+        # cache key is bound to the subject.
+        self_client_auth = None if act_as_user_token else self._get_self_client_auth()
+        subject_token: Optional[str]
         if act_as_user_token:
             subject_token = act_as_user_token
+        elif self_client_auth:
+            subject_token = None
         else:
             cred = await self._get_credential()
             if cred.is_privileged:
@@ -157,13 +178,23 @@ class ResourcesClient:
             if cached is not None:
                 return cached
 
-        data: dict = {
-            "grant_type": GRANT_TOKEN_EXCHANGE,
-            "subject_token": subject_token,
-            "subject_token_type": TOKEN_TYPE_ACCESS_TOKEN,
-            "resource": resource,
-            **client_auth,
-        }
+        data: dict
+        if subject_token is None:
+            # The agent acting as itself: Descope applies client-access Policies
+            # only to a client_credentials request that names the resource.
+            data = {
+                "grant_type": GRANT_CLIENT_CREDENTIALS,
+                "resource": resource,
+                **(self_client_auth or client_auth),
+            }
+        else:
+            data = {
+                "grant_type": GRANT_TOKEN_EXCHANGE,
+                "subject_token": subject_token,
+                "subject_token_type": TOKEN_TYPE_ACCESS_TOKEN,
+                "resource": resource,
+                **client_auth,
+            }
         if scopes:
             data["scope"] = " ".join(scopes)
         if audience:
@@ -180,7 +211,7 @@ class ResourcesClient:
             )
         if not resp.ok or not resp.json or not resp.json.get("access_token"):
             raise TokenExchangeFailed(
-                f"resource token-exchange failed ({resp.status_code}): "
+                f"resource token request failed ({resp.status_code}): "
                 f"{_err(resp.json) or resp.text}",
                 status_code=resp.status_code,
             )
