@@ -11,7 +11,7 @@ describe('MemoryTokenStore', () => {
   it('expires values past their ttl', () => {
     const store = new MemoryTokenStore();
     const now = Date.now();
-    const spy = jest.spyOn(Date, 'now');
+    const spy = vi.spyOn(Date, 'now');
     spy.mockReturnValue(now);
     store.set('a', '1', 10); // 10s ttl
     expect(store.get('a')).toBe('1');
@@ -31,7 +31,7 @@ describe('MemoryTokenStore', () => {
   it('prunes expired keys from list()', () => {
     const store = new MemoryTokenStore();
     const now = Date.now();
-    const spy = jest.spyOn(Date, 'now');
+    const spy = vi.spyOn(Date, 'now');
     spy.mockReturnValue(now);
     store.set('live', 'x');
     store.set('dead', 'y', 5);

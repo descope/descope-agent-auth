@@ -10,10 +10,10 @@ import { MemoryTokenStore } from './store';
 import { BASE_URL, PROJECT_ID } from './testutils';
 
 // Make polling instant where relevant.
-jest.mock('./httpClient', () => {
-  const actual = jest.requireActual('./httpClient');
-  return { ...actual, sleep: () => Promise.resolve() };
-});
+vi.mock('./httpClient', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  sleep: () => Promise.resolve(),
+}));
 
 const TOKEN_PATH = '/oauth2/v1/token';
 const CIBA_TOKEN_PATH = '/oauth2/v1/apps/token';
