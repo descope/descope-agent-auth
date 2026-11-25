@@ -113,9 +113,7 @@ class CibaProvider(CredentialProvider):
                 raise ApprovalDenied("user rejected the CIBA approval request")
             if error == "expired_token":
                 raise ApprovalTimeout("CIBA request expired before approval")
-            raise CredentialAcquisitionFailed(
-                f"CIBA flow failed: {_err(resp.json) or resp.text}"
-            )
+            raise CredentialAcquisitionFailed(f"CIBA flow failed: {_err(resp.json) or resp.text}")
         raise ApprovalTimeout("CIBA request timed out before user approval")
 
     async def _initiate(

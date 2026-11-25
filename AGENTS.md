@@ -334,7 +334,7 @@ Run the repo's checks if you changed SDK code:
 
 ```bash
 # Python
-cd python && pip install -e ".[dev]" && pytest -q && ruff check descope_agent_auth
+cd python && uv sync && uv run pytest -q && uv run ruff check . && uv run ruff format --check .
 # TypeScript
 cd typescript && npm ci && npm test && npm run lint && npm run build
 ```

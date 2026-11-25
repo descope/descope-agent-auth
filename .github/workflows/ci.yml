@@ -14,29 +14,30 @@ on:
 jobs:
   python:
     name: 🐍 Python
-    # ubuntu-latest (26.04) has no Python 3.9 build, and the package still supports 3.9.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: python
     strategy:
       fail-fast: false
       matrix:
-        version: ['3.9', '3.10', '3.11', '3.12', '3.13']
+        version: ['3.10', '3.11', '3.12', '3.13']
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
         with:
           python-version: ${{ matrix.version }}
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: uv sync --locked
       - name: Lint (ruff)
-        run: ruff check descope_agent_auth
+        run: uv run ruff check .
+      - name: Format (ruff)
+        run: uv run ruff format --check .
       - name: Test (pytest)
-        run: pytest -q
+        run: uv run pytest -q
 
   typescript:
     name: 🟦 TypeScript
@@ -60,10 +61,8 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Audit
         run: npm audit --audit-level=moderate
-      - name: Format check
-        run: npm run format-check
-      - name: Lint
-        run: npx eslint "src/**/*.ts"
+      - name: Lint and format (biome)
+        run: npm run lint
       - name: Build
         run: npm run build
       - name: Test
@@ -114,7 +113,7 @@ jobs:
       - uses: actions/dependency-review-action@bbc44d14a204704ccc493733616cd1e93a0321ec # v5.0.1
         with:
           fail-on-severity: moderate
-          allow-licenses: MIT, ISC, BSD-2-Clause, BSD-3-Clause, Apache-2.0, 0BSD, BlueOak-1.0.0, CC0-1.0, CC-BY-4.0, Python-2.0, PSF-2.0, MPL-2.0, Unlicense
+          allow-licenses: MIT, ISC, BSD-2-Clause, BSD-3-Clause, Apache-2.0, 0BSD, BlueOak-1.0.0, CC0-1.0, CC-BY-4.0, Python-2.0, Python-2.0.1, PSF-2.0, MPL-2.0, Unlicense
           # Build-time only (generates .d.ts); not shipped in the package.
           allow-dependencies-licenses: pkg:npm/rollup-plugin-dts
 

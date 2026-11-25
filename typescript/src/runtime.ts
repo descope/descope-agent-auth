@@ -33,7 +33,7 @@ export function base64(input: string): string {
 
 async function webCrypto(): Promise<Crypto> {
   const g = (globalThis as { crypto?: Crypto }).crypto;
-  if (g && g.subtle) return g;
+  if (g?.subtle) return g;
   // Only reached on Node versions without a global WebCrypto; never on edge.
   const nodeCrypto = (await import('node:crypto')) as unknown as { webcrypto: Crypto };
   return nodeCrypto.webcrypto;

@@ -21,8 +21,8 @@
  * `ConnectionAuthorizationRequired` re-auth signal propagate to the caller.
  */
 
-import { AgentAuthClient } from '../client';
-import { ApprovalRequest } from '../types';
+import type { AgentAuthClient } from '../client';
+import type { ApprovalRequest } from '../types';
 
 export interface WithConnectionOptions {
   connection: string;

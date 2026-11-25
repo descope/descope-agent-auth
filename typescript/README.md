@@ -78,12 +78,12 @@ All sign-in providers, Connection and Resource token exchange, a pluggable token
 
 ## Scripts
 
-| Script                 | Purpose                                      |
-| ---------------------- | -------------------------------------------- |
-| `npm run build`        | dual CJS + ESM bundle with type declarations |
-| `npm test`             | Jest + nock with coverage                    |
-| `npm run lint`         | ESLint (airbnb-typescript)                   |
-| `npm run format-check` | Prettier check                               |
+| Script             | Purpose                                      |
+| ------------------ | -------------------------------------------- |
+| `npm run build`    | dual CJS + ESM bundle with type declarations |
+| `npm test`         | Jest + nock with coverage                    |
+| `npm run lint`     | Biome lint + format check                    |
+| `npm run lint:fix` | Biome lint + format, applying fixes          |
 
 > A few endpoint paths (device authorization, resource
 > token-exchange parameters) live in `src/endpoints.ts`, with comments to confirm

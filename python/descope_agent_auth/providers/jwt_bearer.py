@@ -52,8 +52,7 @@ class JwtBearerProvider(CredentialProvider):
         resp = await self.http.post_form(OAUTH2_TOKEN, data=data)
         if not resp.ok:
             raise CredentialAcquisitionFailed(
-                f"jwt-bearer exchange failed ({resp.status_code}): "
-                f"{_err(resp.json) or resp.text}"
+                f"jwt-bearer exchange failed ({resp.status_code}): {_err(resp.json) or resp.text}"
             )
         return token_response_to_credential(resp.json, kind=self.kind)
 

@@ -28,7 +28,7 @@ client = AgentAuthClient(
 try:
     github = client.connections.get_token(
         connection="github",
-        identifier="user@example.com",   # the user the agent acts for
+        identifier="user@example.com",  # the user the agent acts for
         # scopes=["repo"],               # optional; overrides the Connection defaults
     )
     print(github.access_token)

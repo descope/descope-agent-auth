@@ -14,7 +14,7 @@
 
 import { GRANT_JWT_BEARER, OAUTH2_TOKEN } from '../endpoints';
 import { CredentialAcquisitionFailed } from '../errors';
-import { Credential } from '../types';
+import type { Credential } from '../types';
 import { CredentialProvider, errMessage, tokenResponseToCredential } from './base';
 
 export interface JwtBearerOptions {

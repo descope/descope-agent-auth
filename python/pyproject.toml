@@ -7,7 +7,7 @@ name = "descope-agent-auth"
 version = "0.1.1"
 description = "Client-side SDK for wiring a custom agent to Descope: acquire a Descope credential and exchange it for Connection/Resource tokens from the vault."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Descope" }]
 keywords = ["descope", "agent", "auth", "oauth", "ciba", "outbound-apps"]
@@ -17,11 +17,13 @@ dependencies = [
 
 [project.optional-dependencies]
 langgraph = ["langgraph>=0.2"]
+
+[dependency-groups]
 dev = [
-    "pytest>=7.0",
-    "pytest-cov>=4.0",
-    "mypy>=1.0",
-    "ruff>=0.1,<0.16",  # ruff 0.16 flags 282 existing issues repo-wide
+    "pytest>=8",
+    "pytest-cov>=6",
+    "mypy>=1.15",
+    "ruff>=0.17",
 ]
 
 [project.urls]
@@ -37,8 +39,11 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py39"
+
+[tool.ruff.lint]
+# Pinned explicitly so ruff upgrades don't silently widen the rule set.
+select = ["E4", "E7", "E9", "F", "I"]
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 strict = true

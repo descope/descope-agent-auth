@@ -92,9 +92,7 @@ class DeviceCodeProvider(CredentialProvider):
             if error == "slow_down":
                 interval += 5
                 continue
-            raise CredentialAcquisitionFailed(
-                f"device flow failed: {_err(resp.json) or resp.text}"
-            )
+            raise CredentialAcquisitionFailed(f"device flow failed: {_err(resp.json) or resp.text}")
         raise CredentialAcquisitionFailed("device flow timed out before user approval")
 
     def _storage_key(self) -> str:

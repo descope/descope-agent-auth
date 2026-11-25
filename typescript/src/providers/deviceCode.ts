@@ -12,7 +12,7 @@
 import { DEVICE_AUTHORIZATION, GRANT_DEVICE_CODE, OAUTH2_TOKEN } from '../endpoints';
 import { CredentialAcquisitionFailed } from '../errors';
 import { sleep } from '../httpClient';
-import { Credential, PendingAuthorization } from '../types';
+import type { Credential, PendingAuthorization } from '../types';
 import { CredentialProvider, errMessage, tokenResponseToCredential } from './base';
 
 export interface DeviceCodeOptions {
@@ -76,9 +76,7 @@ export class DeviceCodeProvider extends CredentialProvider {
     const deadline = Math.min(pending.expiresAt ?? hardDeadline, hardDeadline);
 
     while (Date.now() / 1000 < deadline) {
-      // eslint-disable-next-line no-await-in-loop
       await sleep(interval * 1000);
-      // eslint-disable-next-line no-await-in-loop
       const resp = await this.requireHttp().postForm(OAUTH2_TOKEN, {
         grant_type: GRANT_DEVICE_CODE,
         device_code: deviceCode,
@@ -88,10 +86,10 @@ export class DeviceCodeProvider extends CredentialProvider {
         return tokenResponseToCredential(resp.json, this.kind);
       }
       const error = resp.json?.error;
-      if (error === 'authorization_pending') continue; // eslint-disable-line no-continue
+      if (error === 'authorization_pending') continue;
       if (error === 'slow_down') {
         interval += 5;
-        continue; // eslint-disable-line no-continue
+        continue;
       }
       throw new CredentialAcquisitionFailed(
         `device flow failed: ${errMessage(resp.json) ?? resp.text}`,

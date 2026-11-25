@@ -18,7 +18,6 @@ from descope_agent_auth.errors import (
     PolicyDenied,
     TokenExchangeFailed,
 )
-
 from descope_agent_auth.store.memory import MemoryTokenStore
 
 from . import common
@@ -220,9 +219,7 @@ class TestConnectionsExchange(common.AgentAuthTest):
         ]
         client = self._agent_client()
 
-        client.connections.get_tenant_token(
-            connection="github", tenant_id="t1", scopes=["read"]
-        )
+        client.connections.get_tenant_token(connection="github", tenant_id="t1", scopes=["read"])
 
         args, kwargs = mock_request.call_args
         self.assertEqual(args[1], TENANT_SCOPED)
@@ -380,7 +377,12 @@ class TestResourcesExchange(common.AgentAuthTest):
         # Descope applies client-access Policies only to a client_credentials
         # request that names the resource; a self token-exchange is refused.
         mock_request.return_value = make_response(
-            {"access_token": "resource_at", "token_type": "Bearer", "expires_in": 3600, "scope": "read"}
+            {
+                "access_token": "resource_at",
+                "token_type": "Bearer",
+                "expires_in": 3600,
+                "scope": "read",
+            }
         )
         client = self._agent_client()
 
@@ -454,8 +456,12 @@ class TestResourcesExchange(common.AgentAuthTest):
             make_response({"access_token": "b_resource_at", "expires_in": 3600}),
         ]
         store = MemoryTokenStore()
-        a = self.make_client(ClientCredentialsProvider(client_id="a", client_secret="s"), store=store)
-        b = self.make_client(ClientCredentialsProvider(client_id="b", client_secret="s"), store=store)
+        a = self.make_client(
+            ClientCredentialsProvider(client_id="a", client_secret="s"), store=store
+        )
+        b = self.make_client(
+            ClientCredentialsProvider(client_id="b", client_secret="s"), store=store
+        )
 
         tok_a = a.resources.get_token(resource="urn:my-api", act_as_user_token="alice_jwt")
         tok_b = b.resources.get_token(resource="urn:my-api", act_as_user_token="alice_jwt")
@@ -473,8 +479,12 @@ class TestResourcesExchange(common.AgentAuthTest):
             make_response({"access_token": "b_resource_at", "expires_in": 3600}),
         ]
         store = MemoryTokenStore()
-        a = self.make_client(ClientCredentialsProvider(client_id="a", client_secret="s"), store=store)
-        b = self.make_client(ClientCredentialsProvider(client_id="b", client_secret="s"), store=store)
+        a = self.make_client(
+            ClientCredentialsProvider(client_id="a", client_secret="s"), store=store
+        )
+        b = self.make_client(
+            ClientCredentialsProvider(client_id="b", client_secret="s"), store=store
+        )
 
         tok_a = a.resources.get_token(resource="urn:my-api")
         tok_b = b.resources.get_token(resource="urn:my-api")
@@ -569,8 +579,11 @@ class TestResourcesExchange(common.AgentAuthTest):
             (401, {"error": "invalid_client"}, CredentialAcquisitionFailed),
             (
                 400,
-                {"errorCode": "E074130", "errorDescription": "invalid_client",
-                 "errorMessage": "Invalid client id"},
+                {
+                    "errorCode": "E074130",
+                    "errorDescription": "invalid_client",
+                    "errorMessage": "Invalid client id",
+                },
                 CredentialAcquisitionFailed,
             ),
             (400, {"error": "unauthorized_client"}, PolicyDenied),
@@ -583,8 +596,11 @@ class TestResourcesExchange(common.AgentAuthTest):
             ),
             (
                 400,
-                {"errorCode": "E063313", "errorDescription": "unauthorized_client",
-                 "errorMessage": "Client is not authorized"},
+                {
+                    "errorCode": "E063313",
+                    "errorDescription": "unauthorized_client",
+                    "errorMessage": "Client is not authorized",
+                },
                 PolicyDenied,
             ),
             (400, {"errorCode": "E063309", "errorMessage": "Scope not allowed"}, PolicyDenied),

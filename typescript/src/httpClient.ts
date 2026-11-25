@@ -141,8 +141,9 @@ export class HttpClient {
     // Array values are appended as repeated params (e.g. audience=a&audience=b).
     const params = new URLSearchParams();
     Object.entries(data).forEach(([key, value]) => {
-      if (Array.isArray(value)) value.forEach((v) => params.append(key, v));
-      else params.append(key, value);
+      if (Array.isArray(value)) {
+        for (const v of value) params.append(key, v);
+      } else params.append(key, value);
     });
     return this.request('POST', path, {
       body: params.toString(),
@@ -170,7 +171,6 @@ export class HttpClient {
       const timer = setTimeout(() => controller.abort(), this.timeoutMs);
       let resp: Response;
       try {
-        // eslint-disable-next-line no-await-in-loop
         resp = await this.fetchImpl(url, {
           method,
           body: opts.body,
@@ -181,9 +181,7 @@ export class HttpClient {
         lastErr = err;
         clearTimeout(timer);
         if (attempt < this.retry.attempts) {
-          // eslint-disable-next-line no-await-in-loop
           await sleep(this.retry.backoffMs * attempt);
-          // eslint-disable-next-line no-continue
           continue;
         }
         throw new AgentAuthError(`HTTP transport error calling ${path}: ${String(err)}`);
@@ -192,13 +190,10 @@ export class HttpClient {
       }
 
       if (this.retry.retryStatuses.includes(resp.status) && attempt < this.retry.attempts) {
-        // eslint-disable-next-line no-await-in-loop
         await sleep(this.retry.backoffMs * attempt);
-        // eslint-disable-next-line no-continue
         continue;
       }
 
-      // eslint-disable-next-line no-await-in-loop
       const text = await resp.text();
       let json: any = null;
       try {

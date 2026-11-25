@@ -1,6 +1,5 @@
-/* eslint-disable import/no-extraneous-dependencies */
-import { AgentAuthClient, AgentAuthClientOptions } from './client';
-import { CredentialProvider } from './providers/base';
+import { AgentAuthClient, type AgentAuthClientOptions } from './client';
+import type { CredentialProvider } from './providers/base';
 
 export const BASE_URL = 'https://api.descope.com';
 export const PROJECT_ID = 'P2test';

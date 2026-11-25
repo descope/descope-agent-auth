@@ -1,8 +1,8 @@
 import nock from 'nock';
 import { AgentAuthClient } from './client';
-import { BASE_URL, PROJECT_ID, makeClient, tokenObj } from './testutils';
-import { ClientCredentialsProvider, ManagementKeyProvider } from './providers';
 import { AgentAuthError, ConnectUrlFailed, PolicyDenied, TokenExchangeFailed } from './errors';
+import { ClientCredentialsProvider, ManagementKeyProvider } from './providers';
+import { BASE_URL, makeClient, PROJECT_ID, tokenObj } from './testutils';
 
 // Agent client_credentials is served by the inbound-apps server.
 const TOKEN_PATH = '/oauth2/v1/apps/token';

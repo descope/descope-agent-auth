@@ -1,10 +1,10 @@
+import { readFileSync, writeFileSync } from 'node:fs';
+import commonjs from '@rollup/plugin-commonjs';
+import json from '@rollup/plugin-json';
+import resolve from '@rollup/plugin-node-resolve';
 import typescript from '@rollup/plugin-typescript';
 import del from 'rollup-plugin-delete';
 import dts from 'rollup-plugin-dts';
-import resolve from '@rollup/plugin-node-resolve';
-import commonjs from '@rollup/plugin-commonjs';
-import json from '@rollup/plugin-json';
-import { readFileSync, writeFileSync } from 'fs';
 
 const packageJson = JSON.parse(readFileSync('./package.json', 'utf8'));
 

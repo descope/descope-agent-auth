@@ -105,9 +105,7 @@ class TestRefreshFromStore(common.AgentAuthTest):
         )
         mock_request.return_value = make_response({"access_token": "new", "expires_in": 3600})
 
-        provider = CibaProvider(
-            client_id="cid", client_secret="sec", login_hint="user@example.com"
-        )
+        provider = CibaProvider(client_id="cid", client_secret="sec", login_hint="user@example.com")
         cred = _client(provider, store).get_credential()
 
         self.assertEqual(cred.token, "new")

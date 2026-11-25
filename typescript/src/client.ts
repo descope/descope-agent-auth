@@ -9,12 +9,12 @@
 
 import { AgentAuthError } from './errors';
 import { Execution } from './execution';
-import { HttpClient, Logger, RetryConfig } from './httpClient';
-import { CibaProvider } from './providers/ciba';
-import { CredentialProvider } from './providers/base';
+import { HttpClient, type Logger, type RetryConfig } from './httpClient';
+import type { CredentialProvider } from './providers/base';
+import type { CibaProvider } from './providers/ciba';
+import type { TokenStore } from './store/base';
 import { MemoryTokenStore } from './store/memory';
-import { TokenStore } from './store/base';
-import { ApprovalRequest, Credential, Mode } from './types';
+import type { ApprovalRequest, Credential, Mode } from './types';
 import { VaultBackend } from './vault/base';
 import { ConnectionsClient } from './vault/connections';
 import { ResourcesClient } from './vault/resources';
