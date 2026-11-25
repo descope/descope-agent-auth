@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.0](https://github.com/descope/descope-agent-auth/compare/agent-auth-v0.1.1...agent-auth-v0.2.0) (2026-11-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* **typescript:** tsdown, vitest, node 22+; drop husky and commitlint ([#62](https://github.com/descope/descope-agent-auth/issues/62))
+* move to biome, uv and latest ruff; require Python 3.10+ ([#59](https://github.com/descope/descope-agent-auth/issues/59))
+
+### Miscellaneous Chores
+
+* move to biome, uv and latest ruff; require Python 3.10+ ([#59](https://github.com/descope/descope-agent-auth/issues/59)) ([af6a5bf](https://github.com/descope/descope-agent-auth/commit/af6a5bf0569c6d818d096bae08c428abaeebfe58))
+* **typescript:** tsdown, vitest, node 22+; drop husky and commitlint ([#62](https://github.com/descope/descope-agent-auth/issues/62)) ([1903048](https://github.com/descope/descope-agent-auth/commit/1903048966633c26ac74e03e396072cb1e57c662))
+
 ## [0.1.1](https://github.com/descope/descope-agent-auth/compare/agent-auth-v0.1.0...agent-auth-v0.1.1) (2026-11-25)
 
 
