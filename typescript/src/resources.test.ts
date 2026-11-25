@@ -21,7 +21,7 @@ class UserBoundProvider extends AccessTokenProvider {
     super({ accessToken: userJwt });
   }
 
-  tokenExchangeClientAuth(): Record<string, string> {
+  clientAuth(): Record<string, string> {
     return { client_id: 'cid', client_secret: 's' };
   }
 }

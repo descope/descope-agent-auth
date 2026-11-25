@@ -24,6 +24,9 @@ export class ClientCredentialsProvider extends CredentialProvider {
   // Agentic Clients are inbound apps: acquire and refresh on the inbound-apps server.
   protected readonly refreshEndpoint = OAUTH2_APPS_TOKEN;
 
+  // The agent client itself: its own Resource tokens use client_credentials.
+  readonly actsAsClient = true;
+
   private readonly clientId: string;
 
   private readonly clientSecret: string;
@@ -62,11 +65,7 @@ export class ClientCredentialsProvider extends CredentialProvider {
     return `cred:client_credentials:${this.projectId}:${this.clientId}`;
   }
 
-  tokenExchangeClientAuth(): Record<string, string> {
+  clientAuth(): Record<string, string> {
     return { client_id: this.clientId, client_secret: this.clientSecret };
-  }
-
-  resourceSelfClientAuth(): Record<string, string> {
-    return this.tokenExchangeClientAuth();
   }
 }

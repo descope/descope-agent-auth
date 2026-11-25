@@ -58,6 +58,16 @@ export abstract class CredentialProvider {
   /** Token endpoint for the `refresh_token` grant: the one that issued the token. */
   protected readonly refreshEndpoint: string = OAUTH2_TOKEN;
 
+  /**
+   * True when this provider's identity *is* the agent client (client credentials).
+   * A Resource token the agent requests as itself then uses the `client_credentials`
+   * grant, which Descope's client-access Policies govern. False means the
+   * provider's credential is exchanged instead (RFC 8693), e.g. a CIBA token that
+   * represents a user. `kind` can't carry this: other providers (JWT bearer) are
+   * `agent_token` too.
+   */
+  readonly actsAsClient: boolean = false;
+
   protected http?: HttpClient;
 
   protected projectId?: string;
@@ -159,25 +169,12 @@ export abstract class CredentialProvider {
   /**
    * Form fields that authenticate this agent as a confidential client.
    *
-   * Descope's token-exchange grant requires the exchanging client to authenticate
-   * (it becomes `act.sub` on the minted token). Providers that hold a client secret
-   * return `client_id` + `client_secret`; the rest return `undefined` and cannot
-   * mint Resource tokens.
+   * Resource tokens are minted by an authenticated agent client (it becomes
+   * `act.sub` on a token exchange). Providers that hold a client secret return
+   * `client_id` + `client_secret`; the rest return `undefined` and cannot mint
+   * Resource tokens.
    */
-  tokenExchangeClientAuth(): Record<string, string> | undefined {
-    return undefined;
-  }
-
-  /**
-   * Client auth for a Resource token the agent requests *as itself*.
-   *
-   * Return `client_id` + `client_secret` when this provider's identity is the agent
-   * client (client credentials): the SDK then asks for the Resource token with the
-   * `client_credentials` grant, which Descope's client-access Policies govern. The
-   * default `undefined` means the provider's credential is exchanged instead
-   * (RFC 8693), e.g. a CIBA token that represents a user.
-   */
-  resourceSelfClientAuth(): Record<string, string> | undefined {
+  clientAuth(): Record<string, string> | undefined {
     return undefined;
   }
 

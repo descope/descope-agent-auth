@@ -171,7 +171,7 @@ class CibaProvider(CredentialProvider):
             out["client_secret"] = self._client_secret
         return out
 
-    def token_exchange_client_auth(self) -> Optional[Dict[str, str]]:
+    def client_auth(self) -> Optional[Dict[str, str]]:
         # Only a confidential CIBA client can authenticate a token exchange.
         if not self._client_secret:
             return None

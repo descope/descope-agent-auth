@@ -20,6 +20,8 @@ class ClientCredentialsProvider(CredentialProvider):
     kind = CredentialKind.AGENT_TOKEN
     # Agentic Clients are inbound apps: acquire and refresh on the inbound-apps server.
     refresh_endpoint = OAUTH2_APPS_TOKEN
+    # The agent client itself: its own Resource tokens use client_credentials.
+    acts_as_client = True
 
     def __init__(
         self,
@@ -61,8 +63,5 @@ class ClientCredentialsProvider(CredentialProvider):
         # base.get_credential falls back to _acquire when there is no refresh token.
         return {}
 
-    def token_exchange_client_auth(self) -> Optional[Dict[str, str]]:
+    def client_auth(self) -> Optional[Dict[str, str]]:
         return {"client_id": self._client_id, "client_secret": self._client_secret}
-
-    def resource_self_client_auth(self) -> Optional[Dict[str, str]]:
-        return self.token_exchange_client_auth()

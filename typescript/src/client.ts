@@ -109,8 +109,8 @@ export class AgentAuthClient {
     this.resources = new ResourcesClient({
       http: this.http,
       getCredential: () => this.getCredential(),
-      getClientAuth: () => this.credential.tokenExchangeClientAuth(),
-      getSelfClientAuth: () => this.credential.resourceSelfClientAuth(),
+      getClientAuth: () => this.credential.clientAuth(),
+      actsAsClient: this.credential.actsAsClient,
       store: this.store,
       mode: this.mode,
       approvalGate: (request) => this.runApproval(request),

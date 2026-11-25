@@ -50,10 +50,10 @@ export interface ResourcesClientDeps {
   /** Confidential-client auth for the exchange (`client_id` + `client_secret`), if any. */
   getClientAuth: () => Record<string, string> | undefined;
   /**
-   * Client auth for a Resource token the agent requests as itself with the
-   * `client_credentials` grant; `undefined` means its credential is exchanged.
+   * True when the provider's identity is the agent client: its own Resource tokens
+   * use the `client_credentials` grant rather than exchanging its credential.
    */
-  getSelfClientAuth: () => Record<string, string> | undefined;
+  actsAsClient?: boolean;
   store: TokenStore;
   mode: Mode;
   approvalGate?: ApprovalGate;
@@ -128,11 +128,10 @@ export class ResourcesClient {
     // credential. A Management Key is not an OAuth token, so it cannot be the
     // subject of a token-exchange. Resolve it before the cache lookup: the cache
     // key is bound to the subject.
-    const selfClientAuth = args.actAsUserToken ? undefined : this.deps.getSelfClientAuth();
     let subjectToken: string | undefined;
     if (args.actAsUserToken) {
       subjectToken = args.actAsUserToken;
-    } else if (selfClientAuth) {
+    } else if (this.deps.actsAsClient) {
       subjectToken = undefined;
     } else {
       const cred = await this.deps.getCredential();
@@ -164,7 +163,7 @@ export class ResourcesClient {
           {
             grant_type: GRANT_CLIENT_CREDENTIALS,
             resource: args.resource,
-            ...(selfClientAuth ?? clientAuth),
+            ...clientAuth,
           }
         : {
             grant_type: GRANT_TOKEN_EXCHANGE,

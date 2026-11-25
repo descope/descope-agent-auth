@@ -305,7 +305,7 @@ class _UserBoundProvider(AccessTokenProvider):
     def __init__(self, user_jwt):
         super().__init__(access_token=user_jwt)
 
-    def token_exchange_client_auth(self):
+    def client_auth(self):
         return {"client_id": "cid", "client_secret": "s"}
 
 

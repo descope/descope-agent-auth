@@ -76,17 +76,19 @@ class ResourcesClient:
         http: HttpClient,
         get_credential: Callable[[], Awaitable[Credential]],
         get_client_auth: Callable[[], Optional[Dict[str, str]]],
-        get_self_client_auth: Callable[[], Optional[Dict[str, str]]],
         store: TokenStore,
         mode: Mode,
         approval_gate: Optional[Callable[[ApprovalRequest], Awaitable[None]]] = None,
         skew_seconds: float = 60.0,
         cache_tokens: bool = True,
+        acts_as_client: bool = False,
     ) -> None:
         self._http = http
         self._get_credential = get_credential
         self._get_client_auth = get_client_auth
-        self._get_self_client_auth = get_self_client_auth
+        # True when the provider's identity is the agent client: its own Resource
+        # tokens use client_credentials rather than exchanging the credential.
+        self._acts_as_client = acts_as_client
         self._store = store
         self._mode = mode
         self._approval_gate = approval_gate
@@ -150,11 +152,10 @@ class ResourcesClient:
         # credential. A Management Key is not an OAuth token, so it cannot be the
         # subject of a token-exchange. Resolve it before the cache lookup: the
         # cache key is bound to the subject.
-        self_client_auth = None if act_as_user_token else self._get_self_client_auth()
         subject_token: Optional[str]
         if act_as_user_token:
             subject_token = act_as_user_token
-        elif self_client_auth:
+        elif self._acts_as_client:
             subject_token = None
         else:
             cred = await self._get_credential()
@@ -185,7 +186,7 @@ class ResourcesClient:
             data = {
                 "grant_type": GRANT_CLIENT_CREDENTIALS,
                 "resource": resource,
-                **(self_client_auth or client_auth),
+                **client_auth,
             }
         else:
             data = {
