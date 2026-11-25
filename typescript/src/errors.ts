@@ -18,6 +18,8 @@ export class AgentAuthError extends Error {
 /**
  * The user has not yet connected (or has revoked) the downstream account. Catch
  * this and redirect the user to `connectUrl` to complete OAuth consent, then retry.
+ * If Descope could not produce a connect URL, `connectUrl` is undefined and
+ * `connectError` says why (for example a redirect URL the project does not allow).
  */
 export class ConnectionAuthorizationRequired extends AgentAuthError {
   connectUrl?: string;
@@ -26,14 +28,32 @@ export class ConnectionAuthorizationRequired extends AgentAuthError {
 
   identifier?: string;
 
+  connectError?: string;
+
   constructor(
     message: string,
-    opts: { connectUrl?: string; connection?: string; identifier?: string } = {},
+    opts: {
+      connectUrl?: string;
+      connection?: string;
+      identifier?: string;
+      connectError?: string;
+    } = {},
   ) {
     super(message);
     this.connectUrl = opts.connectUrl;
     this.connection = opts.connection;
     this.identifier = opts.identifier;
+    this.connectError = opts.connectError;
+  }
+}
+
+/** Descope did not return a connect URL. The message carries Descope's reason. */
+export class ConnectUrlFailed extends AgentAuthError {
+  statusCode?: number;
+
+  constructor(message: string, opts: { statusCode?: number } = {}) {
+    super(message);
+    this.statusCode = opts.statusCode;
   }
 }
 

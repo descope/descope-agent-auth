@@ -16,6 +16,19 @@ describe('redact (log masking)', () => {
     expect(masked.scope).toBe('read');
   });
 
+  it('masks token-exchange tokens', () => {
+    const masked = redact({
+      subject_token: 'user.jwt',
+      actor_token: 'agent.jwt',
+      client_assertion: 'signed.jwt',
+      subject_token_type: 'urn:ietf:params:oauth:token-type:access_token',
+    });
+    expect(masked.subject_token).toBe(REDACTED);
+    expect(masked.actor_token).toBe(REDACTED);
+    expect(masked.client_assertion).toBe(REDACTED);
+    expect(masked.subject_token_type).toBe('urn:ietf:params:oauth:token-type:access_token');
+  });
+
   it('masks authorization_details (transaction data)', () => {
     const masked = redact({ authorization_details: '[{"type":"payment_initiation"}]' });
     expect(masked.authorization_details).toBe(REDACTED);

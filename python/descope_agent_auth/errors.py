@@ -19,7 +19,9 @@ class ConnectionAuthorizationRequired(AgentAuthError):
     """The user has not yet connected (or has revoked) the downstream account.
 
     Catch this and redirect the user to ``connect_url`` to complete the OAuth
-    consent, then retry the exchange.
+    consent, then retry the exchange. If Descope could not produce a connect URL,
+    ``connect_url`` is ``None`` and ``connect_error`` says why (for example a
+    redirect URL the project does not allow).
     """
 
     def __init__(
@@ -29,11 +31,21 @@ class ConnectionAuthorizationRequired(AgentAuthError):
         connect_url: Optional[str] = None,
         connection: Optional[str] = None,
         identifier: Optional[str] = None,
+        connect_error: Optional[str] = None,
     ) -> None:
         super().__init__(message)
         self.connect_url = connect_url
         self.connection = connection
         self.identifier = identifier
+        self.connect_error = connect_error
+
+
+class ConnectUrlFailed(AgentAuthError):
+    """Descope did not return a connect URL. The message carries Descope's reason."""
+
+    def __init__(self, message: str, *, status_code: Optional[int] = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
 
 
 class PolicyDenied(AgentAuthError):

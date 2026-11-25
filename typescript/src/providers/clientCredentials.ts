@@ -6,7 +6,7 @@
  * authenticating as itself.
  */
 
-import { GRANT_CLIENT_CREDENTIALS, OAUTH2_TOKEN } from '../endpoints';
+import { GRANT_CLIENT_CREDENTIALS, OAUTH2_APPS_TOKEN } from '../endpoints';
 import { CredentialAcquisitionFailed } from '../errors';
 import { base64 } from '../runtime';
 import { Credential } from '../types';
@@ -20,6 +20,12 @@ export interface ClientCredentialsOptions {
 
 export class ClientCredentialsProvider extends CredentialProvider {
   readonly kind = 'agent_token';
+
+  // Agentic Clients are inbound apps: acquire and refresh on the inbound-apps server.
+  protected readonly refreshEndpoint = OAUTH2_APPS_TOKEN;
+
+  // The agent client itself: its own Resource tokens use client_credentials.
+  readonly actsAsClient = true;
 
   private readonly clientId: string;
 
@@ -41,7 +47,9 @@ export class ClientCredentialsProvider extends CredentialProvider {
   protected async acquire(): Promise<Credential> {
     const data: Record<string, string> = { grant_type: GRANT_CLIENT_CREDENTIALS };
     if (this.scopes.length) data.scope = this.scopes.join(' ');
-    const resp = await this.requireHttp().postForm(OAUTH2_TOKEN, data, {
+    // Agentic Clients are inbound apps, served by the /v1/apps/<projectId>
+    // authorization server, whose token endpoint is /oauth2/v1/apps/token.
+    const resp = await this.requireHttp().postForm(OAUTH2_APPS_TOKEN, data, {
       Authorization: this.basicAuth(),
     });
     if (!resp.ok) {
@@ -55,5 +63,9 @@ export class ClientCredentialsProvider extends CredentialProvider {
 
   protected storageKey(): string {
     return `cred:client_credentials:${this.projectId}:${this.clientId}`;
+  }
+
+  clientAuth(): Record<string, string> {
+    return { client_id: this.clientId, client_secret: this.clientSecret };
   }
 }

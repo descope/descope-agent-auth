@@ -197,30 +197,42 @@ const repos = await listRepos('user@example.com');
 
 ### User-scoped access
 
-To act as a specific user — and to mint user-scoped Resource tokens — present that
-user's Descope access token. Configure the client with `AccessTokenProvider`, or pass
-`act_as_user_token` / `actAsUserToken` per call on a shared client:
+To act as a specific user, present that user's Descope access token. For Connection
+tokens, configure the client with `AccessTokenProvider`, or pass `act_as_user_token` /
+`actAsUserToken` per call on a shared client. User-scoped **Resource** tokens always
+use the per-call form on a `ClientCredentialsProvider` client: Descope only serves
+token exchange to an authenticated confidential client, and records it as the actor
+(`act.sub`). An `AccessTokenProvider` client raises `AgentAuthError` there.
 
 ```python
-from descope_agent_auth import AccessTokenProvider
+from descope_agent_auth import AccessTokenProvider, ClientCredentialsProvider
 
 # A — client bound to the user's token:
 client = AgentAuthClient(project_id="P2...", credential=AccessTokenProvider(access_token=user_jwt))
 gh = client.connections.get_token(connection="github", identifier=user_id)
 
-# B — one shared client, user token per call:
-gh = client.connections.get_token(connection="github", identifier=user_id, act_as_user_token=user_jwt)
-res = client.resources.get_token(resource="urn:my-api", act_as_user_token=user_jwt)
+# B — one shared agent client, user token per call:
+agent = AgentAuthClient(
+    project_id="P2...",
+    credential=ClientCredentialsProvider(client_id="...", client_secret="..."),
+)
+gh = agent.connections.get_token(connection="github", identifier=user_id, act_as_user_token=user_jwt)
+res = agent.resources.get_token(resource="urn:my-api", act_as_user_token=user_jwt)
 ```
 
 ```ts
-import { AccessTokenProvider } from '@descope/agent-auth';
+import { AccessTokenProvider, ClientCredentialsProvider } from '@descope/agent-auth';
 
 const client = new AgentAuthClient({ projectId: 'P2...', credential: new AccessTokenProvider({ accessToken: userJwt }) });
 await client.connections.getToken({ connection: 'github', identifier: userId });
 
-// or per call on a shared client:
-await client.connections.getToken({ connection: 'github', identifier: userId, actAsUserToken: userJwt });
+// or per call on a shared agent client:
+const agent = new AgentAuthClient({
+  projectId: 'P2...',
+  credential: new ClientCredentialsProvider({ clientId: '...', clientSecret: '...' }),
+});
+await agent.connections.getToken({ connection: 'github', identifier: userId, actAsUserToken: userJwt });
+await agent.resources.getToken({ resource: 'urn:my-api', actAsUserToken: userJwt });
 ```
 
 ### Management key (trusted backend, no user token)
@@ -554,7 +566,8 @@ whose access token the resource server can check once a Custom Claims action add
 
 | Error | Meaning |
 | --- | --- |
-| `ConnectionAuthorizationRequired` | user hasn't connected the account; carries `connect_url` / `connectUrl` |
+| `ConnectionAuthorizationRequired` | user hasn't connected the account; carries `connect_url` / `connectUrl`, or `connect_error` / `connectError` saying why there's no URL |
+| `ConnectUrlFailed` | `get_connect_url` / `getConnectUrl` got no URL back; the message has Descope's reason |
 | `PolicyDenied` | agent token lacks Policy permission |
 | `ApprovalDenied` / `ApprovalTimeout` | the CIBA gate was rejected or timed out |
 | `CredentialAcquisitionFailed` | the agent couldn't sign in to Descope (bad creds, device-flow timeout, …) |

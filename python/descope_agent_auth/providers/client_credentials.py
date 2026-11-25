@@ -8,9 +8,9 @@ authenticating as itself.
 from __future__ import annotations
 
 import base64
-from typing import List, Optional
+from typing import Dict, List, Optional
 
-from .._endpoints import GRANT_CLIENT_CREDENTIALS, OAUTH2_TOKEN
+from .._endpoints import GRANT_CLIENT_CREDENTIALS, OAUTH2_APPS_TOKEN
 from ..errors import CredentialAcquisitionFailed
 from ..types import Credential, CredentialKind
 from .base import CredentialProvider, _err, token_response_to_credential
@@ -18,6 +18,10 @@ from .base import CredentialProvider, _err, token_response_to_credential
 
 class ClientCredentialsProvider(CredentialProvider):
     kind = CredentialKind.AGENT_TOKEN
+    # Agentic Clients are inbound apps: acquire and refresh on the inbound-apps server.
+    refresh_endpoint = OAUTH2_APPS_TOKEN
+    # The agent client itself: its own Resource tokens use client_credentials.
+    acts_as_client = True
 
     def __init__(
         self,
@@ -39,8 +43,10 @@ class ClientCredentialsProvider(CredentialProvider):
         data = {"grant_type": GRANT_CLIENT_CREDENTIALS}
         if self._scopes:
             data["scope"] = " ".join(self._scopes)
+        # Agentic Clients are inbound apps, served by the /v1/apps/<projectId>
+        # authorization server, whose token endpoint is /oauth2/v1/apps/token.
         resp = await self.http.post_form(
-            OAUTH2_TOKEN, data=data, headers={"Authorization": self._basic_auth()}
+            OAUTH2_APPS_TOKEN, data=data, headers={"Authorization": self._basic_auth()}
         )
         if not resp.ok:
             raise CredentialAcquisitionFailed(
@@ -56,3 +62,6 @@ class ClientCredentialsProvider(CredentialProvider):
         # client_credentials tokens are re-acquired, not refresh-token rotated;
         # base.get_credential falls back to _acquire when there is no refresh token.
         return {}
+
+    def client_auth(self) -> Optional[Dict[str, str]]:
+        return {"client_id": self._client_id, "client_secret": self._client_secret}

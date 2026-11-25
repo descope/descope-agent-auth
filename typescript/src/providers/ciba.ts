@@ -200,4 +200,15 @@ export class CibaProvider extends CredentialProvider {
     if (this.clientSecret) out.client_secret = this.clientSecret;
     return out;
   }
+
+  identityKey(): string {
+    // One user per provider (loginHint), so the storage key names the subject.
+    return this.storageKey();
+  }
+
+  clientAuth(): Record<string, string> | undefined {
+    // Only a confidential CIBA client can authenticate a token exchange.
+    if (!this.clientSecret) return undefined;
+    return { client_id: this.clientId, client_secret: this.clientSecret };
+  }
 }

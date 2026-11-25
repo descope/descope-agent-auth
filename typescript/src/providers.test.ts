@@ -38,6 +38,8 @@ afterAll(() => {
   nock.enableNetConnect();
 });
 
+// Agentic Clients are inbound apps: their token endpoint (per the /v1/apps/<projectId>
+// discovery document) is /oauth2/v1/apps/token, the same one CIBA uses.
 describe('ClientCredentialsProvider', () => {
   it('acquires a token (happy path) with Basic auth', async () => {
     let authHeader: string | undefined;
@@ -49,7 +51,7 @@ describe('ClientCredentialsProvider', () => {
         },
       },
     })
-      .post(TOKEN_PATH)
+      .post(CIBA_TOKEN_PATH)
       .reply(200, { access_token: 'agent_at', expires_in: 3600 });
 
     const client = makeClient(
@@ -63,7 +65,7 @@ describe('ClientCredentialsProvider', () => {
 
   it('caches the credential until expiry', async () => {
     const scope = nock(BASE_URL)
-      .post(TOKEN_PATH)
+      .post(CIBA_TOKEN_PATH)
       .reply(200, { access_token: 'agent_at', expires_in: 3600 });
     const client = makeClient(
       new ClientCredentialsProvider({ clientId: 'cid', clientSecret: 's' }),
@@ -74,7 +76,7 @@ describe('ClientCredentialsProvider', () => {
   });
 
   it('raises CredentialAcquisitionFailed on bad credentials', async () => {
-    nock(BASE_URL).post(TOKEN_PATH).reply(401, { error: 'invalid_client' });
+    nock(BASE_URL).post(CIBA_TOKEN_PATH).reply(401, { error: 'invalid_client' });
     const client = makeClient(
       new ClientCredentialsProvider({ clientId: 'cid', clientSecret: 'bad' }),
     );
@@ -84,9 +86,9 @@ describe('ClientCredentialsProvider', () => {
   it('uses the refresh_token grant when one is held and the token expired', async () => {
     let refreshBody: any;
     nock(BASE_URL)
-      .post(TOKEN_PATH)
+      .post(CIBA_TOKEN_PATH)
       .reply(200, { access_token: 'first', expires_in: -10, refresh_token: 'r1' })
-      .post(TOKEN_PATH, (body) => {
+      .post(CIBA_TOKEN_PATH, (body) => {
         refreshBody = body;
         return true;
       })
@@ -101,9 +103,9 @@ describe('ClientCredentialsProvider', () => {
 
   it('re-acquires when the cached credential is expired', async () => {
     nock(BASE_URL)
-      .post(TOKEN_PATH)
+      .post(CIBA_TOKEN_PATH)
       .reply(200, { access_token: 'first', expires_in: -10 })
-      .post(TOKEN_PATH)
+      .post(CIBA_TOKEN_PATH)
       .reply(200, { access_token: 'second', expires_in: 3600 });
     const client = makeClient(
       new ClientCredentialsProvider({ clientId: 'cid', clientSecret: 's' }),

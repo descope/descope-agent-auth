@@ -9,6 +9,7 @@ from .errors import (
     ApprovalDenied,
     ApprovalTimeout,
     ConnectionAuthorizationRequired,
+    ConnectUrlFailed,
     CredentialAcquisitionFailed,
     InvalidAuthorizationDetails,
     PolicyDenied,
@@ -65,6 +66,7 @@ __all__ = [
     # errors
     "AgentAuthError",
     "ConnectionAuthorizationRequired",
+    "ConnectUrlFailed",
     "PolicyDenied",
     "CredentialAcquisitionFailed",
     "InvalidAuthorizationDetails",

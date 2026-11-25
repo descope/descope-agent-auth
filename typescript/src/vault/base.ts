@@ -11,6 +11,7 @@ import { OUTBOUND_CONNECT } from '../endpoints';
 import {
   AgentAuthError,
   ConnectionAuthorizationRequired,
+  ConnectUrlFailed,
   PolicyDenied,
   TokenExchangeFailed,
 } from '../errors';
@@ -147,11 +148,24 @@ export class VaultBackend {
 
     // 404 -> user has not connected (or token cleared / wrong scopes).
     if (resp.statusCode === 404) {
-      const connectUrl = await this.tryConnectUrl(args.connectBody, header);
-      throw new ConnectionAuthorizationRequired(
-        `connection '${args.connection}' is not authorized for this identity yet`,
-        { connectUrl, connection: args.connection, identifier: args.identifier },
-      );
+      let message = `connection '${args.connection}' is not authorized for this identity yet`;
+      let connectUrl: string | undefined;
+      let connectError: string | undefined;
+      if (args.connectBody) {
+        try {
+          connectUrl = await this.requestConnectUrl(args.connectBody, header);
+        } catch (err) {
+          if (!(err instanceof ConnectUrlFailed)) throw err;
+          connectError = err.message;
+          message = `${message}; no connect URL: ${connectError}`;
+        }
+      }
+      throw new ConnectionAuthorizationRequired(message, {
+        connectUrl,
+        connection: args.connection,
+        identifier: args.identifier,
+        connectError,
+      });
     }
 
     // 401/403 -> Policy (or auth) denied. Meaningful for agent tokens;
@@ -170,7 +184,10 @@ export class VaultBackend {
     );
   }
 
-  /** Proactively generate a connect URL (the explicit authorize path). */
+  /**
+   * Proactively generate a connect URL (the explicit authorize path).
+   * Throws `ConnectUrlFailed` with Descope's reason if no URL comes back.
+   */
   async getConnectUrl(
     connectBody: Record<string, unknown> | undefined,
     actAsUserToken?: string,
@@ -179,24 +196,29 @@ export class VaultBackend {
     const header = actAsUserToken
       ? `Bearer ${this.projectId}:${actAsUserToken}`
       : await this.authHeader();
-    return this.tryConnectUrl(connectBody, header);
+    return this.requestConnectUrl(connectBody, header);
   }
 
-  private async tryConnectUrl(
-    connectBody: Record<string, unknown> | undefined,
+  private async requestConnectUrl(
+    connectBody: Record<string, unknown>,
     header: string,
-  ): Promise<string | undefined> {
-    if (!connectBody) return undefined;
+  ): Promise<string> {
+    let resp;
     try {
-      const resp = await this.http.postJson(OUTBOUND_CONNECT, connectBody, {
-        Authorization: header,
-      });
-      if (resp.ok && resp.json) return resp.json.url;
+      resp = await this.http.postJson(OUTBOUND_CONNECT, connectBody, { Authorization: header });
     } catch (err) {
-      if (err instanceof AgentAuthError) return undefined;
+      if (err instanceof ConnectUrlFailed) throw err;
+      if (err instanceof AgentAuthError) {
+        throw new ConnectUrlFailed(`connect URL request failed: ${err.message}`);
+      }
       throw err;
     }
-    return undefined;
+    const url: string | undefined = resp.ok && resp.json ? resp.json.url : undefined;
+    if (url) return url;
+    const reason = msg(resp.json) ?? (resp.text || 'response had no url');
+    throw new ConnectUrlFailed(`connect URL request failed (${resp.statusCode}): ${reason}`, {
+      statusCode: resp.statusCode,
+    });
   }
 }
 

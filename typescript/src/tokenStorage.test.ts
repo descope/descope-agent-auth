@@ -28,7 +28,7 @@ afterAll(() => nock.enableNetConnect());
 
 describe('phase-1 credential persistence', () => {
   it('persists the credential and reuses it across instances (restart)', async () => {
-    nock(BASE_URL).post(TOKEN_PATH).reply(200, { access_token: 'agent_at', expires_in: 3600 });
+    nock(BASE_URL).post(CIBA_TOKEN_PATH).reply(200, { access_token: 'agent_at', expires_in: 3600 });
     const store = new MemoryTokenStore();
 
     const first = client(

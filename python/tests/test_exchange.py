@@ -5,15 +5,21 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 from descope_agent_auth import (
+    AccessTokenProvider,
+    CibaProvider,
     ClientCredentialsProvider,
     ManagementKeyProvider,
 )
 from descope_agent_auth.errors import (
     AgentAuthError,
     ConnectionAuthorizationRequired,
+    ConnectUrlFailed,
+    CredentialAcquisitionFailed,
     PolicyDenied,
     TokenExchangeFailed,
 )
+
+from descope_agent_auth.store.memory import MemoryTokenStore
 
 from . import common
 from .common import PROJECT_ID, make_response, token_obj
@@ -282,6 +288,45 @@ class TestConnectionsExchange(common.AgentAuthTest):
         self.assertNotIn("userId", kwargs["json"])  # connect body carries no userId
 
     @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_not_connected_reports_why_there_is_no_connect_url(self, mock_request):
+        mock_request.side_effect = [
+            make_response(CRED),
+            make_response({"error": "not found"}, status=404),
+            make_response({"errorDescription": "redirect URL not allowed"}, status=400),
+        ]
+        client = self._agent_client()
+
+        with self.assertRaises(ConnectionAuthorizationRequired) as ctx:
+            client.connections.get_token(connection="github", identifier="user@example.com")
+
+        self.assertIsNone(ctx.exception.connect_url)
+        self.assertIn("400", ctx.exception.connect_error)
+        self.assertIn("redirect URL not allowed", ctx.exception.connect_error)
+        self.assertIn("redirect URL not allowed", str(ctx.exception))
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_get_connect_url_raises_with_descope_reason(self, mock_request):
+        mock_request.side_effect = [
+            make_response(CRED),
+            make_response({"errorDescription": "redirect URL not allowed"}, status=400),
+        ]
+        client = self._agent_client()
+
+        with self.assertRaises(ConnectUrlFailed) as ctx:
+            client.connections.get_connect_url(connection="github", identifier="u@x.com")
+
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertIn("redirect URL not allowed", str(ctx.exception))
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_get_connect_url_raises_when_response_has_no_url(self, mock_request):
+        mock_request.side_effect = [make_response(CRED), make_response({})]
+        client = self._agent_client()
+
+        with self.assertRaises(ConnectUrlFailed):
+            client.connections.get_connect_url(connection="github", identifier="u@x.com")
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_wait_for_connection_times_out(self, mock_request):
         mock_request.side_effect = [
             make_response(CRED),
@@ -296,49 +341,286 @@ class TestConnectionsExchange(common.AgentAuthTest):
             )
 
 
+class _UserBoundProvider(AccessTokenProvider):
+    """A user's token plus a confidential client, like a CibaProvider with a secret."""
+
+    def __init__(self, user_jwt):
+        super().__init__(access_token=user_jwt)
+
+    def client_auth(self):
+        return {"client_id": "cid", "client_secret": "s"}
+
+
+class _IdentifiedUserProvider(_UserBoundProvider):
+    """A user-bound provider with a stable identity (like CibaProvider), counting
+    how often its credential is resolved."""
+
+    def __init__(self, user_jwt, identity):
+        super().__init__(user_jwt)
+        self.identity = identity
+        self.credential_calls = 0
+
+    def identity_key(self):
+        return self.identity
+
+    async def get_credential(self):
+        self.credential_calls += 1
+        return await super().get_credential()
+
+
 @patch("asyncio.sleep", AsyncMock())
 class TestResourcesExchange(common.AgentAuthTest):
-    """Resource tokens are minted via the RFC 8693 token-exchange grant."""
+    """Resource tokens: client_credentials for the agent itself, token exchange for a user."""
 
     def _agent_client(self):
         return self.make_client(ClientCredentialsProvider(client_id="cid", client_secret="s"))
 
     @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
-    def test_token_exchange_returns_resource_token(self, mock_request):
-        mock_request.side_effect = [
-            make_response({"access_token": "agent_at", "expires_in": 3600}),  # phase 1
-            make_response(  # token-exchange
-                {
-                    "access_token": "resource_at",
-                    "token_type": "Bearer",
-                    "expires_in": 3600,
-                    "scope": "read",
-                }
-            ),
-        ]
+    def test_agent_itself_uses_client_credentials_with_resource(self, mock_request):
+        # Descope applies client-access Policies only to a client_credentials
+        # request that names the resource; a self token-exchange is refused.
+        mock_request.return_value = make_response(
+            {"access_token": "resource_at", "token_type": "Bearer", "expires_in": 3600, "scope": "read"}
+        )
         client = self._agent_client()
 
         tok = client.resources.get_token(resource="urn:my-api", scopes=["read"])
 
         self.assertEqual(tok.access_token, "resource_at")
         self.assertEqual(tok.scopes, ["read"])
-        args, kwargs = mock_request.call_args  # the token-exchange call
-        self.assertEqual(args[1], "/oauth2/v1/token")
-        self.assertEqual(
-            kwargs["data"]["grant_type"], "urn:ietf:params:oauth:grant-type:token-exchange"
-        )
+        self.assertEqual(mock_request.call_count, 1)  # no phase-1 token needed
+        args, kwargs = mock_request.call_args
+        self.assertEqual(args[1], "/oauth2/v1/apps/token")
+        self.assertEqual(kwargs["data"]["grant_type"], "client_credentials")
         self.assertEqual(kwargs["data"]["resource"], "urn:my-api")
-        self.assertEqual(kwargs["data"]["subject_token"], "agent_at")
+        self.assertEqual(kwargs["data"]["scope"], "read")
+        self.assertEqual(kwargs["data"]["client_id"], "cid")
+        self.assertEqual(kwargs["data"]["client_secret"], "s")
+        self.assertNotIn("subject_token", kwargs["data"])
 
     @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
-    def test_resource_token_sends_audience(self, mock_request):
+    def test_user_scoped_exchange_authenticates_the_agent_client(self, mock_request):
+        mock_request.return_value = make_response({"access_token": "resource_at"})
+        client = self._agent_client()
+
+        client.resources.get_token(resource="urn:my-api", act_as_user_token="user_jwt")
+
+        args, kwargs = mock_request.call_args
+        self.assertEqual(args[1], "/oauth2/v1/apps/token")
+        self.assertEqual(kwargs["data"]["subject_token"], "user_jwt")
+        self.assertEqual(kwargs["data"]["client_id"], "cid")
+        self.assertEqual(kwargs["data"]["client_secret"], "s")
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_user_scoped_tokens_are_not_shared_across_users(self, mock_request):
+        # One shared agent client serving two users must never hand user A's
+        # Resource token to user B from the cache.
         mock_request.side_effect = [
-            make_response({"access_token": "agent_at", "expires_in": 3600}),  # phase 1
-            make_response({"access_token": "resource_at", "token_type": "Bearer"}),
+            make_response({"access_token": "alice_resource_at", "expires_in": 3600}),
+            make_response({"access_token": "bob_resource_at", "expires_in": 3600}),
         ]
         client = self._agent_client()
 
-        client.resources.get_token(resource="urn:my-api", audience=["https://api.acme.com"])
+        alice = client.resources.get_token(resource="urn:my-api", act_as_user_token="alice_jwt")
+        bob = client.resources.get_token(resource="urn:my-api", act_as_user_token="bob_jwt")
+        alice_again = client.resources.get_token(
+            resource="urn:my-api", act_as_user_token="alice_jwt"
+        )
+
+        self.assertEqual(alice.access_token, "alice_resource_at")
+        self.assertEqual(bob.access_token, "bob_resource_at")
+        self.assertEqual(alice_again.access_token, "alice_resource_at")  # cached per user
+        self.assertEqual(mock_request.call_count, 2)
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_user_scoped_token_is_not_served_to_the_agent_itself(self, mock_request):
+        mock_request.side_effect = [
+            make_response({"access_token": "alice_resource_at", "expires_in": 3600}),
+            make_response({"access_token": "agent_resource_at", "expires_in": 3600}),
+        ]
+        client = self._agent_client()
+
+        client.resources.get_token(resource="urn:my-api", act_as_user_token="alice_jwt")
+        own = client.resources.get_token(resource="urn:my-api")
+
+        self.assertEqual(own.access_token, "agent_resource_at")
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_shared_store_does_not_mix_agent_clients_for_one_user(self, mock_request):
+        # Two agentic clients on one shared store, acting for the same user, must
+        # each get a token minted with themselves as act.sub.
+        mock_request.side_effect = [
+            make_response({"access_token": "a_resource_at", "expires_in": 3600}),
+            make_response({"access_token": "b_resource_at", "expires_in": 3600}),
+        ]
+        store = MemoryTokenStore()
+        a = self.make_client(ClientCredentialsProvider(client_id="a", client_secret="s"), store=store)
+        b = self.make_client(ClientCredentialsProvider(client_id="b", client_secret="s"), store=store)
+
+        tok_a = a.resources.get_token(resource="urn:my-api", act_as_user_token="alice_jwt")
+        tok_b = b.resources.get_token(resource="urn:my-api", act_as_user_token="alice_jwt")
+
+        self.assertEqual(tok_a.access_token, "a_resource_at")
+        self.assertEqual(tok_b.access_token, "b_resource_at")
+        self.assertEqual(mock_request.call_args.kwargs["data"]["client_id"], "b")
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_shared_store_does_not_mix_agent_own_tokens(self, mock_request):
+        # Without act_as_user_token each client asks for its own token; a shared
+        # store must not serve one client's Resource token to another client.
+        mock_request.side_effect = [
+            make_response({"access_token": "a_resource_at", "expires_in": 3600}),
+            make_response({"access_token": "b_resource_at", "expires_in": 3600}),
+        ]
+        store = MemoryTokenStore()
+        a = self.make_client(ClientCredentialsProvider(client_id="a", client_secret="s"), store=store)
+        b = self.make_client(ClientCredentialsProvider(client_id="b", client_secret="s"), store=store)
+
+        tok_a = a.resources.get_token(resource="urn:my-api")
+        tok_b = b.resources.get_token(resource="urn:my-api")
+        tok_a_again = a.resources.get_token(resource="urn:my-api")
+
+        self.assertEqual(tok_a.access_token, "a_resource_at")
+        self.assertEqual(tok_b.access_token, "b_resource_at")
+        self.assertEqual(tok_a_again.access_token, "a_resource_at")  # still cached
+        self.assertEqual(mock_request.call_count, 2)
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_user_bound_credential_is_exchanged_and_keyed_per_user(self, mock_request):
+        # A confidential client whose phase-1 credential represents a user (as
+        # with CIBA) exchanges that credential. Two such clients for different
+        # users on one shared store must not share a Resource token.
+        mock_request.side_effect = [
+            make_response({"access_token": "alice_resource_at", "expires_in": 3600}),
+            make_response({"access_token": "bob_resource_at", "expires_in": 3600}),
+        ]
+        store = MemoryTokenStore()
+        alice = self.make_client(_UserBoundProvider("alice_jwt"), store=store)
+        bob = self.make_client(_UserBoundProvider("bob_jwt"), store=store)
+
+        tok_alice = alice.resources.get_token(resource="urn:my-api")
+        tok_bob = bob.resources.get_token(resource="urn:my-api")
+
+        self.assertEqual(tok_alice.access_token, "alice_resource_at")
+        self.assertEqual(tok_bob.access_token, "bob_resource_at")
+        data = mock_request.call_args.kwargs["data"]
+        self.assertEqual(data["grant_type"], "urn:ietf:params:oauth:grant-type:token-exchange")
+        self.assertEqual(data["subject_token"], "bob_jwt")
+        self.assertEqual(data["client_id"], "cid")
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_identified_provider_serves_cache_before_resolving_credential(self, mock_request):
+        # A provider with a stable identity (CIBA) keys the cache by that identity,
+        # so a cached Resource token never triggers a refresh or a new approval,
+        # and the entry survives the phase-1 credential's rotation.
+        mock_request.return_value = make_response(
+            {"access_token": "alice_resource_at", "expires_in": 3600}
+        )
+        provider = _IdentifiedUserProvider("alice_jwt", "cred:ciba:P:cid:alice")
+        client = self.make_client(provider)
+
+        first = client.resources.get_token(resource="urn:my-api")
+        # Rotate the phase-1 token: a digest-keyed entry would now miss.
+        provider._access_token = "alice_jwt_rotated"
+        provider._cached = None
+        again = client.resources.get_token(resource="urn:my-api")
+
+        self.assertEqual(first.access_token, "alice_resource_at")
+        self.assertEqual(again.access_token, "alice_resource_at")
+        self.assertEqual(mock_request.call_count, 1)
+        self.assertEqual(provider.credential_calls, 1)  # only on the cache miss
+        self.assertEqual(mock_request.call_args.kwargs["data"]["subject_token"], "alice_jwt")
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_identified_providers_are_keyed_per_identity(self, mock_request):
+        mock_request.side_effect = [
+            make_response({"access_token": "alice_resource_at", "expires_in": 3600}),
+            make_response({"access_token": "bob_resource_at", "expires_in": 3600}),
+        ]
+        store = MemoryTokenStore()
+        alice = self.make_client(_IdentifiedUserProvider("alice_jwt", "id:alice"), store=store)
+        bob = self.make_client(_IdentifiedUserProvider("bob_jwt", "id:bob"), store=store)
+
+        self.assertEqual(
+            alice.resources.get_token(resource="urn:my-api").access_token, "alice_resource_at"
+        )
+        self.assertEqual(
+            bob.resources.get_token(resource="urn:my-api").access_token, "bob_resource_at"
+        )
+
+    def test_ciba_identity_is_per_user(self):
+        alice = CibaProvider(client_id="cid", client_secret="s", login_hint="alice@x.com")
+        bob = CibaProvider(client_id="cid", client_secret="s", login_hint="bob@x.com")
+        self.make_client(alice)
+        self.make_client(bob)
+        self.assertIsNotNone(alice.identity_key())
+        self.assertNotEqual(alice.identity_key(), bob.identity_key())
+        # Providers without one stable subject key by the credential instead.
+        self.assertIsNone(
+            ClientCredentialsProvider(client_id="cid", client_secret="s").identity_key()
+        )
+        self.assertIsNone(AccessTokenProvider(access_token="t").identity_key())
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_error_mapping_follows_the_oauth_error(self, mock_request):
+        # Every Resource request carries the client secret, so go by the OAuth
+        # error, not the HTTP status. Legacy envelope (strict OAuth errors off) too.
+        cases = [
+            (401, {"error": "invalid_client"}, CredentialAcquisitionFailed),
+            (
+                400,
+                {"errorCode": "E074130", "errorDescription": "invalid_client",
+                 "errorMessage": "Invalid client id"},
+                CredentialAcquisitionFailed,
+            ),
+            (400, {"error": "unauthorized_client"}, PolicyDenied),
+            (400, {"error": "invalid_target"}, PolicyDenied),
+            (403, {"error": "access_denied"}, PolicyDenied),
+            (
+                400,
+                {"error": "invalid_scope", "error_description": "Requested scope not granted"},
+                PolicyDenied,
+            ),
+            (
+                400,
+                {"errorCode": "E063313", "errorDescription": "unauthorized_client",
+                 "errorMessage": "Client is not authorized"},
+                PolicyDenied,
+            ),
+            (400, {"errorCode": "E063309", "errorMessage": "Scope not allowed"}, PolicyDenied),
+            (403, {"message": "forbidden"}, PolicyDenied),
+            (400, {"error": "invalid_request"}, TokenExchangeFailed),
+            (401, {"error": "invalid_token"}, TokenExchangeFailed),
+        ]
+        for status, body, expected in cases:
+            with self.subTest(status=status, body=body):
+                mock_request.reset_mock()
+                mock_request.return_value = make_response(body, status=status)
+                client = self._agent_client()
+                with self.assertRaises(AgentAuthError) as ctx:
+                    client.resources.get_token(resource="urn:my-api")
+                self.assertIs(type(ctx.exception), expected)
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_exchange_without_confidential_client_is_rejected(self, mock_request):
+        # A bare user token has no client to authenticate the exchange, and
+        # Descope rejects unauthenticated token-exchange requests.
+        client = self.make_client(AccessTokenProvider(access_token="user_jwt"))
+        with self.assertRaises(AgentAuthError) as ctx:
+            client.resources.get_token(resource="urn:my-api")
+        self.assertIn("ClientCredentialsProvider", str(ctx.exception))
+        mock_request.assert_not_called()
+
+    @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
+    def test_resource_token_sends_audience(self, mock_request):
+        mock_request.return_value = make_response(
+            {"access_token": "resource_at", "token_type": "Bearer"}
+        )
+        client = self._agent_client()
+
+        client.resources.get_token(
+            resource="urn:my-api", audience=["https://api.acme.com"], act_as_user_token="u"
+        )
 
         _, kwargs = mock_request.call_args  # the token-exchange call
         self.assertEqual(kwargs["data"]["audience"], ["https://api.acme.com"])
@@ -354,10 +636,7 @@ class TestResourcesExchange(common.AgentAuthTest):
 
     @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_policy_denied(self, mock_request):
-        mock_request.side_effect = [
-            make_response({"access_token": "agent_at", "expires_in": 3600}),
-            make_response({"error": "access_denied"}, status=403),
-        ]
+        mock_request.return_value = make_response({"error": "access_denied"}, status=403)
         client = self._agent_client()
         with self.assertRaises(PolicyDenied):
             client.resources.get_token(resource="urn:my-api")

@@ -76,6 +76,7 @@ export type {
 export {
   AgentAuthError,
   ConnectionAuthorizationRequired,
+  ConnectUrlFailed,
   PolicyDenied,
   CredentialAcquisitionFailed,
   InvalidAuthorizationDetails,

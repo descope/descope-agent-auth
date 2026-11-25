@@ -59,8 +59,9 @@ Steps 1 + 2 select a recipe below.
 ## Recipe A — Act for a logged-in user (most common)
 
 Use when your app already authenticated the user with Descope and you hold their
-access token (`user_jwt`). Covers user-level Connection tokens **and** user-scoped
-Resource tokens.
+access token (`user_jwt`). Covers user-level Connection tokens. For user-scoped
+Resource tokens, see the per-call form below (a `ClientCredentialsProvider` client
+with `act_as_user_token`).
 
 **Python**
 
@@ -110,9 +111,12 @@ One shared client, many users? Don't bind the client to one user — pass the us
 token per call instead: `get_token(..., act_as_user_token=user_jwt)` /
 `getToken({ ..., actAsUserToken: userJwt })`.
 
-A user-scoped Resource token is the same idea:
-`client.resources.get_token(resource="urn:my-api", scopes=["read"])` (the user is the
-subject) or `resources.getToken({ resource: 'urn:my-api', actAsUserToken: userJwt })`.
+A user-scoped Resource token always takes the per-call form, on a client built with
+`ClientCredentialsProvider` (Descope only serves token exchange to an authenticated
+confidential client, which becomes `act.sub`; an `AccessTokenProvider` client raises
+`AgentAuthError`):
+`agent.resources.get_token(resource="urn:my-api", scopes=["read"], act_as_user_token=user_jwt)` /
+`agent.resources.getToken({ resource: 'urn:my-api', scopes: ['read'], actAsUserToken: userJwt })`.
 
 ---
 
@@ -312,10 +316,11 @@ All extend `AgentAuthError` (match with `isinstance` / `instanceof`).
 
 | Error | Means | What to do |
 | --- | --- | --- |
-| `ConnectionAuthorizationRequired` | user hasn't connected; carries `connect_url` / `connectUrl` | send the user to the URL, then retry the call (or use `wait_for_connection`) |
+| `ConnectionAuthorizationRequired` | user hasn't connected; carries `connect_url` / `connectUrl` | send the user to the URL, then retry the call (or use `wait_for_connection`). If the URL is missing, `connect_error` / `connectError` has Descope's reason (often a redirect URL the project doesn't allow) |
+| `ConnectUrlFailed` | `get_connect_url` / `getConnectUrl` got no URL back; carries Descope's reason and `status_code` / `statusCode` | fix the cause in the message (redirect URL, Connection config); don't retry blindly |
 | `PolicyDenied` | the credential lacks Policy permission | surface a permission error; do not retry blindly |
 | `ApprovalDenied` / `ApprovalTimeout` | a CIBA approval gate was rejected / timed out | tell the user the action wasn't approved |
-| `CredentialAcquisitionFailed` | the agent couldn't sign in to Descope (bad creds, device/CIBA timeout) | check the `credential=` config |
+| `CredentialAcquisitionFailed` | the agent couldn't sign in to Descope (bad creds, incl. `invalid_client` on a Resource token request; device/CIBA timeout) | check the `credential=` config |
 | `TokenExchangeFailed` | other token-fetch failure | inspect the message; usually config/transport |
 
 Catch `ConnectionAuthorizationRequired` specifically; let the rest propagate unless

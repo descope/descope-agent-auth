@@ -43,6 +43,10 @@ _SENSITIVE_KEYS = {
     "device_code",
     "auth_req_id",
     "assertion",
+    "client_assertion",
+    # RFC 8693 token exchange: the user's (or agent's) token being exchanged.
+    "subject_token",
+    "actor_token",
     # Not a credential, but carries the transaction (amounts, account numbers).
     "authorization_details",
 }

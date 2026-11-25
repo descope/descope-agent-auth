@@ -10,12 +10,14 @@ a refresh token).
         project_id="P2...",
         credential=AccessTokenProvider(access_token=user_jwt),
     )
-    # user-scoped: vault fetch + token-exchange both run as this user
+    # user-scoped: the vault fetch runs as this user
     gh = client.connections.get_token(connection="github", identifier=user_id)
 
-For a single shared (autonomous) client serving many users, prefer the per-call
-``act_as_user_token=`` override on ``connections.get_token`` / ``resources.get_token``
-instead of constructing a client per user.
+This provider holds no client secret, so it cannot authenticate a token exchange:
+``resources.get_token`` raises ``AgentAuthError`` on such a client. For user-scoped
+Resource tokens, and for a single shared client serving many users, build the client
+with ``ClientCredentialsProvider`` and pass ``act_as_user_token=`` per call on
+``connections.get_token`` / ``resources.get_token``.
 """
 
 from __future__ import annotations

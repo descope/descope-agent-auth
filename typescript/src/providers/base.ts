@@ -58,6 +58,16 @@ export abstract class CredentialProvider {
   /** Token endpoint for the `refresh_token` grant: the one that issued the token. */
   protected readonly refreshEndpoint: string = OAUTH2_TOKEN;
 
+  /**
+   * True when this provider's identity *is* the agent client (client credentials).
+   * A Resource token the agent requests as itself then uses the `client_credentials`
+   * grant, which Descope's client-access Policies govern. False means the
+   * provider's credential is exchanged instead (RFC 8693), e.g. a CIBA token that
+   * represents a user. `kind` can't carry this: other providers (JWT bearer) are
+   * `agent_token` too.
+   */
+  readonly actsAsClient: boolean = false;
+
   protected http?: HttpClient;
 
   protected projectId?: string;
@@ -154,6 +164,32 @@ export abstract class CredentialProvider {
   /** Extra form fields / client auth for refresh. Override as needed. */
   protected refreshClientAuth(): Record<string, string> {
     return {};
+  }
+
+  /**
+   * Form fields that authenticate this agent as a confidential client.
+   *
+   * Resource tokens are minted by an authenticated agent client (it becomes
+   * `act.sub` on a token exchange). Providers that hold a client secret return
+   * `client_id` + `client_secret`; the rest return `undefined` and cannot mint
+   * Resource tokens.
+   */
+  clientAuth(): Record<string, string> | undefined {
+    return undefined;
+  }
+
+  /**
+   * A stable id for whom this provider's own credential represents, or `undefined`.
+   *
+   * When a Resource token is minted by exchanging this provider's own credential,
+   * the token cache is keyed by this id instead of a digest of the current
+   * credential. A cached Resource token is then served without first refreshing (or
+   * re-approving) the credential, and survives its rotation. Override only when the
+   * id pins down one subject: two providers that may hold different users'
+   * credentials must never return the same id. The default keys by the credential.
+   */
+  identityKey(): string | undefined {
+    return undefined;
   }
 
   // -- persistence --------------------------------------------------------

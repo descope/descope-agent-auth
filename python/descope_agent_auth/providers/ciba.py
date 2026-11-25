@@ -19,7 +19,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from .._endpoints import CIBA_AUTHENTICATE, GRANT_CIBA, OAUTH2_APPS_TOKEN
 from ..errors import (
@@ -170,6 +170,16 @@ class CibaProvider(CredentialProvider):
         if self._client_secret:
             out["client_secret"] = self._client_secret
         return out
+
+    def identity_key(self) -> Optional[str]:
+        # One user per provider (login_hint), so the storage key names the subject.
+        return self._storage_key()
+
+    def client_auth(self) -> Optional[Dict[str, str]]:
+        # Only a confidential CIBA client can authenticate a token exchange.
+        if not self._client_secret:
+            return None
+        return {"client_id": self._client_id, "client_secret": self._client_secret}
 
 
 def _rejected_details_reason(body: Optional[dict]) -> Optional[str]:

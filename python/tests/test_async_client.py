@@ -88,19 +88,18 @@ class TestAsyncClient(common.AgentAuthTest):
 
     @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_resources_token_exchange(self, mock_request):
-        mock_request.side_effect = [
-            make_response(CRED),  # phase 1
-            make_response(  # token-exchange
-                {"access_token": "resource_at", "token_type": "Bearer", "expires_in": 3600}
-            ),
-        ]
+        mock_request.return_value = make_response(  # token-exchange
+            {"access_token": "resource_at", "token_type": "Bearer", "expires_in": 3600}
+        )
 
         async def scenario():
             client = _async_client(
                 ClientCredentialsProvider(client_id="cid", client_secret="s")
             )
             try:
-                return await client.resources.get_token(resource="urn:my-api")
+                return await client.resources.get_token(
+                    resource="urn:my-api", act_as_user_token="user_jwt"
+                )
             finally:
                 await client.aclose()
 
@@ -108,7 +107,7 @@ class TestAsyncClient(common.AgentAuthTest):
 
         self.assertEqual(tok.access_token, "resource_at")
         _, kwargs = mock_request.call_args
-        self.assertEqual(kwargs["data"]["subject_token"], "agent_at")
+        self.assertEqual(kwargs["data"]["subject_token"], "user_jwt")
 
     @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_not_connected_raises(self, mock_request):

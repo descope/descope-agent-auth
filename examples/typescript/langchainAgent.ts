@@ -5,7 +5,7 @@
  * tool pulls the exact token it needs at call time:
  *
  *   - queryInternalApi -> a Descope Resource token (your own API, protected by
- *     Descope OAuth scopes), minted from the agent's identity via token-exchange.
+ *     Descope OAuth scopes), minted for the agent itself with client credentials.
  *   - lookupSharedCrm  -> a tenant-level Connection API key (one org-shared
  *     credential every user shares -- no per-user auth) from the Descope vault.
  *

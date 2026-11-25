@@ -37,8 +37,11 @@ class TestClientCredentialsProvider(common.AgentAuthTest):
         self.assertFalse(cred.is_privileged)
         self.assertFalse(cred.is_expired())
         # Authorization header is HTTP Basic.
-        _, kwargs = mock_request.call_args
+        args, kwargs = mock_request.call_args
         self.assertTrue(kwargs["headers"]["Authorization"].startswith("Basic "))
+        # Agentic Clients are inbound apps: their token endpoint (per the
+        # /v1/apps/<projectId> discovery document) is /oauth2/v1/apps/token.
+        self.assertEqual(args[1], "/oauth2/v1/apps/token")
 
     @patch("httpx.AsyncClient.request", new_callable=AsyncMock)
     def test_caches_until_expiry(self, mock_request):

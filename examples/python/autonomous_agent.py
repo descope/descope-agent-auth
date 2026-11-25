@@ -1,7 +1,7 @@
 """Autonomous agent (client credentials, no user in the loop).
 
 Shows the two token kinds an M2M agent can obtain:
-  1. a **Resource token** (token-exchange, scoped to the agent itself), and
+  1. a **Resource token** (client credentials, scoped to the agent itself), and
   2. a **tenant-level Connection token** (org-shared, no user) — if the agent's
      identity is associated with that tenant.
 

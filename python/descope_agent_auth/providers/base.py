@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import time
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Dict, Optional
 
 from .._async import maybe_await
 from .._endpoints import GRANT_REFRESH_TOKEN, OAUTH2_TOKEN
@@ -41,6 +41,14 @@ class CredentialProvider(ABC):
 
     #: Token endpoint for the ``refresh_token`` grant: the one that issued the token.
     refresh_endpoint: str = OAUTH2_TOKEN
+
+    #: True when this provider's identity *is* the agent client (client
+    #: credentials). A Resource token the agent requests as itself then uses the
+    #: ``client_credentials`` grant, which Descope's client-access Policies govern.
+    #: False means the provider's credential is exchanged instead (RFC 8693), e.g.
+    #: a CIBA token that represents a user. ``kind`` can't carry this: other
+    #: providers (JWT bearer) are ``AGENT_TOKEN`` too.
+    acts_as_client: bool = False
 
     def __init__(self) -> None:
         self._cached: Optional[Credential] = None
@@ -140,6 +148,29 @@ class CredentialProvider(ABC):
     def _refresh_client_auth(self) -> dict:
         """Extra form fields / client auth needed for refresh. Override as needed."""
         return {}
+
+    def client_auth(self) -> Optional[Dict[str, str]]:
+        """Form fields that authenticate this agent as a confidential client.
+
+        Resource tokens are minted by an authenticated agent client (it becomes
+        ``act.sub`` on a token exchange). Providers that hold a client secret
+        return ``client_id`` + ``client_secret``; the rest return ``None`` and
+        cannot mint Resource tokens.
+        """
+        return None
+
+    def identity_key(self) -> Optional[str]:
+        """A stable id for whom this provider's own credential represents, or ``None``.
+
+        When a Resource token is minted by exchanging this provider's own credential,
+        the token cache is keyed by this id instead of a digest of the current
+        credential. A cached Resource token is then served without first refreshing
+        (or re-approving) the credential, and survives its rotation. Override only
+        when the id pins down one subject: two providers that may hold different
+        users' credentials must never return the same id. The default ``None`` keys
+        by the credential itself.
+        """
+        return None
 
     # -- persistence --------------------------------------------------------
 

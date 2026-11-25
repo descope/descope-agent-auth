@@ -9,18 +9,18 @@
  * discovery document (`/<projectId>/.well-known/openid-configuration`) before
  * relying on them:
  *   - DEVICE_AUTHORIZATION path
- *   - RESOURCE token endpoint shape
  */
 
 // --- Phase 1: OAuth2 / OIDC (acquisition) -----------------------------------
 
-/** client_credentials, refresh_token, device_code. */
+/** refresh_token (default), device_code, jwt-bearer. */
 export const OAUTH2_TOKEN = '/oauth2/v1/token';
 
 /**
- * Token endpoint for an agent that authenticates as an inbound app client. CIBA polls
- * and refreshes here (or the /apps/{projectId}/token variant) because OAUTH2_TOKEN
- * does not serve it.
+ * Token endpoint of the inbound-apps authorization server (the `token_endpoint` in
+ * `/v1/apps/<projectId>/.well-known/openid-configuration`). Agentic Clients are
+ * inbound apps, so client_credentials, CIBA and the Resource token-exchange (which
+ * requires client authentication) all go here.
  */
 export const OAUTH2_APPS_TOKEN = '/oauth2/v1/apps/token';
 

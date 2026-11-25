@@ -11,11 +11,14 @@
  *       projectId: 'P2...',
  *       credential: new AccessTokenProvider({ accessToken: userJwt }),
  *     });
- *     // user-scoped: vault fetch + token-exchange both run as this user
+ *     // user-scoped: the vault fetch runs as this user
  *     const gh = await client.connections.getToken({ connection: 'github', identifier: userId });
  *
- * For a single shared (autonomous) client serving many users, prefer the per-call
- * `actAsUserToken` override on `connections.getToken` / `resources.getToken`.
+ * This provider holds no client secret, so it cannot authenticate a token exchange:
+ * `resources.getToken` throws `AgentAuthError` on such a client. For user-scoped
+ * Resource tokens, and for a single shared client serving many users, build the
+ * client with `ClientCredentialsProvider` and pass `actAsUserToken` per call on
+ * `connections.getToken` / `resources.getToken`.
  */
 
 import { Credential } from '../types';

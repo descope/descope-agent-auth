@@ -8,7 +8,6 @@ Constants marked UNVERIFIED still need confirming against the project's OIDC
 discovery document (``/<project_id>/.well-known/openid-configuration``) before
 relying on them:
   - DEVICE_AUTHORIZATION path
-  - RESOURCE token endpoint shape
 These are isolated as named constants precisely so confirming/overriding them is a
 one-line change, not a refactor.
 """
@@ -17,12 +16,13 @@ from __future__ import annotations
 
 # --- Phase 1: OAuth2 / OIDC (acquisition) -----------------------------------
 
-# Used for client_credentials, refresh_token and device_code grants.
+# Used for refresh_token (default), device_code and jwt-bearer grants.
 OAUTH2_TOKEN = "/oauth2/v1/token"
 
-# Token endpoint for an agent that authenticates as an inbound app client rather
-# than through the project OIDC server. CIBA polls and refreshes
-# here (or the /apps/{projectId}/token variant) because OAUTH2_TOKEN does not serve it.
+# Token endpoint of the inbound-apps authorization server (the token_endpoint in
+# /v1/apps/<project_id>/.well-known/openid-configuration). Agentic Clients are inbound
+# apps, so client_credentials, CIBA and the Resource token-exchange (which requires
+# client authentication) all go here.
 OAUTH2_APPS_TOKEN = "/oauth2/v1/apps/token"
 
 # UNVERIFIED -- confirm via discovery (device_authorization_endpoint).
